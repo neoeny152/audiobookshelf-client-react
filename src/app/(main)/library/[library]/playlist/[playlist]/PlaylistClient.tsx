@@ -9,6 +9,7 @@ import ConfirmDialog from '@/components/widgets/ConfirmDialog'
 import { mapMediaCardMoreMenuItemsToDropdownItems } from '@/components/widgets/media-card/MediaCardMoreMenu'
 import PlaylistGroupCover from '@/components/widgets/media-card/PlaylistGroupCover'
 import { usePlaylistCardActions } from '@/components/widgets/media-card/usePlaylistCardActions'
+import PageCoverFrame from '@/components/widgets/PageCoverFrame'
 import { useBookCoverAspectRatio, useLibrary } from '@/contexts/LibraryContext'
 import { useMediaContext } from '@/contexts/MediaContext'
 import { useSocketEvent } from '@/contexts/SocketContext'
@@ -125,7 +126,9 @@ export default function PlaylistClient({ playlist }: PlaylistClientProps) {
   return (
     <div>
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-6 md:flex-row md:items-start">
-        <PlaylistGroupCover items={orderedItems} width={coverWidth * 2} height={coverHeight * 2} />
+        <PageCoverFrame>
+          <PlaylistGroupCover items={orderedItems} width={coverWidth * 2} height={coverHeight * 2} />
+        </PageCoverFrame>
         <div className="flex w-full min-w-0 flex-1 flex-col gap-2">
           <div className="flex w-full min-w-0 flex-col gap-2 md:flex-row md:items-center md:gap-4">
             <h1 className="text-foreground min-w-0 px-2 text-2xl font-bold wrap-break-word md:flex-1 md:truncate">{playlist.name}</h1>

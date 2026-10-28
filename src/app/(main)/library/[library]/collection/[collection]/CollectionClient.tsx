@@ -10,6 +10,7 @@ import ConfirmDialog from '@/components/widgets/ConfirmDialog'
 import CollectionGroupCover from '@/components/widgets/media-card/CollectionGroupCover'
 import { mapMediaCardMoreMenuItemsToDropdownItems } from '@/components/widgets/media-card/MediaCardMoreMenu'
 import { useCollectionCardActions } from '@/components/widgets/media-card/useCollectionCardActions'
+import PageCoverFrame from '@/components/widgets/PageCoverFrame'
 import { useBookCoverAspectRatio } from '@/contexts/LibraryContext'
 import { useMediaContext } from '@/contexts/MediaContext'
 import { useUser } from '@/contexts/UserContext'
@@ -116,7 +117,9 @@ export default function CollectionClient({ collection }: CollectionClientProps) 
   return (
     <div>
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-6 md:flex-row md:items-start">
-        <CollectionGroupCover books={orderedBooks} width={coverWidth * 2} height={coverHeight} />
+        <PageCoverFrame>
+          <CollectionGroupCover books={orderedBooks} width={coverWidth * 2} height={coverHeight} />
+        </PageCoverFrame>
         <div className="flex w-full min-w-0 flex-1 flex-col gap-2">
           <div className="flex w-full min-w-0 flex-col gap-2 md:flex-row md:items-center md:gap-4">
             <h1 className="text-foreground min-w-0 px-2 text-2xl font-bold wrap-break-word md:flex-1 md:truncate">{collection.name}</h1>
