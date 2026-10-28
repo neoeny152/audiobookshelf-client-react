@@ -145,9 +145,15 @@ describe('snapStartToWholeSecond', () => {
     expect(snapStartToWholeSecond(49.9, pause(49.95, 50.4))).to.equal(50)
   })
 
-  it('rounds when no whole second fits in the pause or there is no pause', () => {
+  it('rounds down when no whole second fits in the pause, so the start never lands after it', () => {
+    // 98.65 would round to 99, after the pause end at 98.9 (in the spoken heading)
+    expect(snapStartToWholeSecond(98.65, pause(98.2, 98.9))).to.equal(98)
     expect(snapStartToWholeSecond(60.4, pause(60.1, 60.9))).to.equal(60)
-    expect(snapStartToWholeSecond(70.6, null)).to.equal(71)
+  })
+
+  it('rounds a file-start down so the start of the file is not cut', () => {
+    expect(snapStartToWholeSecond(3600.6, null)).to.equal(3600)
+    expect(snapStartToWholeSecond(0.4, null)).to.equal(0)
   })
 })
 
@@ -203,6 +209,22 @@ describe('snap rows and retry', () => {
     expect(result.map((r) => r.delta)).to.deep.equal([0, -4, 20, 0])
     expect(result.map((r) => r.changed)).to.deep.equal([false, true, true, false])
     expect([...getDefaultSnapChecked(result)]).to.deep.equal([1])
+    expect(result.map((r) => r.beforePause)).to.deep.equal([false, false, false, false])
+  })
+
+  it('flags and does not pre-check a row rounded to just before a pause with no whole second in it', () => {
+    const result = buildSnapRows(
+      session([
+        proposal({ index: 0, originalStart: 0, reason: 'first-chapter', confidence: 'high' }),
+        proposal({ index: 1, originalStart: 100, proposedStart: 98.65, reason: 'nearest-longest-pause', confidence: 'medium', pause: pause(98.2, 98.9) }),
+        proposal({ index: 2, originalStart: 200, proposedStart: 196.75, reason: 'nearest-longest-pause', confidence: 'high', pause: pause(195, 197) }),
+        proposal({ index: 3, originalStart: 300, reason: 'inside-pause', confidence: 'high', pause: pause(299, 301) })
+      ])
+    )
+
+    expect(result.map((r) => r.newStart)).to.deep.equal([0, 98, 196, 300])
+    expect(result.map((r) => r.beforePause)).to.deep.equal([false, true, false, false])
+    expect([...getDefaultSnapChecked(result)]).to.deep.equal([2])
   })
 
   it('retries not-analysed rows with the proposed chapters and merges the result', () => {

@@ -769,6 +769,7 @@
   "LabelSnapReasonNotAnalysed": "Not analysed (time limit) - unchanged",
   "LabelSnapReasonNotRequested": "Not selected - unchanged",
   "LabelSnapReasonOrderConflict": "Would overlap a neighbouring chapter - unchanged",
+  "LabelSnapRoundedBeforePause": "Rounded to a whole second just before the pause - check it",
   "LabelSnapSelectAllChanges": "Select all changes",
   "LabelSnapShowUnchanged": "Show unchanged",
   "LabelSnapWindowSec": "Search window (s)",

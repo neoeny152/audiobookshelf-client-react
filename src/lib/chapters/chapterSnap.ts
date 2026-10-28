@@ -53,6 +53,8 @@ export interface SnapRow {
   newStart: number
   delta: number
   changed: boolean
+  /** No whole second fits inside the pause, so newStart sits just before it (in the previous chapter's tail). */
+  beforePause: boolean
   reason: SnapChapterReason
   confidence: SnapChapterConfidence
   pause: SnapChapterPause | null
@@ -142,16 +144,18 @@ export function mergeSnapRetry(previous: SnapChaptersResponse, retry: SnapChapte
 
 /**
  * The editor keeps whole-second starts. Pick a whole second that is still inside the chosen pause
- * (earliest-safe first), so rounding never pushes a start into speech.
+ * (earliest-safe first), so rounding never pushes a start into speech. When no whole second fits in the pause,
+ * or there is no pause (file-start), round down: up to a second early lands in the previous chapter's tail,
+ * whereas rounding up can land in the spoken heading.
  */
 export function snapStartToWholeSecond(proposedStart: number, pause: SnapChapterPause | null): number {
+  const floor = Math.floor(proposedStart)
   if (pause) {
-    const floor = Math.floor(proposedStart)
     if (floor >= pause.start && floor <= pause.end) return floor
     const ceil = Math.ceil(proposedStart)
     if (ceil >= pause.start && ceil <= pause.end) return ceil
   }
-  return Math.max(0, Math.round(proposedStart))
+  return Math.max(0, floor)
 }
 
 export function buildSnapRows(session: SnapSession): SnapRow[] {
@@ -159,6 +163,7 @@ export function buildSnapRows(session: SnapSession): SnapRow[] {
     const snapshotRow = session.snapshot[i]
     const originalStart = snapshotRow ? snapshotRow.start : entry.originalStart
     const newStart = entry.changed ? snapStartToWholeSecond(entry.proposedStart, entry.pause) : originalStart
+    const changed = newStart !== originalStart
     return {
       index: i,
       clientKey: snapshotRow?.clientKey ?? `index-${i}`,
@@ -167,7 +172,8 @@ export function buildSnapRows(session: SnapSession): SnapRow[] {
       proposedStart: entry.proposedStart,
       newStart,
       delta: newStart - originalStart,
-      changed: newStart !== originalStart,
+      changed,
+      beforePause: changed && !!entry.pause && newStart < entry.pause.start,
       reason: entry.reason,
       confidence: entry.confidence,
       pause: entry.pause
@@ -175,7 +181,9 @@ export function buildSnapRows(session: SnapSession): SnapRow[] {
   })
 }
 
-/** Every row that would move is pre-checked, except low-confidence ones. */
+/** Every row that would move is pre-checked, except low-confidence ones and ones rounded to just before their pause. */
 export function getDefaultSnapChecked(rows: SnapRow[]): Set<number> {
-  return new Set(rows.filter((row) => row.changed && (row.confidence === 'high' || row.confidence === 'medium')).map((row) => row.index))
+  return new Set(
+    rows.filter((row) => row.changed && !row.beforePause && (row.confidence === 'high' || row.confidence === 'medium')).map((row) => row.index)
+  )
 }

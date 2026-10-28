@@ -158,6 +158,23 @@ describe('<SnapToAudioPanel /> proposal', () => {
   })
 })
 
+describe('<SnapToAudioPanel /> rounding', () => {
+  it('flags a start rounded to just before its pause and leaves it unchecked', () => {
+    const session = makeSession([
+      proposal({ index: 0, reason: 'first-chapter', confidence: 'high' }),
+      proposal({ index: 1, proposedStart: 98.65, reason: 'nearest-longest-pause', confidence: 'medium', pause: pause(98.2, 98.9) }),
+      proposal({ index: 2, reason: 'inside-pause', confidence: 'high', pause: pause(199, 201) }),
+      proposal({ index: 3, reason: 'inside-pause', confidence: 'high', pause: pause(299, 301) })
+    ])
+    mountPanel({ onSnap: cy.stub().as('onSnap').resolves(session) })
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('[cy-id="snap-row"]').should('have.length', 1)
+    cy.get('[cy-id="snap-row"]').eq(0).should('contain.text', '01:38').and('contain.text', '-2 s')
+    cy.get('[cy-id="snap-row"]').eq(0).find('[cy-id="snap-before-pause"]').should('contain.text', 'just before the pause')
+    cy.get('[cy-id="snap-row"]').eq(0).find('input[type="checkbox"]').should('not.be.checked')
+  })
+})
+
 describe('<SnapToAudioPanel /> preview', () => {
   it('previews the proposed start with the editor player', () => {
     const playChapter = cy.stub().as('playChapter')
