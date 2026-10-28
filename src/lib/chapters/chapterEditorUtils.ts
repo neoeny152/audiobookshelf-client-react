@@ -323,7 +323,8 @@ export interface SnapTitlePick {
 
 /**
  * Apply titles heard by the snap speech check: changes titles only (never starts, never order). A pick is skipped
- * when its row is gone or its title was edited since the snap. Returns the clientKeys whose title was set.
+ * when its row is gone or its title was edited since the snap. Returns the clientKeys whose title was set, including
+ * rows that already had the title (so the offer for them goes away).
  */
 export function applySnapTitles(chapters: EditableChapter[], picks: SnapTitlePick[]): { chapters: EditableChapter[]; applied: string[]; skipped: number } {
   const indexByKey = new Map<string, number>()
@@ -334,6 +335,7 @@ export function applySnapTitles(chapters: EditableChapter[], picks: SnapTitlePic
   const next = chapters.slice()
   const applied: string[] = []
   let skipped = 0
+  let changed = false
   for (const pick of picks) {
     const index = indexByKey.get(pick.clientKey)
     const toTitle = pick.toTitle.trim()
@@ -342,16 +344,20 @@ export function applySnapTitles(chapters: EditableChapter[], picks: SnapTitlePic
       continue
     }
     const current = (next[index].title || '').trim()
-    if (current === toTitle) continue
+    if (current === toTitle) {
+      applied.push(pick.clientKey)
+      continue
+    }
     if (current !== pick.fromTitle.trim()) {
       skipped++
       continue
     }
     next[index] = { ...next[index], title: toTitle }
+    changed = true
     applied.push(pick.clientKey)
   }
 
-  return { chapters: applied.length ? next : chapters, applied, skipped }
+  return { chapters: changed ? next : chapters, applied, skipped }
 }
 
 /**
