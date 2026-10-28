@@ -85,6 +85,8 @@ import {
   Series,
   ServerStatus,
   ServerYearStats,
+  SnapChaptersPayload,
+  SnapChaptersResponse,
   TasksResponse,
   UpdateAuthorPayload,
   UpdateAuthSettingsResponse,
@@ -545,6 +547,17 @@ export async function updateChapters(libraryItemId: string, chapters: Chapter[])
   return apiRequest<UpdateChaptersResponse>(`/api/items/${libraryItemId}/chapters`, {
     method: 'POST',
     body: JSON.stringify({ chapters })
+  })
+}
+
+/**
+ * Propose chapter starts snapped to pauses in the audio. Nothing is saved; typically takes 5-15 s.
+ * Throws ApiError with the server's status (400/403/404/409/429/500) on failure.
+ */
+export async function snapChapters(libraryItemId: string, payload: SnapChaptersPayload): Promise<SnapChaptersResponse> {
+  return apiRequest<SnapChaptersResponse>(`/api/items/${libraryItemId}/chapters/snap`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
   })
 }
 

@@ -612,6 +612,86 @@ export interface UpdateChaptersResponse {
   updated: boolean
 }
 
+/** Server-side tuning for `POST /api/items/:id/chapters/snap`. Out-of-range numbers are clamped by the server. */
+export interface SnapChaptersOptions {
+  windowSec?: number
+  minSilenceSec?: number
+  noiseDb?: number
+  leadSec?: number
+  headingLookbackSec?: number
+  snapToFileStart?: boolean
+}
+
+export interface SnapChaptersPayload {
+  /** Starts to snap (strictly increasing). Omitted = the item's saved chapters. */
+  chapters?: { id: number; title?: string; start: number }[]
+  /** Only these chapter indexes are snapped; the rest come back `not-requested`. */
+  indexes?: number[]
+  options?: SnapChaptersOptions
+}
+
+export type SnapChapterReason =
+  | 'first-chapter'
+  | 'inside-pause'
+  | 'file-start'
+  | 'nearest-longest-pause'
+  | 'heading-lookback'
+  | 'no-pause-in-window'
+  | 'order-conflict'
+  | 'not-requested'
+  | 'not-analysed'
+  | 'analysis-failed'
+
+export type SnapChapterConfidence = 'high' | 'medium' | 'low' | 'none'
+
+export interface SnapChapterPause {
+  start: number
+  end: number
+  duration: number
+  startClipped: boolean
+  endClipped: boolean
+  crossesFileBoundary: boolean
+}
+
+export interface SnapChapterProposal {
+  index: number
+  id: number | string
+  title: string
+  originalStart: number
+  proposedStart: number
+  delta: number
+  changed: boolean
+  pause: SnapChapterPause | null
+  reason: SnapChapterReason
+  confidence: SnapChapterConfidence
+  trackIndex: number
+  speech: unknown
+}
+
+/** Proposal only: the server saves nothing. */
+export interface SnapChaptersResponse {
+  libraryItemId: string
+  duration: number
+  /** False when the time limit was hit or a segment failed; see the retry contract in `buildSnapRetryPayload`. */
+  complete: boolean
+  options: Required<SnapChaptersOptions>
+  stats: {
+    segments: number
+    ffmpegCalls: number
+    failedSegments: number
+    analysedSec: number
+    pausesFound: number
+    elapsedMs: number
+    moved: number
+    unchanged: number
+    skipped: number
+  }
+  chapters: SnapChapterProposal[]
+  /** Same shape as the `POST /api/items/:id/chapters` payload, with proposed starts. */
+  proposedChapters: Chapter[]
+  warnings: string[]
+}
+
 export interface OrderedTrackFileData {
   index: number
   filename: string
