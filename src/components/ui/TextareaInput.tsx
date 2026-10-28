@@ -18,6 +18,8 @@ export interface TextareaInputProps {
   fillHeight?: boolean
   /** Trim leading/trailing whitespace on blur (Vue `trim-whitespace` parity). */
   trimWhitespace?: boolean
+  /** Highlight the value as changed from its saved value. */
+  dirty?: boolean
 }
 
 /**
@@ -35,7 +37,8 @@ export default function TextareaInput({
   onChange,
   className,
   fillHeight = false,
-  trimWhitespace = false
+  trimWhitespace = false,
+  dirty = false
 }: TextareaInputProps) {
   const generatedId = useId()
   const textareaInputId = id || generatedId
@@ -60,7 +63,8 @@ export default function TextareaInput({
   const textareaClassNames = mergeClasses(
     'w-full bg-transparent py-1 px-1 outline-none border-none',
     fillHeight ? 'h-full resize-none' : 'resize-y',
-    'disabled:cursor-not-allowed disabled:text-disabled read-only:text-read-only'
+    'disabled:cursor-not-allowed disabled:text-disabled read-only:text-read-only',
+    dirty && !disabled && !readOnly && 'text-info'
   )
 
   return (

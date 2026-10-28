@@ -53,6 +53,8 @@ interface DropdownProps {
   /** Icon shown instead of the full box on mobile widths */
   mobileIcon?: string
   onClear?: () => void
+  /** Highlight the selected value as changed from its saved value. */
+  dirty?: boolean
 }
 
 const UNICODE_LETTER_OR_NUMBER = new RegExp('[\\p{L}\\p{N}]', 'u')
@@ -78,7 +80,8 @@ export default function Dropdown({
   usePortal = false,
   wrapText = false,
   mobileIcon,
-  onClear
+  onClear,
+  dirty = false
 }: DropdownProps) {
   const t = useTypeSafeTranslations()
   const [showMenu, setShowMenu] = useState(false)
@@ -466,7 +469,8 @@ export default function Dropdown({
             type="button"
             aria-label={triggerAriaLabel}
             className={mergeClasses(
-              'text-foreground relative w-full cursor-pointer text-left',
+              'relative w-full cursor-pointer text-left',
+              dirty && !disabled ? 'text-info' : 'text-foreground',
               'flex h-full items-center justify-between border-none bg-transparent ps-1 outline-none',
               'disabled:text-disabled disabled:cursor-not-allowed',
               size === 'small' ? 'text-sm' : size === 'large' ? 'text-lg' : size === 'medium' ? 'text-base' : ''

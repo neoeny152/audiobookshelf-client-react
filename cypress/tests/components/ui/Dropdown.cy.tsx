@@ -114,6 +114,16 @@ describe('<Dropdown />', () => {
     cy.get('.custom-class').should('exist')
   })
 
+  it('highlights the trigger when dirty', () => {
+    cy.mount(<Dropdown items={mockItems} value="option1" dirty />)
+    cy.get('button').should('have.class', 'text-info').and('not.have.class', 'text-foreground')
+  })
+
+  it('does not highlight the trigger when dirty and disabled', () => {
+    cy.mount(<Dropdown items={mockItems} value="option1" dirty disabled />)
+    cy.get('button').should('not.have.class', 'text-info')
+  })
+
   it('applies custom menu max height', () => {
     const customHeight = '300px'
     cy.mount(<Dropdown items={mockItems} menuMaxHeight={customHeight} />)
