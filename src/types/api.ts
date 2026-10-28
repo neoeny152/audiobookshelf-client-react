@@ -711,6 +711,28 @@ export interface SnapChaptersResponse {
   warnings: string[]
 }
 
+/** `GET /api/items/:id/epub/:jobId` status. `downloading`: the server is writing the EPUB into the book folder. */
+export type EpubJobStatus = 'queued' | 'running' | 'downloading' | 'done' | 'failed' | 'cancelled'
+
+/** EPUB from audio (chapterbot), one job per library item; also the payload of `chapterbot_epub_done` / `_failed`. */
+export interface EpubJob {
+  jobId: string
+  libraryItemId: string
+  status: EpubJobStatus
+  /** Free-form sidecar stage name, e.g. "transcribing" */
+  stage: string | null
+  /** 0..1 */
+  progress: number
+  chaptersDone: number
+  chaptersTotal: number
+  cancelRequested: boolean
+  error: string | null
+  /** Name of the EPUB written into the book folder (when done) */
+  fileName: string | null
+  createdAt: number
+  finishedAt: number | null
+}
+
 export interface OrderedTrackFileData {
   index: number
   filename: string

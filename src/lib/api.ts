@@ -27,6 +27,7 @@ import {
   CreateUpdateApiKeyResponse,
   CreateUserResponse,
   EmailSettingsFormFields,
+  EpubJob,
   EReaderDevice,
   FetchPodcastFeedResponse,
   FFProbeData,
@@ -559,6 +560,23 @@ export async function snapChapters(libraryItemId: string, payload: SnapChaptersP
     method: 'POST',
     body: JSON.stringify(payload)
   })
+}
+
+/**
+ * Start building an EPUB from the book's audio (chapterbot; only when /status lists `chapterbotEpub`). Takes hours.
+ * Throws ApiError 400/403/409 (already running: the body carries its `jobId`)/429/502.
+ */
+export async function startEpubJob(libraryItemId: string): Promise<EpubJob> {
+  return apiRequest<EpubJob>(`/api/items/${libraryItemId}/epub`, { method: 'POST' })
+}
+
+export async function getEpubJob(libraryItemId: string, jobId: string): Promise<EpubJob> {
+  return apiRequest<EpubJob>(`/api/items/${libraryItemId}/epub/${encodeURIComponent(jobId)}`)
+}
+
+/** Cancel a queued or running EPUB job. A running job stops at its next segment, so it may report `cancelRequested` first. */
+export async function cancelEpubJob(libraryItemId: string, jobId: string): Promise<EpubJob> {
+  return apiRequest<EpubJob>(`/api/items/${libraryItemId}/epub/${encodeURIComponent(jobId)}`, { method: 'DELETE' })
 }
 
 /**
