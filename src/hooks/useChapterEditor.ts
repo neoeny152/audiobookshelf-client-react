@@ -1,6 +1,6 @@
 'use client'
 
-import { updateChaptersAction } from '@/app/actions/chapterActions'
+import { snapChaptersAction, updateChaptersAction, type SnapChaptersActionResult } from '@/app/actions/chapterActions'
 import { getExpandedLibraryItemAction } from '@/app/actions/mediaActions'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
@@ -9,6 +9,7 @@ import { useItemPageSocket } from '@/hooks/useItemPageSocket'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import {
   applyChapterTitleDrafts,
+  applySnapProposals,
   buildBulkChapters,
   buildChapterDirtyBaseline,
   buildIdenticalChapters,
@@ -35,6 +36,15 @@ import {
   type ChapterMatchDebug
 } from '@/lib/chapters/chapterEditorUtils'
 import { SHOW_CHAPTER_MATCH_DEBUG } from '@/lib/chapters/chapterMatching'
+import {
+  buildSnapPayload,
+  buildSnapRetryPayload,
+  getSnapRetryIndexes,
+  mergeSnapRetry,
+  type SnapAdvancedOptions,
+  type SnapRow,
+  type SnapSession
+} from '@/lib/chapters/chapterSnap'
 import { blurActiveChapterEditorField } from '@/lib/chapterEditorFocus'
 import type { AudibleChapterSearchResult, BookLibraryItem, Chapter, PodcastLibraryItem } from '@/types/api'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react'
@@ -388,6 +398,84 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
     replaceChapterList(mergeResult.chapters.length ? mergeResult.chapters : initChapters([], mediaDuration))
   }, [clearLookupUi, cloneMatchBaseline, discardFocusedChapterFields, mediaDuration, preview, replaceChapterList, tracks])
 
+  const showSnapError = useCallback(
+    (result: Extract<SnapChaptersActionResult, { ok: false }>) => {
+      switch (result.status) {
+        case 400:
+          showToast(result.error ? t('ToastSnapChaptersInvalidWithError', { error: result.error }) : t('ToastSnapChaptersFailed'), { type: 'error' })
+          return
+        case 403:
+          showToast(t('ToastSnapChaptersForbidden'), { type: 'error' })
+          return
+        case 409:
+          showToast(t('ToastSnapChaptersAlreadyRunning'), { type: 'warning' })
+          return
+        case 429:
+          showToast(t('ToastSnapChaptersBusy'), { type: 'warning' })
+          return
+        default:
+          showToast(result.error ? t('ToastSnapChaptersFailedWithError', { error: result.error }) : t('ToastSnapChaptersFailed'), { type: 'error' })
+      }
+    },
+    [showToast, t]
+  )
+
+  /** Snap the current editor rows (unsaved edits included); with a selection, only the selected rows. Saves nothing. */
+  const handleSnapToAudio = useCallback(
+    async (options: SnapAdvancedOptions): Promise<SnapSession | null> => {
+      blurActiveChapterEditorField()
+      const chapters = applyChapterTitleDrafts(newChaptersRef.current, titleDraftsRef.current)
+      if (chapters.length <= 1) return null
+      if (chapters.some((chapter) => chapter.error)) {
+        showToast(t('ToastChaptersHaveErrors'), { type: 'error' })
+        return null
+      }
+
+      const { payload, snapshot } = buildSnapPayload(chapters, selectedKeys, options)
+      const result = await snapChaptersAction(libraryItem.id, payload)
+      if (!result.ok) {
+        showSnapError(result)
+        return null
+      }
+      return { snapshot, response: result.data, options }
+    },
+    [libraryItem.id, selectedKeys, showSnapError, showToast, t]
+  )
+
+  /** Server retry contract: resend proposedChapters with the not-analysed indexes, then merge. */
+  const handleSnapRetry = useCallback(
+    async (session: SnapSession): Promise<SnapSession | null> => {
+      const payload = buildSnapRetryPayload(session.response, session.options)
+      if (!payload) return session
+      const result = await snapChaptersAction(libraryItem.id, payload)
+      if (!result.ok) {
+        showSnapError(result)
+        return null
+      }
+      return { ...session, response: mergeSnapRetry(session.response, result.data, getSnapRetryIndexes(session.response)) }
+    },
+    [libraryItem.id, showSnapError]
+  )
+
+  /** Write the checked proposals into the editor as unsaved changes (start times only). */
+  const handleApplySnap = useCallback(
+    (rows: SnapRow[]) => {
+      blurActiveChapterEditorField()
+      const picks = rows.map((row) => ({ clientKey: row.clientKey, fromStart: row.originalStart, toStart: row.newStart }))
+      const result = applySnapProposals(newChaptersRef.current, picks, mediaDuration)
+      if (result.applied > 0) {
+        runValidation(result.chapters)
+      }
+      if (result.skipped > 0) {
+        showToast(t('ToastSnapChaptersAppliedSomeSkipped', { count: result.applied, skipped: result.skipped }), { type: 'warning' })
+      } else if (result.applied > 0) {
+        showToast(t('ToastSnapChaptersApplied', { count: result.applied }), { type: 'success' })
+      }
+      return result.applied
+    },
+    [mediaDuration, runValidation, showToast, t]
+  )
+
   const setBulkChapterCount = useCallback((count: number) => {
     setBulkChapterCountState(clampBulkChapterCount(count))
   }, [])
@@ -504,6 +592,9 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
     handleToggleAllChaptersSelected,
     handleRemoveSelected,
     handleSetChaptersFromTracks,
+    handleSnapToAudio,
+    handleSnapRetry,
+    handleApplySnap,
     setConfirmState,
     handleSave,
     handleAddChapterFromInput,
