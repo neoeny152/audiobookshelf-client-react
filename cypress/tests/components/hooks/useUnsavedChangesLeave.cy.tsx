@@ -94,4 +94,25 @@ describe('useUnsavedChangesLeave', () => {
       .its('args')
       .should('deep.equal', [['beforeLeave'], ['leave']])
   })
+
+  it('blocks unload only while dirty', () => {
+    // Cypress wraps the AUT's own beforeunload dispatch, so check the registered listener directly.
+    cy.window().then((win) => {
+      cy.spy(win, 'addEventListener').as('addEventListener')
+    })
+
+    cy.mount(<LeaveProbe isDirty={false} log={cy.stub()} />)
+    cy.get('@addEventListener').should('not.have.been.calledWith', 'beforeunload')
+
+    cy.mount(<LeaveProbe isDirty log={cy.stub()} />)
+    cy.get('@addEventListener')
+      .should('have.been.calledWith', 'beforeunload')
+      .then((spy) => {
+        const call = (spy as unknown as sinon.SinonSpy).getCalls().find((c) => c.args[0] === 'beforeunload')
+        const event = { preventDefault: cy.stub(), returnValue: undefined as unknown }
+        call?.args[1](event)
+        expect(event.preventDefault).to.have.callCount(1)
+        expect(event.returnValue).to.equal('')
+      })
+  })
 })

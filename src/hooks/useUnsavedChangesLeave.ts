@@ -1,7 +1,7 @@
 'use client'
 
 import type { UnsavedChangesLeaveHandle } from '@/components/modals/LibraryItemModal'
-import { useCallback, useImperativeHandle, useRef, useState, type Ref } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 
 interface UseUnsavedChangesLeaveOptions {
   /** When false, leave requests run right away. */
@@ -75,6 +75,18 @@ export function useUnsavedChangesLeave({ isDirty, closeRequestRef, onBeforeLeave
   }, [leave])
 
   useImperativeHandle(closeRequestRef, () => ({ requestLeave }), [requestLeave])
+
+  // Reload, tab close, or a full page load while dirty. A plain listener on purpose:
+  // useUnsavedNavigationGuard's history trap would clash with useModalHistory.
+  useEffect(() => {
+    if (!isDirty) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
 
   return {
     showLeaveConfirm,
