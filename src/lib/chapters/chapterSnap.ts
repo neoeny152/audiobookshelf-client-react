@@ -1,4 +1,4 @@
-import type { EditableChapter } from '@/lib/chapters/chapterEditorUtils'
+import { normalizeChapterStartSec, type EditableChapter } from '@/lib/chapters/chapterEditorUtils'
 import type { SnapChapterConfidence, SnapChapterPause, SnapChapterReason, SnapChaptersPayload, SnapChaptersResponse } from '@/types/api'
 
 /** The advanced settings the panel exposes; the server echoes back what it used. */
@@ -73,7 +73,8 @@ export function clampSnapOption(key: keyof SnapAdvancedOptions, value: number): 
 
 /**
  * Request for the CURRENT editor rows (so unsaved edits are snapped). With a selection, only the selected
- * rows are snapped; the others come back `not-requested`.
+ * rows are snapped; the others come back `not-requested`. Starts are sent as whole seconds, the value the editor
+ * saves: freshly loaded chapters can still hold the server's fractional starts.
  */
 export function buildSnapPayload(
   chapters: EditableChapter[],
@@ -82,7 +83,7 @@ export function buildSnapPayload(
 ): { payload: SnapChaptersPayload; snapshot: SnapSnapshotChapter[] } {
   const snapshot = chapters.map((chapter, i) => ({
     clientKey: chapter.clientKey ?? `index-${i}`,
-    start: chapter.start,
+    start: normalizeChapterStartSec(chapter.start),
     title: (chapter.title || '').trim()
   }))
 

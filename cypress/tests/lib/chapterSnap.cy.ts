@@ -129,6 +129,21 @@ describe('applySnapProposals', () => {
     expect(result.chapters).to.equal(chapters)
   })
 
+  it('matches fractional editor starts (freshly loaded chapters) against whole-second picks', () => {
+    const chapters = rows([0, 100.6, 200.4, 300])
+    const result = applySnapProposals(chapters, [{ clientKey: 'ch-1', fromStart: 101, toStart: 96 }], mediaDuration)
+    expect(result.applied).to.equal(1)
+    expect(result.skipped).to.equal(0)
+    expect(result.chapters.map((c) => c.start)).to.deep.equal([0, 96, 200.4, 300])
+  })
+
+  it('reverts a move that would collide with a fractional neighbour once rounded', () => {
+    const chapters = rows([0, 96.6, 120, 300])
+    const result = applySnapProposals(chapters, [{ clientKey: 'ch-2', fromStart: 120, toStart: 97 }], mediaDuration)
+    expect(result.applied).to.equal(0)
+    expect(result.skipped).to.equal(1)
+  })
+
   it('returns the same array when nothing is picked', () => {
     const chapters = rows([0, 100])
     expect(applySnapProposals(chapters, [], mediaDuration).chapters).to.equal(chapters)
@@ -168,6 +183,12 @@ describe('buildSnapPayload', () => {
     expect(payload).not.to.have.property('indexes')
     expect(payload.options).to.deep.equal(SNAP_DEFAULT_OPTIONS)
     expect(snapshot.map((s) => s.clientKey)).to.deep.equal(['ch-0', 'ch-1', 'ch-2'])
+  })
+
+  it('sends whole-second starts when the editor still holds fractional ones', () => {
+    const { payload, snapshot } = buildSnapPayload(rows([0, 100.6, 200.4]), new Set(), SNAP_DEFAULT_OPTIONS)
+    expect(payload.chapters?.map((c) => c.start)).to.deep.equal([0, 101, 200])
+    expect(snapshot.map((s) => s.start)).to.deep.equal([0, 101, 200])
   })
 
   it('sends indexes for the selected rows only and omits empty titles', () => {
@@ -210,6 +231,27 @@ describe('snap rows and retry', () => {
     expect(result.map((r) => r.changed)).to.deep.equal([false, true, true, false])
     expect([...getDefaultSnapChecked(result)]).to.deep.equal([1])
     expect(result.map((r) => r.beforePause)).to.deep.equal([false, false, false, false])
+  })
+
+  it('reports whole-second deltas for chapters loaded with fractional starts', () => {
+    const { snapshot: fractionalSnapshot } = buildSnapPayload(rows([0, 100.6, 200.4, 300]), new Set(), SNAP_DEFAULT_OPTIONS)
+    const result = buildSnapRows({
+      snapshot: fractionalSnapshot,
+      response: response(
+        [
+          proposal({ index: 0, originalStart: 0, reason: 'first-chapter', confidence: 'high' }),
+          proposal({ index: 1, originalStart: 101, proposedStart: 96.75, reason: 'nearest-longest-pause', confidence: 'high', pause: pause(95, 97) }),
+          proposal({ index: 2, originalStart: 200, proposedStart: 200.45, reason: 'nearest-longest-pause', confidence: 'high', pause: pause(199.5, 200.7) }),
+          proposal({ index: 3, originalStart: 300, reason: 'inside-pause', confidence: 'high', pause: pause(299, 301) })
+        ],
+        true
+      ),
+      options: { ...SNAP_DEFAULT_OPTIONS }
+    })
+
+    expect(result.map((r) => r.originalStart)).to.deep.equal([0, 101, 200, 300])
+    expect(result.map((r) => r.delta)).to.deep.equal([0, -5, 0, 0])
+    expect(result.map((r) => r.changed)).to.deep.equal([false, true, false, false])
   })
 
   it('flags and does not pre-check a row rounded to just before a pause with no whole second in it', () => {

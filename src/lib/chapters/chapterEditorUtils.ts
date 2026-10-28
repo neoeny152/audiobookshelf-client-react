@@ -293,7 +293,7 @@ export function shiftChapterTimes(
 export interface SnapProposalPick {
   /** Row identity, so a proposal still lands on its chapter if rows were inserted or removed since the snap. */
   clientKey: string
-  /** The start the proposal was computed from; a row whose start changed since is left alone. */
+  /** The whole-second start the proposal was computed from; a row whose start changed since is left alone. */
   fromStart: number
   toStart: number
 }
@@ -302,6 +302,7 @@ export interface SnapProposalPick {
  * Apply snap proposals: changes start times only (never titles, never order). The first chapter stays at 0.
  * A pick is skipped when its row is gone or was edited since the snap, when it falls outside the book,
  * or when it would no longer sit strictly between its neighbours. Ends of touched rows follow the next start.
+ * Starts are compared as whole seconds (as the editor saves them), so fractional starts loaded from the server match.
  */
 export function applySnapProposals(
   chapters: EditableChapter[],
@@ -324,8 +325,9 @@ export function applySnapProposals(
       continue
     }
     const current = chapters[index]
-    if (current.start === pick.toStart) continue
-    if (index === 0 || current.start !== pick.fromStart || !Number.isFinite(pick.toStart) || pick.toStart <= 0 || pick.toStart >= mediaDuration) {
+    const currentStart = normalizeChapterStartSec(current.start)
+    if (currentStart === pick.toStart) continue
+    if (index === 0 || currentStart !== pick.fromStart || !Number.isFinite(pick.toStart) || pick.toStart <= 0 || pick.toStart >= mediaDuration) {
       skipped++
       continue
     }
@@ -337,7 +339,7 @@ export function applySnapProposals(
   // with no moves left the list is back to the input.
   let i = 1
   while (i < next.length) {
-    if ((moved.has(i) || moved.has(i - 1)) && next[i].start <= next[i - 1].start) {
+    if ((moved.has(i) || moved.has(i - 1)) && normalizeChapterStartSec(next[i].start) <= normalizeChapterStartSec(next[i - 1].start)) {
       const revert = moved.has(i) ? i : i - 1
       next[revert] = chapters[revert]
       moved.delete(revert)
