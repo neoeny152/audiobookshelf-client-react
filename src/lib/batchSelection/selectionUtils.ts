@@ -1,17 +1,24 @@
 import { batchDeleteLibraryItemsAction, batchEmbedMetadataAction, batchScanLibraryItemsAction } from '@/app/actions/batchActions'
 import { batchUpdateMediaFinishedAction, deleteLibraryItemMediaEpisodeAction } from '@/app/actions/mediaActions'
 import { fetchSelectedPodcasts } from '@/lib/batchSelection/selectionEpisodes'
+import type { ActionResult } from '@/lib/actionResult'
 import { downloadLibraryItemFile, downloadLibraryItems } from '@/lib/download'
 import type { SelectedMediaItem } from '@/lib/selectedMediaItem'
 
+/** Throws with the server's message so batch callers keep their try/catch flow. */
+function throwIfFailed(result: ActionResult<unknown>) {
+  if (!result.ok) throw new Error(result.error)
+}
+
 export async function toggleFinishedSelection(selectedItems: readonly SelectedMediaItem[], allFinished: boolean) {
-  await batchUpdateMediaFinishedAction(
+  const result = await batchUpdateMediaFinishedAction(
     selectedItems.map((item) => ({
       libraryItemId: item.libraryItemId,
       episodeId: item.episodeId,
       isFinished: !allFinished
     }))
   )
+  throwIfFailed(result)
 }
 
 export async function deleteLibraryItemsSelection(uniqueLibraryItemIds: string[], hardDelete: boolean) {
@@ -21,7 +28,7 @@ export async function deleteLibraryItemsSelection(uniqueLibraryItemIds: string[]
 export async function deleteEpisodesSelection(selectedItems: readonly SelectedMediaItem[], hardDelete: boolean) {
   for (const item of selectedItems) {
     if (!item.episodeId) continue
-    await deleteLibraryItemMediaEpisodeAction(item.libraryItemId, item.episodeId, hardDelete)
+    throwIfFailed(await deleteLibraryItemMediaEpisodeAction(item.libraryItemId, item.episodeId, hardDelete))
   }
 }
 

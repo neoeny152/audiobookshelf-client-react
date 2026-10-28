@@ -122,7 +122,12 @@ function EpisodeEditModalContent({ isOpen, startSaveTransition, isSavePending, o
 
       startSaveTransition(async () => {
         try {
-          const updatedLibraryItem = await updatePodcastEpisodeAction(libraryItemId, episodeId, result.updatePayload)
+          const updateResult = await updatePodcastEpisodeAction(libraryItemId, episodeId, result.updatePayload)
+          if (!updateResult.ok) {
+            showToast(updateResult.error || t('ToastFailedToUpdate'), { type: 'error' })
+            return
+          }
+          const updatedLibraryItem = updateResult.data
           const updatedEpisode = updatedLibraryItem.media.episodes?.find((ep) => ep.id === episodeId)
           if (!updatedEpisode) {
             throw new Error('Updated episode not found in response')

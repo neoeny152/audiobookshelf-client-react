@@ -201,10 +201,15 @@ export function useMediaCardActions({
       startTransition(async () => {
         try {
           setProcessing(true)
-          await toggleFinishedAction(libraryItem.id, {
+          const result = await toggleFinishedAction(libraryItem.id, {
             isFinished: !itemIsFinished,
             episodeId: episode?.id
           })
+          if (!result.ok) {
+            showToast(result.error || (!itemIsFinished ? t('ToastItemMarkedAsFinishedFailed') : t('ToastItemMarkedAsNotFinishedFailed')), {
+              type: 'error'
+            })
+          }
         } catch (error) {
           console.error('Failed to toggle finished', error)
           showToast(!itemIsFinished ? t('ToastItemMarkedAsFinishedFailed') : t('ToastItemMarkedAsNotFinishedFailed'), {
@@ -272,7 +277,11 @@ export function useMediaCardActions({
             startTransition(async () => {
               try {
                 setProcessing(true)
-                await deleteLibraryItemMediaEpisodeAction(libraryItem.id, episode.id, hardDelete)
+                const result = await deleteLibraryItemMediaEpisodeAction(libraryItem.id, episode.id, hardDelete)
+                if (!result.ok) {
+                  showToast(result.error || t('ToastItemDeletedFailed'), { type: 'error' })
+                  return
+                }
                 showToast(t('ToastItemDeletedSuccess'), { type: 'success' })
                 onDeleteSuccess?.()
               } catch (error) {
@@ -318,7 +327,11 @@ export function useMediaCardActions({
             startTransition(async () => {
               try {
                 setProcessing(true)
-                await sendEbookToDeviceAction({ libraryItemId: libraryItem.id, deviceName })
+                const result = await sendEbookToDeviceAction({ libraryItemId: libraryItem.id, deviceName })
+                if (!result.ok) {
+                  showToast(result.error || t('ToastSendEbookToDeviceFailed'), { type: 'error' })
+                  return
+                }
                 showToast(t('ToastSendEbookToDeviceSuccess', { 0: deviceName }), { type: 'success' })
               } catch (error) {
                 console.error('Failed to send ebook to device', error)
@@ -359,7 +372,11 @@ export function useMediaCardActions({
           try {
             setProcessing(true)
             const result = await rescanLibraryItemAction(libraryItem.id)
-            const outcome = result?.result
+            if (!result.ok) {
+              showToast(result.error || t('ToastScanFailed'), { type: 'error' })
+              return
+            }
+            const outcome = result.data?.result
             if (!outcome) {
               showToast(t('ToastRescanFailedGeneric'), { type: 'error' })
             } else {
@@ -385,7 +402,10 @@ export function useMediaCardActions({
         startTransition(async () => {
           try {
             setProcessing(true)
-            await removeFromContinueListeningAction(progressId)
+            const result = await removeFromContinueListeningAction(progressId)
+            if (!result.ok) {
+              showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+            }
           } catch (error) {
             console.error('Failed to remove from continue listening', error)
             showToast(t('ToastFailedToUpdate'), { type: 'error' })
@@ -401,7 +421,10 @@ export function useMediaCardActions({
         startTransition(async () => {
           try {
             setProcessing(true)
-            await removeSeriesFromContinueListeningAction(seriesId)
+            const result = await removeSeriesFromContinueListeningAction(seriesId)
+            if (!result.ok) {
+              showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+            }
           } catch (error) {
             console.error('Failed to remove series from continue series', error)
             showToast(t('ToastFailedToUpdate'), { type: 'error' })
@@ -418,7 +441,11 @@ export function useMediaCardActions({
             startTransition(async () => {
               try {
                 setProcessing(true)
-                await deleteLibraryItemAction(libraryItem.id, hardDelete)
+                const result = await deleteLibraryItemAction(libraryItem.id, hardDelete)
+                if (!result.ok) {
+                  showToast(result.error || t('ToastItemDeletedFailed'), { type: 'error' })
+                  return
+                }
                 showToast(t('ToastItemDeletedSuccess'), { type: 'success' })
                 refetchFilterDataSilently()
                 onDeleteSuccess?.()

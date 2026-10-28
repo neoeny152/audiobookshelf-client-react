@@ -246,17 +246,24 @@ export default function EpisodeFeedModal({ isOpen, onClose, libraryItem, episode
       }
 
       startTransition(async () => {
+        const resetSelection = () => {
+          setSelectedEpisodes(new Set())
+          setSelectAll(false)
+          lastSelectedEpisodeUrlRef.current = null
+        }
         try {
-          await downloadPodcastEpisodesAction(libraryItem.id, episodesToDownload)
+          const result = await downloadPodcastEpisodesAction(libraryItem.id, episodesToDownload)
+          if (!result.ok) {
+            showToast(result.error || t('ToastFailedToDownloadEpisodes'), { type: 'error' })
+            resetSelection()
+            return
+          }
           showToast(t('ToastStartedDownloadingEpisodes'), { type: 'success' })
           onClose()
         } catch (error: Error | unknown) {
           console.error('Failed to download episodes', error)
-          const errorMessage = error instanceof Error ? error.message : ''
-          showToast(errorMessage || t('ToastFailedToDownloadEpisodes'), { type: 'error' })
-          setSelectedEpisodes(new Set())
-          setSelectAll(false)
-          lastSelectedEpisodeUrlRef.current = null
+          showToast(t('ToastFailedToDownloadEpisodes'), { type: 'error' })
+          resetSelection()
         }
       })
     },

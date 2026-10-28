@@ -36,7 +36,10 @@ export default function LibraryItemProgressPanel({ libraryItem, mediaProgress, d
   const handleConfirmReset = useCallback(async () => {
     setIsConfirmOpen(false)
     try {
-      await deleteMediaProgressAction(mediaProgress.id)
+      const result = await deleteMediaProgressAction(mediaProgress.id)
+      if (!result.ok) {
+        showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+      }
     } catch (error) {
       console.error('Progress reset failed', error)
       showToast(t('ToastFailedToUpdate'), { type: 'error' })

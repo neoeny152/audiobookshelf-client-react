@@ -96,7 +96,12 @@ export default function EpisodeMatch({ libraryItem, episode, onEpisodeUpdated }:
 
       startApplyTransition(async () => {
         try {
-          const updatedLibraryItem = await updatePodcastEpisodeAction(libraryItem.id, episode.id, updatePayload)
+          const result = await updatePodcastEpisodeAction(libraryItem.id, episode.id, updatePayload)
+          if (!result.ok) {
+            showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+            return
+          }
+          const updatedLibraryItem = result.data
           const updatedEpisode = updatedLibraryItem.media.episodes?.find((ep) => ep.id === episode.id)
           showToast(t('ToastPodcastEpisodeUpdated'), { type: 'success' })
           if (updatedEpisode) {

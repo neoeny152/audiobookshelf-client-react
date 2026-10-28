@@ -201,10 +201,14 @@ export function LibraryItemEditModalContent({
 
       startSaveTransition(async () => {
         try {
-          await updateLibraryItemMediaAction(itemId, {
+          const result = await updateLibraryItemMediaAction(itemId, {
             metadata: details.updatePayload.metadata,
             tags: details.updatePayload.tags
           })
+          if (!result.ok) {
+            showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+            return
+          }
           showToast(t('ToastItemUpdateSuccess'), { type: 'success' })
           setHasChanges(false)
           if (pendingLeaveRef.current) {

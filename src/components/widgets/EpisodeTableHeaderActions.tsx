@@ -43,7 +43,11 @@ export default function EpisodeTableHeaderActions({
           startTransition(async () => {
             try {
               for (const episodeId of Array.from(selectedEpisodes)) {
-                await deleteLibraryItemMediaEpisodeAction(libraryItemId, episodeId, hardDelete)
+                const result = await deleteLibraryItemMediaEpisodeAction(libraryItemId, episodeId, hardDelete)
+                if (!result.ok) {
+                  showToast(result.error || t('ToastEpisodeBatchDeleteFailed'), { type: 'error' })
+                  return
+                }
               }
               onClearSelection()
             } catch (err: unknown) {
@@ -65,13 +69,16 @@ export default function EpisodeTableHeaderActions({
               const markState = !allSelectedEpisodesFinished
               startTransition(async () => {
                 try {
-                  await batchUpdateMediaFinishedAction(
+                  const result = await batchUpdateMediaFinishedAction(
                     Array.from(selectedEpisodes).map((episodeId) => ({
                       libraryItemId,
                       episodeId,
                       isFinished: markState
                     }))
                   )
+                  if (!result.ok) {
+                    showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+                  }
                 } catch (error) {
                   console.error('Failed to batch update selected episodes', error)
                   showToast(t('ToastFailedToUpdate'), { type: 'error' })

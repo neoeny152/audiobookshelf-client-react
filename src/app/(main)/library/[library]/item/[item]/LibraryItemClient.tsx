@@ -97,7 +97,11 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
 
   const handleClearDownloadQueue = useCallback(async () => {
     try {
-      await clearPodcastDownloadQueueAction(libraryItem.id)
+      const result = await clearPodcastDownloadQueueAction(libraryItem.id)
+      if (!result.ok) {
+        showToast(result.error || t('ToastEpisodeDownloadQueueClearFailed'), { type: 'error' })
+        return
+      }
       showToast(t('ToastEpisodeDownloadQueueClearSuccess'), { type: 'success' })
       setIsClearQueueDialogOpen(false)
     } catch (error) {

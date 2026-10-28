@@ -212,7 +212,10 @@ function CompilationItemListRowBody({
     setIsProcessingReadUpdate(true)
     startTransition(async () => {
       try {
-        await toggleFinishedAction(libraryItem.id, { isFinished: !bookUserIsFinished, episodeId: episodeId ?? undefined })
+        const result = await toggleFinishedAction(libraryItem.id, { isFinished: !bookUserIsFinished, episodeId: episodeId ?? undefined })
+        if (!result.ok) {
+          showToast(result.error || (bookUserIsFinished ? t('ToastItemMarkedAsNotFinishedFailed') : t('ToastItemMarkedAsFinishedFailed')), { type: 'error' })
+        }
       } catch (error) {
         console.error('Failed to toggle finished', error)
         showToast(bookUserIsFinished ? t('ToastItemMarkedAsNotFinishedFailed') : t('ToastItemMarkedAsFinishedFailed'), { type: 'error' })

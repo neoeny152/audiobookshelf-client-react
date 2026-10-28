@@ -1,5 +1,6 @@
 'use server'
 
+import { ActionResult, toActionResult } from '@/lib/actionResult'
 import * as api from '@/lib/api'
 import { RssPodcastEpisode, UpdateLibraryItemMediaPayload, UpdatePodcastEpisodePayload, type BatchUpdateLibraryItemPayload } from '@/types/api'
 import { revalidatePath } from 'next/cache'
@@ -9,24 +10,30 @@ function revalidateSeriesPage(libraryId: string, seriesId: string) {
 }
 
 export async function toggleFinishedAction(libraryItemId: string, params: { isFinished: boolean; episodeId?: string }) {
-  return api.updateMediaFinished(libraryItemId, params)
+  return toActionResult(() => api.updateMediaFinished(libraryItemId, params))
 }
 
 export async function deleteMediaProgressAction(progressId: string) {
-  return api.deleteMediaProgress(progressId)
+  return toActionResult(() => api.deleteMediaProgress(progressId))
 }
 
 export async function batchUpdateMediaFinishedAction(payload: { libraryItemId: string; episodeId?: string; isFinished: boolean }[]) {
-  return api.batchUpdateMediaFinished(payload)
+  return toActionResult(() => api.batchUpdateMediaFinished(payload))
 }
 
-export async function markSeriesFinishedAction(libraryId: string, seriesId: string, payload: { libraryItemId: string; isFinished: boolean }[]) {
-  await api.batchUpdateMediaFinished(payload)
+export async function markSeriesFinishedAction(
+  libraryId: string,
+  seriesId: string,
+  payload: { libraryItemId: string; isFinished: boolean }[]
+): Promise<ActionResult> {
+  const result = await toActionResult(() => api.batchUpdateMediaFinished(payload))
+  if (!result.ok) return result
   revalidateSeriesPage(libraryId, seriesId)
+  return { ok: true, data: undefined }
 }
 
 export async function updateLibraryItemMediaAction(libraryItemId: string, payload: UpdateLibraryItemMediaPayload) {
-  return api.updateLibraryItemMedia(libraryItemId, payload)
+  return toActionResult(() => api.updateLibraryItemMedia(libraryItemId, payload))
 }
 
 export async function batchGetLibraryItemsAction(libraryItemIds: string[]) {
@@ -34,31 +41,31 @@ export async function batchGetLibraryItemsAction(libraryItemIds: string[]) {
 }
 
 export async function batchUpdateLibraryItemsAction(payload: BatchUpdateLibraryItemPayload[]) {
-  return api.batchUpdateLibraryItems(payload)
+  return toActionResult(() => api.batchUpdateLibraryItems(payload))
 }
 
 export async function rescanLibraryItemAction(libraryItemId: string) {
-  return api.rescanLibraryItem(libraryItemId)
+  return toActionResult(() => api.rescanLibraryItem(libraryItemId))
 }
 
 export async function sendEbookToDeviceAction(payload: { libraryItemId: string; deviceName: string }) {
-  return api.sendEbookToDevice(payload)
+  return toActionResult(() => api.sendEbookToDevice(payload))
 }
 
 export async function removeSeriesFromContinueListeningAction(seriesId: string) {
-  return api.removeSeriesFromContinueListening(seriesId)
+  return toActionResult(() => api.removeSeriesFromContinueListening(seriesId))
 }
 
 export async function readdSeriesToContinueListeningAction(seriesId: string) {
-  return api.readdSeriesToContinueListening(seriesId)
+  return toActionResult(() => api.readdSeriesToContinueListening(seriesId))
 }
 
 export async function removeFromContinueListeningAction(progressId: string) {
-  return api.removeFromContinueListening(progressId)
+  return toActionResult(() => api.removeFromContinueListening(progressId))
 }
 
 export async function deleteLibraryItemAction(libraryItemId: string, hardDelete: boolean) {
-  return api.deleteLibraryItem(libraryItemId, hardDelete)
+  return toActionResult(() => api.deleteLibraryItem(libraryItemId, hardDelete))
 }
 
 export async function getExpandedLibraryItemAction(libraryItemId: string) {
@@ -66,7 +73,7 @@ export async function getExpandedLibraryItemAction(libraryItemId: string) {
 }
 
 export async function deleteLibraryItemMediaEpisodeAction(libraryItemId: string, episodeId: string, hardDelete = false) {
-  return api.deleteLibraryItemMediaEpisode(libraryItemId, episodeId, hardDelete)
+  return toActionResult(() => api.deleteLibraryItemMediaEpisode(libraryItemId, episodeId, hardDelete))
 }
 
 export async function fetchPodcastFeedAction(rssFeed: string) {
@@ -74,19 +81,19 @@ export async function fetchPodcastFeedAction(rssFeed: string) {
 }
 
 export async function downloadPodcastEpisodesAction(libraryItemId: string, episodes: RssPodcastEpisode[]) {
-  return api.downloadPodcastEpisodes(libraryItemId, episodes)
+  return toActionResult(() => api.downloadPodcastEpisodes(libraryItemId, episodes))
 }
 
 export async function clearPodcastDownloadQueueAction(libraryItemId: string) {
-  return api.clearPodcastDownloadQueue(libraryItemId)
+  return toActionResult(() => api.clearPodcastDownloadQueue(libraryItemId))
 }
 
 export async function checkPodcastNewEpisodesAction(libraryItemId: string, limit: number) {
-  return api.checkPodcastNewEpisodes(libraryItemId, limit)
+  return toActionResult(() => api.checkPodcastNewEpisodes(libraryItemId, limit))
 }
 
 export async function quickMatchPodcastEpisodesAction(libraryItemId: string) {
-  return api.quickMatchPodcastEpisodes(libraryItemId)
+  return toActionResult(() => api.quickMatchPodcastEpisodes(libraryItemId))
 }
 
 export async function getPodcastEpisodeAction(libraryItemId: string, episodeId: string) {
@@ -94,7 +101,7 @@ export async function getPodcastEpisodeAction(libraryItemId: string, episodeId: 
 }
 
 export async function updatePodcastEpisodeAction(libraryItemId: string, episodeId: string, payload: UpdatePodcastEpisodePayload) {
-  return api.updatePodcastEpisode(libraryItemId, episodeId, payload)
+  return toActionResult(() => api.updatePodcastEpisode(libraryItemId, episodeId, payload))
 }
 
 export async function searchPodcastEpisodeAction(libraryItemId: string, title: string) {

@@ -1,4 +1,5 @@
 import { updatePodcastEpisodeAction } from '@/app/actions/mediaActions'
+import type { ActionResult } from '@/lib/actionResult'
 import type { SelectedMediaItem, SelectionKind } from '@/lib/selectedMediaItem'
 import type { BookLibraryItem, BookMetadata, LibraryItem, PodcastLibraryItem, PodcastMetadata, UpdatePodcastEpisodePayload } from '@/types/api'
 
@@ -79,12 +80,16 @@ export interface EpisodeBatchUpdate {
   payload: UpdatePodcastEpisodePayload
 }
 
-/** Save episode batch updates one at a time. Replace with server batch endpoint when available. */
-export async function saveEpisodeBatchSequential(updates: EpisodeBatchUpdate[]): Promise<number> {
+/**
+ * Save episode batch updates one at a time, stopping at the first failure.
+ * Replace with server batch endpoint when available.
+ */
+export async function saveEpisodeBatchSequential(updates: EpisodeBatchUpdate[]): Promise<ActionResult<number>> {
   let count = 0
   for (const { libraryItemId, episodeId, payload } of updates) {
-    await updatePodcastEpisodeAction(libraryItemId, episodeId, payload)
+    const result = await updatePodcastEpisodeAction(libraryItemId, episodeId, payload)
+    if (!result.ok) return result
     count++
   }
-  return count
+  return { ok: true, data: count }
 }

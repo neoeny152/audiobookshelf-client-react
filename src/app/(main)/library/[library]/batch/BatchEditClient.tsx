@@ -241,7 +241,12 @@ export default function BatchEditClient({ libraryId }: BatchEditClientProps) {
           }
         }
 
-        const count = await saveEpisodeBatchSequential(updates)
+        const result = await saveEpisodeBatchSequential(updates)
+        if (!result.ok) {
+          showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+          return
+        }
+        const count = result.data
         const returnPath = session.returnPath || getDefaultReturnPath(libraryId, 'episode')
         clearBatchEditSession()
         showToast(t('MessageItemsUpdated', { 0: count.toString() }), { type: 'success' })
@@ -267,7 +272,12 @@ export default function BatchEditClient({ libraryId }: BatchEditClientProps) {
           return
         }
 
-        const response = await batchUpdateLibraryItemsAction(updates)
+        const result = await batchUpdateLibraryItemsAction(updates)
+        if (!result.ok) {
+          showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+          return
+        }
+        const response = result.data
         if (response.updates) {
           const returnPath = session.returnPath || getDefaultReturnPath(libraryId, session.selectionKind)
           clearBatchEditSession()

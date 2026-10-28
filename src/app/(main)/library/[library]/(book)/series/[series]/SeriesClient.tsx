@@ -92,7 +92,11 @@ export default function SeriesClient({ series: seriesProp }: SeriesClientProps) 
 
     startReaddSeriesTransition(async () => {
       try {
-        await readdSeriesToContinueListeningAction(series.id)
+        const result = await readdSeriesToContinueListeningAction(series.id)
+        if (!result.ok) {
+          showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+          return
+        }
         showToast(t('ToastItemUpdateSuccess'), { type: 'success' })
       } catch (error) {
         console.error('Failed to re-add series to continue listening', error)
@@ -113,7 +117,7 @@ export default function SeriesClient({ series: seriesProp }: SeriesClientProps) 
 
     startMarkSeriesFinishedTransition(async () => {
       try {
-        await markSeriesFinishedAction(
+        const result = await markSeriesFinishedAction(
           library.id,
           series.id,
           seriesLibraryItemIds.map((libraryItemId) => ({
@@ -121,6 +125,10 @@ export default function SeriesClient({ series: seriesProp }: SeriesClientProps) 
             isFinished: newIsFinished
           }))
         )
+        if (!result.ok) {
+          showToast(result.error || t('ToastSeriesUpdateFailed'), { type: 'error' })
+          return
+        }
 
         showToast(t('ToastSeriesUpdateSuccess'), { type: 'success' })
         setMarkSeriesConfirmOpen(false)

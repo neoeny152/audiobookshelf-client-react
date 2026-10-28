@@ -127,10 +127,15 @@ export function useEpisodeListenActions({ libraryItemId, episode, itemTitle, get
     setIsProcessingFinished(true)
     startTransition(async () => {
       try {
-        await toggleFinishedAction(libraryItemId, {
+        const result = await toggleFinishedAction(libraryItemId, {
           isFinished: !userIsFinished,
           episodeId: episode.id
         })
+        if (!result.ok) {
+          showToast(result.error || (!userIsFinished ? t('ToastItemMarkedAsFinishedFailed') : t('ToastItemMarkedAsNotFinishedFailed')), {
+            type: 'error'
+          })
+        }
       } catch (error) {
         console.error('Failed to toggle finished', error)
         showToast(!userIsFinished ? t('ToastItemMarkedAsFinishedFailed') : t('ToastItemMarkedAsNotFinishedFailed'), {
@@ -155,10 +160,14 @@ export function useEpisodeListenActions({ libraryItemId, episode, itemTitle, get
           onClose={clearBoundModal}
           onConfirm={() => {
             clearBoundModal()
-            void toggleFinishedAction(libraryItemId, { isFinished: true, episodeId }).catch((error) => {
-              console.error('Failed to toggle finished', error)
-              showToast(t('ToastItemMarkedAsFinishedFailed'), { type: 'error' })
-            })
+            void toggleFinishedAction(libraryItemId, { isFinished: true, episodeId })
+              .then((result) => {
+                if (!result.ok) showToast(result.error || t('ToastItemMarkedAsFinishedFailed'), { type: 'error' })
+              })
+              .catch((error) => {
+                console.error('Failed to toggle finished', error)
+                showToast(t('ToastItemMarkedAsFinishedFailed'), { type: 'error' })
+              })
           }}
         />
       )

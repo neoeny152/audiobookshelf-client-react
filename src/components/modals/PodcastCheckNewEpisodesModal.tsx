@@ -88,12 +88,20 @@ export default function PodcastCheckNewEpisodesModal({ isOpen, onClose, libraryI
     setIsChecking(true)
     try {
       if (lastEpisodeCheck !== savedLastEpisodeCheck) {
-        await updateLibraryItemMediaAction(libraryItem.id, { lastEpisodeCheck })
+        const updateResult = await updateLibraryItemMediaAction(libraryItem.id, { lastEpisodeCheck })
+        if (!updateResult.ok) {
+          showToast(updateResult.error || t('ToastFailedToUpdate'), { type: 'error' })
+          return
+        }
       }
 
-      const response = await checkPodcastNewEpisodesAction(libraryItem.id, parsedLimit)
+      const result = await checkPodcastNewEpisodesAction(libraryItem.id, parsedLimit)
+      if (!result.ok) {
+        showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+        return
+      }
       saveMaxEpisodesToDownload(parsedLimit)
-      const newEpisodes = response?.episodes ?? []
+      const newEpisodes = result.data?.episodes ?? []
 
       if (newEpisodes.length > 0) {
         showToast(t('ToastNewEpisodesFound', { 0: newEpisodes.length }), { type: 'success' })

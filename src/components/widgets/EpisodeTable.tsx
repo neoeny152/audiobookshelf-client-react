@@ -228,7 +228,10 @@ export default function EpisodeTable({
     (episode: PodcastEpisode, hardDelete: boolean) => {
       startTransition(async () => {
         try {
-          await deleteLibraryItemMediaEpisodeAction(libraryItem.id, episode.id, hardDelete)
+          const result = await deleteLibraryItemMediaEpisodeAction(libraryItem.id, episode.id, hardDelete)
+          if (!result.ok) {
+            showToast(result.error || t('ToastItemDeletedFailed'), { type: 'error' })
+          }
         } catch (err: unknown) {
           console.error('Failed to remove episode', err)
           showToast(t('ToastItemDeletedFailed'), { type: 'error' })
@@ -265,7 +268,12 @@ export default function EpisodeTable({
             setBatchMarkConfirmState(null)
             startTransition(async () => {
               try {
-                const { numEpisodesUpdated } = await quickMatchPodcastEpisodesAction(libraryItem.id)
+                const result = await quickMatchPodcastEpisodesAction(libraryItem.id)
+                if (!result.ok) {
+                  showToast(result.error || t('ToastFailedToMatch'), { type: 'error' })
+                  return
+                }
+                const { numEpisodesUpdated } = result.data
                 if (numEpisodesUpdated) {
                   showToast(t('ToastEpisodeUpdateSuccess', { 0: numEpisodesUpdated }), { type: 'success' })
                 } else {
@@ -288,13 +296,17 @@ export default function EpisodeTable({
             setBatchMarkConfirmState(null)
             startTransition(async () => {
               try {
-                await batchUpdateMediaFinishedAction(
+                const result = await batchUpdateMediaFinishedAction(
                   episodes.map((episode) => ({
                     libraryItemId: libraryItem.id,
                     episodeId: episode.id,
                     isFinished: markState
                   }))
                 )
+                if (!result.ok) {
+                  showToast(result.error || t('ToastBatchUpdateFailed'), { type: 'error' })
+                  return
+                }
                 showToast(t('ToastBatchUpdateSuccess'), { type: 'success' })
               } catch (error) {
                 console.error('Failed to batch mark episodes finished state', error)

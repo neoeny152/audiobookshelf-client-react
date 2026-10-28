@@ -132,12 +132,16 @@ export default function PodcastDownloadScheduleModal({ isOpen, onClose, libraryI
 
     setIsSaving(true)
     try {
-      await updateLibraryItemMediaAction(libraryItem.id, {
+      const result = await updateLibraryItemMediaAction(libraryItem.id, {
         autoDownloadEpisodes: true,
         autoDownloadSchedule: cronExpression,
         maxEpisodesToKeep: parsedMaxEpisodesToKeep,
         maxNewEpisodesToDownload: parsedMaxNewEpisodesToDownload
       })
+      if (!result.ok) {
+        showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+        return
+      }
       showToast(t('ToastItemDetailsUpdateSuccess'), { type: 'success' })
       onClose()
     } catch (error) {
@@ -166,9 +170,13 @@ export default function PodcastDownloadScheduleModal({ isOpen, onClose, libraryI
 
     setIsDisabling(true)
     try {
-      await updateLibraryItemMediaAction(libraryItem.id, {
+      const result = await updateLibraryItemMediaAction(libraryItem.id, {
         autoDownloadEpisodes: false
       })
+      if (!result.ok) {
+        showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+        return
+      }
       showToast(t('ToastItemDetailsUpdateSuccess'), { type: 'success' })
       onClose()
     } catch (error) {
