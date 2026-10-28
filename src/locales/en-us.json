@@ -1306,6 +1306,7 @@
   "ToastEpubFromAudioCancelFailedWithError": "Couldn't cancel the EPUB: {error}",
   "ToastEpubFromAudioCancelled": "EPUB from audio cancelled",
   "ToastEpubFromAudioDone": "EPUB created: {fileName}",
+  "ToastEpubFromAudioDoneNoName": "EPUB created",
   "ToastEpubFromAudioFailed": "Making the EPUB failed",
   "ToastEpubFromAudioFailedWithError": "Making the EPUB failed: {error}",
   "ToastEpubFromAudioForbidden": "You don't have permission to make an EPUB for this book",
