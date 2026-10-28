@@ -6,7 +6,7 @@ import { useLibraryOptional } from '@/contexts/LibraryContext'
 import { useMediaContext } from '@/contexts/MediaContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
-import { writeBatchEditSession } from '@/lib/batchEdit'
+import { BATCH_EDIT_SOFT_LIMIT, writeBatchEditSession } from '@/lib/batchEdit'
 import { buildSelectedBooksPlayPayload, buildSelectedEpisodesPlayPayload } from '@/lib/batchSelection/selectionPlayback'
 import {
   deleteEpisodesSelection,
@@ -37,6 +37,8 @@ interface UseAppBarBatchActionsParams {
 export interface AppBarBatchActionsResult {
   onBatchAction: (action: AppBarBatchActionId) => void
   processing: boolean
+  /** Progress of a long batch (episode removal), null otherwise. */
+  progress: { done: number; total: number } | null
   confirmState: ConfirmState | null
   closeConfirm: () => void
   modalsProps: AppBarBatchActionModalsProps
@@ -60,6 +62,7 @@ export function useAppBarBatchActions({
   const [collectionsModalOpen, setCollectionsModalOpen] = useState(false)
   const [playlistsModalOpen, setPlaylistsModalOpen] = useState(false)
   const [quickMatchModalOpen, setQuickMatchModalOpen] = useState(false)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
 
   const uniqueLibraryItemIds = useMemo(() => [...new Set(selectedItems.map((item) => item.libraryItemId))], [selectedItems])
   const playlistItems = useMemo(() => selectedItems.map((item) => ({ libraryItemId: item.libraryItemId, episodeId: item.episodeId ?? null })), [selectedItems])
@@ -162,15 +165,31 @@ export function useAppBarBatchActions({
       t,
       setConfirmState,
       onDelete: (hardDelete) => {
-        runBatch(async () => deleteEpisodesSelection(selectedItems, hardDelete), {
-          logLabel: 'Failed to batch delete episodes',
-          successToast: t('ToastEpisodeBatchDeleteSuccess'),
-          errorToast: t('ToastEpisodeBatchDeleteFailed'),
-          onSuccess: finishBatchAction
-        })
+        runBatch(
+          async () => {
+            try {
+              const outcome = await deleteEpisodesSelection(selectedItems, hardDelete, (done, total) => setProgress({ done, total }))
+              if (outcome.failed === 0) {
+                showToast(t('ToastEpisodeBatchDeleteSuccess'), { type: 'success' })
+              } else if (outcome.succeeded === 0) {
+                showToast(outcome.firstError || t('ToastEpisodeBatchDeleteFailed'), { type: 'error' })
+              } else {
+                const message = t('ToastEpisodeBatchDeletePartial', { succeeded: outcome.succeeded, total: outcome.total, failed: outcome.failed })
+                showToast(outcome.firstError ? `${message}: ${outcome.firstError}` : message, { type: 'warning' })
+              }
+            } finally {
+              setProgress(null)
+            }
+          },
+          {
+            logLabel: 'Failed to batch delete episodes',
+            errorToast: t('ToastEpisodeBatchDeleteFailed'),
+            onSuccess: finishBatchAction
+          }
+        )
       }
     })
-  }, [finishBatchAction, runBatch, selectedItems, t])
+  }, [finishBatchAction, runBatch, selectedItems, showToast, t])
 
   const handleDownload = useCallback(() => {
     if (!libraryId) return
@@ -253,11 +272,24 @@ export function useAppBarBatchActions({
       if (isPending || selectedItems.length === 0) return
 
       switch (action) {
-        case 'batch-edit':
+        case 'batch-edit': {
           if (!libraryId) return
-          writeBatchEditSession({ libraryId, selectionKind, items: [...selectedItems], returnPath: pathname })
-          router.push(`/library/${libraryId}/batch`)
+          const openBatchEdit = () => {
+            writeBatchEditSession({ libraryId, selectionKind, items: [...selectedItems], returnPath: pathname })
+            router.push(`/library/${libraryId}/batch`)
+          }
+          if (selectedItems.length > BATCH_EDIT_SOFT_LIMIT) {
+            openSimpleConfirm({
+              message: t('MessageConfirmBatchEditLarge', { count: selectedItems.length, limit: BATCH_EDIT_SOFT_LIMIT }),
+              yesButtonText: t('ButtonYes'),
+              setConfirmState,
+              onConfirm: openBatchEdit
+            })
+          } else {
+            openBatchEdit()
+          }
           break
+        }
         case 'play':
           handlePlay()
           break
@@ -301,13 +333,15 @@ export function useAppBarBatchActions({
       pathname,
       router,
       selectedItems,
-      selectionKind
+      selectionKind,
+      t
     ]
   )
 
   return {
     onBatchAction,
     processing: isPending,
+    progress,
     confirmState,
     closeConfirm: () => setConfirmState(null),
     modalsProps

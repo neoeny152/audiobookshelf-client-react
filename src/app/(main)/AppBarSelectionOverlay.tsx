@@ -77,7 +77,7 @@ export default function AppBarSelectionOverlay({ libraryId }: { libraryId?: stri
 
   const { allPlayable, allFinished } = useSelectionBatchState(selectedItems, user.mediaProgress)
 
-  const { onBatchAction, processing, confirmState, closeConfirm, modalsProps } = useAppBarBatchActions({
+  const { onBatchAction, processing, progress, confirmState, closeConfirm, modalsProps } = useAppBarBatchActions({
     selectedItems,
     selectionKind: selectionKind ?? 'book',
     libraryId,
@@ -142,6 +142,11 @@ export default function AppBarSelectionOverlay({ libraryId }: { libraryId?: stri
           </span>
         </div>
         <h1 className="hidden px-4 text-lg md:block md:text-2xl">{selectionLabel}</h1>
+        {progress && (
+          <span className="px-2 font-mono text-sm" role="status">
+            {t('MessageBatchProgress', { done: progress.done, total: progress.total })}
+          </span>
+        )}
         <div className="grow" />
 
         <div className="flex items-center gap-1 md:gap-2">

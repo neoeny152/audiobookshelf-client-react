@@ -24,7 +24,7 @@ import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { allowProgrammaticNavigationWithoutTrapCleanup, useUnsavedNavigationGuard } from '@/hooks/useUnsavedNavigationGuard'
-import { clearBatchEditSession, cloneLibraryItemForBatchEdit, readBatchEditSession, saveEpisodeBatchSequential, type BatchEditSession } from '@/lib/batchEdit'
+import { clearBatchEditSession, cloneLibraryItemForBatchEdit, readBatchEditSession, saveEpisodeBatch, type BatchEditSession } from '@/lib/batchEdit'
 import type { SelectionKind } from '@/lib/selectedMediaItem'
 import type { BookLibraryItem, LibraryItem, PodcastEpisode, PodcastLibraryItem, UpdateLibraryItemMediaPayload } from '@/types/api'
 import { useRouter } from 'next/navigation'
@@ -61,6 +61,7 @@ export default function BatchEditClient({ libraryId }: BatchEditClientProps) {
   const [itemsWithChanges, setItemsWithChanges] = useState<Set<string>>(new Set())
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [hasMapFieldSelected, setHasMapFieldSelected] = useState(false)
+  const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null)
 
   const originalLibraryItemsRef = useRef<LibraryItem[]>([])
   const originalEpisodeEntriesRef = useRef<EpisodeBatchEntry[]>([])
@@ -225,12 +226,14 @@ export default function BatchEditClient({ libraryId }: BatchEditClientProps) {
           }
         }
 
-        const result = await saveEpisodeBatchSequential(updates)
-        if (!result.ok) {
-          showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+        const outcome = await saveEpisodeBatch(updates, (done, total) => setSaveProgress({ done, total }))
+        if (outcome.failed > 0) {
+          // Stay on the page so the failed ones can be saved again (re-sending the saved ones is a no-op)
+          const message = t('ToastEpisodeBatchUpdatePartial', { succeeded: outcome.succeeded, total: outcome.total, failed: outcome.failed })
+          showToast(outcome.firstError ? `${message}: ${outcome.firstError}` : message, { type: outcome.succeeded > 0 ? 'warning' : 'error' })
           return
         }
-        const count = result.data
+        const count = outcome.succeeded
         const returnPath = session.returnPath || getDefaultReturnPath(libraryId, 'episode')
         clearBatchEditSession()
         showToast(t('MessageItemsUpdated', { 0: count.toString() }), { type: 'success' })
@@ -278,6 +281,7 @@ export default function BatchEditClient({ libraryId }: BatchEditClientProps) {
       showToast(t('ToastFailedToUpdate'), { type: 'error' })
     } finally {
       setIsProcessing(false)
+      setSaveProgress(null)
     }
   }, [episodeEntries, isEpisodeMode, isProcessing, libraryId, libraryItemCopies, router, session, showToast, t])
 
@@ -418,7 +422,14 @@ export default function BatchEditClient({ libraryId }: BatchEditClientProps) {
 
       {isProcessing && (
         <div className="safe-px fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <LoadingIndicator variant="inline" />
+          <div className="flex flex-col items-center gap-3">
+            <LoadingIndicator variant="inline" />
+            {saveProgress && saveProgress.total > 1 && (
+              <p className="font-mono text-sm" role="status">
+                {t('MessageBatchProgress', { done: saveProgress.done, total: saveProgress.total })}
+              </p>
+            )}
+          </div>
         </div>
       )}
 

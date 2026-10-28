@@ -1,5 +1,6 @@
 import { batchDeleteLibraryItemsAction, batchEmbedMetadataAction, batchScanLibraryItemsAction } from '@/app/actions/batchActions'
 import { batchUpdateMediaFinishedAction, deleteLibraryItemMediaEpisodeAction } from '@/app/actions/mediaActions'
+import { runEpisodeBatch, runEpisodesOneByOne, type BatchProgressCallback, type EpisodeBatchOutcome, type EpisodeRef } from '@/lib/batchSelection/episodeBatch'
 import { fetchSelectedPodcasts } from '@/lib/batchSelection/selectionEpisodes'
 import type { ActionResult } from '@/lib/actionResult'
 import { downloadLibraryItemFile, downloadLibraryItems } from '@/lib/download'
@@ -25,11 +26,26 @@ export async function deleteLibraryItemsSelection(uniqueLibraryItemIds: string[]
   await batchDeleteLibraryItemsAction(uniqueLibraryItemIds, hardDelete)
 }
 
-export async function deleteEpisodesSelection(selectedItems: readonly SelectedMediaItem[], hardDelete: boolean) {
-  for (const item of selectedItems) {
-    if (!item.episodeId) continue
-    throwIfFailed(await deleteLibraryItemMediaEpisodeAction(item.libraryItemId, item.episodeId, hardDelete))
-  }
+export function selectedEpisodeRefs(selectedItems: readonly SelectedMediaItem[]): EpisodeRef[] {
+  return selectedItems.flatMap((item) => (item.episodeId ? [{ libraryItemId: item.libraryItemId, episodeId: item.episodeId }] : []))
+}
+
+/** Removes the selected episodes one podcast at a time; failures are counted, not thrown. */
+export async function deleteEpisodesSelection(
+  selectedItems: readonly SelectedMediaItem[],
+  hardDelete: boolean,
+  onProgress?: BatchProgressCallback
+): Promise<EpisodeBatchOutcome> {
+  return runEpisodeBatch(
+    selectedEpisodeRefs(selectedItems),
+    (group, step) =>
+      runEpisodesOneByOne(
+        group,
+        ({ libraryItemId, episodeId }) => deleteLibraryItemMediaEpisodeAction(libraryItemId, episodeId, hardDelete),
+        () => step(1)
+      ),
+    onProgress
+  )
 }
 
 export async function downloadEpisodesSelection(selectedItems: readonly SelectedMediaItem[]) {

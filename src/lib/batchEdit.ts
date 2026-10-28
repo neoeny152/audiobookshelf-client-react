@@ -1,5 +1,5 @@
 import { updatePodcastEpisodeQuietAction } from '@/app/actions/mediaActions'
-import type { ActionResult } from '@/lib/actionResult'
+import { runEpisodeBatch, runEpisodesOneByOne, type BatchProgressCallback, type EpisodeBatchOutcome } from '@/lib/batchSelection/episodeBatch'
 import type { SelectedMediaItem, SelectionKind } from '@/lib/selectedMediaItem'
 import type { BookLibraryItem, BookMetadata, LibraryItem, PodcastLibraryItem, PodcastMetadata, UpdatePodcastEpisodePayload } from '@/types/api'
 
@@ -80,16 +80,22 @@ export interface EpisodeBatchUpdate {
   payload: UpdatePodcastEpisodePayload
 }
 
+/** Above this many selected items, batch edit asks before opening (every item gets its own form). */
+export const BATCH_EDIT_SOFT_LIMIT = 150
+
 /**
- * Save episode batch updates one at a time, stopping at the first failure.
- * Replace with server batch endpoint when available.
+ * Save episode batch updates one podcast at a time, one request at a time. A failed update does
+ * not stop the rest; the outcome counts what succeeded and failed.
  */
-export async function saveEpisodeBatchSequential(updates: EpisodeBatchUpdate[]): Promise<ActionResult<number>> {
-  let count = 0
-  for (const { libraryItemId, episodeId, payload } of updates) {
-    const result = await updatePodcastEpisodeQuietAction(libraryItemId, episodeId, payload)
-    if (!result.ok) return result
-    count++
-  }
-  return { ok: true, data: count }
+export async function saveEpisodeBatch(updates: readonly EpisodeBatchUpdate[], onProgress?: BatchProgressCallback): Promise<EpisodeBatchOutcome> {
+  return runEpisodeBatch(
+    updates,
+    (group, step) =>
+      runEpisodesOneByOne(
+        group,
+        ({ libraryItemId, episodeId, payload }) => updatePodcastEpisodeQuietAction(libraryItemId, episodeId, payload),
+        () => step(1)
+      ),
+    onProgress
+  )
 }
