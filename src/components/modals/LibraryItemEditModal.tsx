@@ -1,7 +1,7 @@
 'use client'
 
 import { updateLibraryItemMediaAction } from '@/app/actions/mediaActions'
-import LibraryItemModal, { useLibraryItemModal, type LibraryItemModalItemSource, type UnsavedChangesLeaveHandle } from '@/components/modals/LibraryItemModal'
+import { useLibraryItemModal, type UnsavedChangesLeaveHandle } from '@/components/modals/LibraryItemModal'
 import ModalFooter from '@/components/modals/ModalFooter'
 import LoadingIndicator from '@/components/ui/LoadingIndicator'
 import BookDetailsEdit, { BookDetailsEditRef, BookUpdatePayload } from '@/components/widgets/BookDetailsEdit'
@@ -13,7 +13,7 @@ import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { useUnsavedChangesLeave } from '@/hooks/useUnsavedChangesLeave'
 import type { BookMedia, BookMetadata, PodcastMedia, PodcastMetadata } from '@/types/api'
 import { BookLibraryItem, PodcastLibraryItem } from '@/types/api'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type Ref, type TransitionStartFunction } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref, type TransitionStartFunction } from 'react'
 
 function createPlaceholderBookLibraryItem(id: string, libraryId: string): BookLibraryItem {
   const metadata: BookMetadata = {
@@ -69,11 +69,6 @@ function createPlaceholderPodcastLibraryItem(id: string, libraryId: string): Pod
     media
   }
 }
-
-export type LibraryItemEditModalProps = {
-  isOpen: boolean
-  onClose: () => void
-} & LibraryItemModalItemSource
 
 export type LibraryItemEditModalContentProps = {
   isOpen: boolean
@@ -343,36 +338,5 @@ export function LibraryItemEditModalContent({
         onConfirm={handleSaveAndLeave}
       />
     </div>
-  )
-}
-
-/**
- * Modal for editing library item metadata.
- * Renders BookDetailsEdit for books and PodcastDetailsEdit for podcasts.
- * Uses filter data from LibraryContext for autocomplete options.
- * Pass `navCtx` to load expanded items and enable prev/next.
- */
-export default function LibraryItemEditModal(props: LibraryItemEditModalProps) {
-  const { isOpen, onClose } = props
-  const navCtxMode = 'navCtx' in props
-  const { filterDataLoading } = useLibrary()
-  const [isSavePending, startSaveTransition] = useTransition()
-
-  return (
-    <LibraryItemModal
-      isOpen={isOpen}
-      onClose={onClose}
-      {...(navCtxMode ? { navCtx: props.navCtx } : { libraryItem: props.libraryItem })}
-      additionalProcessing={isSavePending || filterDataLoading}
-      className="sm:max-w-(--content-vw) md:max-w-[800px]"
-    >
-      <LibraryItemEditModalContent
-        isOpen={isOpen}
-        startSaveTransition={startSaveTransition}
-        isSavePending={isSavePending}
-        onClose={onClose}
-        stableBodyHeight={navCtxMode}
-      />
-    </LibraryItemModal>
   )
 }
