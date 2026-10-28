@@ -227,7 +227,7 @@ export function useDetailsEdit<TDetails extends Record<string, any>>({
 
         return currentValue !== initialValue
       })
-      .map((key) => [key, effectiveValue(details, key)])
+      .map((key) => [key, effectiveValue(details, key)] as const)
 
     const metadataUpdate = Object.fromEntries(changedEntries) as Partial<TDetails>
 
@@ -236,13 +236,17 @@ export function useDetailsEdit<TDetails extends Record<string, any>>({
       updatePayload.metadata = metadataUpdate
     }
 
-    if (!stringArraysEqual(currentTags, initialTags)) {
+    const tagsDirty = !stringArraysEqual(currentTags, initialTags)
+    if (tagsDirty) {
       updatePayload.tags = currentTags
     }
 
     return {
       updatePayload,
-      hasChanges: Object.keys(updatePayload).length > 0
+      hasChanges: Object.keys(updatePayload).length > 0,
+      /** Metadata keys that differ from their initial values (per-field dirty styling). */
+      dirtyFields: new Set(changedEntries.map(([key]) => key)) as ReadonlySet<keyof TDetails>,
+      tagsDirty
     }
   }, [details, initialDetails, currentTags, initialTags, trimFields])
 
@@ -262,7 +266,7 @@ export function useDetailsEdit<TDetails extends Record<string, any>>({
   const submitForm = useCallback(
     (e?: React.FormEvent) => {
       e?.preventDefault()
-      onSubmit?.(changes)
+      onSubmit?.({ updatePayload: changes.updatePayload, hasChanges: changes.hasChanges })
     },
     [changes, onSubmit]
   )
@@ -296,6 +300,8 @@ export function useDetailsEdit<TDetails extends Record<string, any>>({
     updateTags,
     mapBatchDetails,
     changes,
+    dirtyFields: changes.dirtyFields,
+    tagsDirty: changes.tagsDirty,
     submitForm,
     dispatch
   }
