@@ -441,7 +441,7 @@ describe('snap speech check', () => {
     const next = withSnapTitles(session, new Map([['ch-1', 'Chapter 3']]))
     expect(next.snapshot.map((c) => c.title)).to.deep.equal(['Chapter 1', 'Chapter 3', 'Chapter 3', 'Chapter 4'])
     expect(buildSnapRows(next)[1].title).to.equal('Chapter 3')
-    expect(buildSnapRetryPayload(next.response, next.options)?.chapters[1].title).to.equal('Chapter 3')
+    expect(buildSnapRetryPayload(next.response, next.options)?.chapters?.[1]?.title).to.equal('Chapter 3')
     expect(session.snapshot[1].title).to.equal('Chapter 2')
     expect(withSnapTitles(session, new Map())).to.equal(session)
   })
