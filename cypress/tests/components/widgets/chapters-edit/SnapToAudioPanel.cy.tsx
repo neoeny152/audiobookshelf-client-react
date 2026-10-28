@@ -1,6 +1,6 @@
 import SnapToAudioPanel, { type SnapToAudioPanelProps } from '@/components/widgets/chapters-edit/SnapToAudioPanel'
 import { SNAP_DEFAULT_OPTIONS, type SnapRow, type SnapSession } from '@/lib/chapters/chapterSnap'
-import type { SnapChapterProposal, SnapChaptersResponse } from '@/types/api'
+import type { SnapChapterProposal, SnapChapterSpeech, SnapChaptersResponse } from '@/types/api'
 
 const mediaDuration = 1000
 const starts = [0, 100, 200, 300]
@@ -250,5 +250,132 @@ describe('<SnapToAudioPanel /> incomplete result', () => {
     cy.get('[cy-id="snap-incomplete"]').should('not.exist')
     cy.get('[cy-id="snap-row"]').should('have.length', 2)
     cy.contains('button', 'Apply 2 changes').should('exist')
+  })
+})
+
+describe('<SnapToAudioPanel /> speech check', () => {
+  const heard = (partial: Partial<SnapChapterSpeech>): SnapChapterSpeech => ({
+    before: 'and that was the end of it',
+    after: 'chapter two the long road home',
+    heading: false,
+    late: false,
+    early: false,
+    ...partial
+  })
+
+  function verifiedSession(warnings: string[] = []): SnapSession {
+    const session = makeSession([
+      proposal({ index: 0, reason: 'first-chapter', confidence: 'high' }),
+      proposal({ index: 1, proposedStart: 96.75, reason: 'heading-lookback', confidence: 'high', pause: pause(95, 97), speech: heard({ heading: true }) }),
+      proposal({
+        index: 2,
+        proposedStart: 205,
+        reason: 'nearest-longest-pause',
+        confidence: 'low',
+        pause: pause(204, 205.25),
+        speech: heard({ late: true, before: 'the end. chapter three', after: 'she walked in' })
+      }),
+      proposal({
+        index: 3,
+        proposedStart: 295,
+        reason: 'nearest-longest-pause',
+        confidence: 'medium',
+        pause: pause(294, 295.3),
+        speech: heard({ early: true })
+      })
+    ])
+    session.options = { ...session.options, verify: true }
+    session.response.options = { ...session.response.options, verify: true }
+    session.response.warnings = ['Time limit reached: developer note', ...warnings]
+    return session
+  }
+
+  it('hides the toggle unless the server advertises the speech check', () => {
+    mountPanel()
+    cy.get('[cy-id="snap-check-speech"]').should('not.exist')
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('@onSnap').should('have.been.calledOnceWith', SNAP_DEFAULT_OPTIONS)
+    cy.contains('th', 'Speech').should('not.exist')
+  })
+
+  it('is off by default and sends verify only when switched on', () => {
+    mountPanel({ speechCheckAvailable: true, onSnap: cy.stub().as('onSnap').resolves(null) })
+    cy.get('[cy-id="snap-check-speech"]').should('contain.text', 'Check speech')
+    cy.get('[cy-id="snap-check-speech"] input[type="checkbox"]').should('not.be.checked')
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('@onSnap').its('firstCall.args.0').should('deep.equal', SNAP_DEFAULT_OPTIONS)
+
+    cy.get('[cy-id="snap-check-speech"] input[type="checkbox"]').click()
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('@onSnap')
+      .its('secondCall.args.0')
+      .should('deep.equal', { ...SNAP_DEFAULT_OPTIONS, verify: true })
+  })
+
+  it('says the speech check is slower while it runs', () => {
+    let resolveSnap: (session: SnapSession | null) => void = () => {}
+    const onSnap = cy.stub().callsFake(
+      () =>
+        new Promise<SnapSession | null>((resolve) => {
+          resolveSnap = resolve
+        })
+    )
+    mountPanel({ speechCheckAvailable: true, onSnap })
+    cy.get('[cy-id="snap-check-speech"] input[type="checkbox"]').click()
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('[role="status"]').should('contain.text', 'checking speech')
+    cy.get('[cy-id="snap-check-speech"] input[type="checkbox"]').should('be.disabled')
+    cy.then(() => resolveSnap(null))
+  })
+
+  it('shows a speech indicator per row and marks late and early rows', () => {
+    mountPanel({ speechCheckAvailable: true, onSnap: cy.stub().resolves(verifiedSession()) })
+    cy.contains('button', 'Snap to audio').click()
+    cy.contains('th', 'Speech').should('exist')
+    cy.get('[cy-id="snap-row"]').eq(0).should('have.attr', 'data-speech', 'heading').find('[cy-id="snap-speech"]').should('contain.text', 'Heading heard')
+    cy.get('[cy-id="snap-row"]').eq(1).should('have.attr', 'data-speech', 'late').and('have.class', 'bg-warning/10')
+    cy.get('[cy-id="snap-row"]').eq(1).find('[cy-id="snap-speech"]').should('contain.text', 'Starts late')
+    cy.get('[cy-id="snap-row"]').eq(2).should('have.attr', 'data-speech', 'early').and('have.class', 'bg-warning/10')
+    cy.get('[cy-id="snap-row"]').eq(2).find('[cy-id="snap-speech"]').should('contain.text', 'Starts early')
+    cy.get('[cy-id="snap-row"]').eq(0).should('not.have.class', 'bg-warning/10')
+  })
+
+  it('leaves late and early rows unchecked, even at medium confidence', () => {
+    mountPanel({ speechCheckAvailable: true, onSnap: cy.stub().resolves(verifiedSession()) })
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('[cy-id="snap-row"]').eq(0).find('input[type="checkbox"]').should('be.checked')
+    cy.get('[cy-id="snap-row"]').eq(1).find('input[type="checkbox"]').should('not.be.checked')
+    cy.get('[cy-id="snap-row"]').eq(2).find('input[type="checkbox"]').should('not.be.checked')
+    cy.get('[cy-id="snap-speech-notes"]').should('contain.text', 'flagged 2 chapters')
+    cy.contains('button', 'Apply 1 change').should('exist')
+  })
+
+  it('expands a row to show what was heard before and after the start', () => {
+    mountPanel({ speechCheckAvailable: true, onSnap: cy.stub().resolves(verifiedSession()) })
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('[cy-id="snap-speech-row"]').should('not.exist')
+    cy.get('[cy-id="snap-row"]').eq(1).find('[cy-id="snap-speech-toggle"]').should('have.attr', 'aria-expanded', 'false').click()
+    cy.get('[cy-id="snap-row"]').eq(1).find('[cy-id="snap-speech-toggle"]').should('have.attr', 'aria-expanded', 'true')
+    cy.get('[cy-id="snap-speech-row"]').should('have.length', 1)
+    cy.get('[cy-id="snap-speech-before"]').should('contain.text', 'the end. chapter three')
+    cy.get('[cy-id="snap-speech-after"]').should('contain.text', 'she walked in')
+    cy.get('[cy-id="snap-row"]').eq(1).find('[cy-id="snap-speech-toggle"]').click()
+    cy.get('[cy-id="snap-speech-row"]').should('not.exist')
+  })
+
+  it('shows rows the check skipped as not checked', () => {
+    mountPanel({ speechCheckAvailable: true, onSnap: cy.stub().resolves(verifiedSession()) })
+    cy.contains('button', 'Snap to audio').click()
+    cy.contains('label', 'Show unchanged').siblings('input[type="checkbox"]').click()
+    cy.get('[cy-id="snap-row"]').eq(0).find('[cy-id="snap-speech"]').should('contain.text', 'Not checked')
+    cy.get('[cy-id="snap-row"]').eq(0).find('[cy-id="snap-speech-toggle"]').should('not.exist')
+  })
+
+  it("shows the server's speech check warnings but not its developer notes", () => {
+    const warning = 'Speech check skipped: chapterbot is busy, 3 chapters not checked, try again later'
+    mountPanel({ speechCheckAvailable: true, onSnap: cy.stub().resolves(verifiedSession([warning])) })
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('[cy-id="snap-speech-warning"]').should('have.length', 1).and('contain.text', warning)
+    cy.get('[cy-id="snap-speech-notes"]').should('not.contain.text', 'developer note')
   })
 })

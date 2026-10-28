@@ -13,15 +13,21 @@ import {
   formatSnapStart,
   getDefaultSnapChecked,
   getSnapRetryIndexes,
+  getSnapSpeechStatus,
+  getSnapSpeechWarnings,
+  isSnapSpeechFlagged,
   SNAP_DEFAULT_OPTIONS,
+  snapSessionCheckedSpeech,
   type SnapAdvancedOptions,
+  type SnapRequestOptions,
   type SnapRow,
-  type SnapSession
+  type SnapSession,
+  type SnapSpeechStatus
 } from '@/lib/chapters/chapterSnap'
 import { mergeClasses } from '@/lib/merge-classes'
 import type { TypeSafeTranslations } from '@/types/translations'
-import type { SnapChapterConfidence, SnapChapterReason } from '@/types/api'
-import { useCallback, useId, useMemo, useState } from 'react'
+import type { SnapChapterConfidence, SnapChapterReason, SnapChapterSpeech } from '@/types/api'
+import { Fragment, useCallback, useId, useMemo, useState } from 'react'
 
 /** The editor's chapter preview player (`useChapterPreviewAudio`). */
 export interface SnapPreviewControls {
@@ -38,12 +44,14 @@ export interface SnapToAudioPanelProps {
   chapterCount: number
   disabled?: boolean
   /** Snap the current editor chapters. Resolves null on failure (the caller shows the toast). */
-  onSnap: (options: SnapAdvancedOptions) => Promise<SnapSession | null>
+  onSnap: (options: SnapRequestOptions) => Promise<SnapSession | null>
   /** Snap the chapters the server did not get to, following the server's retry contract. */
   onRetry: (session: SnapSession) => Promise<SnapSession | null>
   /** Write the given rows' new starts into the editor as unsaved changes. Returns how many were applied. */
   onApply: (rows: SnapRow[]) => number
   preview?: SnapPreviewControls
+  /** The server advertises the speech check (`chapterbotVerify`); shows the Check speech toggle. */
+  speechCheckAvailable?: boolean
 }
 
 type OptionKey = keyof SnapAdvancedOptions
@@ -126,20 +134,89 @@ const CONFIDENCE_CLASS: Record<SnapChapterConfidence, string> = {
   none: 'text-foreground-muted'
 }
 
+const SPEECH_STATUS_CLASS: Record<SnapSpeechStatus, string> = {
+  heading: 'text-success',
+  'no-heading': 'text-foreground-muted',
+  late: 'text-warning font-semibold',
+  early: 'text-warning font-semibold'
+}
+
+const SPEECH_STATUS_ICON: Record<SnapSpeechStatus, string> = {
+  heading: 'record_voice_over',
+  'no-heading': 'voice_over_off',
+  late: 'history',
+  early: 'update'
+}
+
+function speechStatusLabel(status: SnapSpeechStatus, t: TypeSafeTranslations): string {
+  switch (status) {
+    case 'heading':
+      return t('LabelSnapSpeechHeading')
+    case 'no-heading':
+      return t('LabelSnapSpeechNoHeading')
+    case 'late':
+      return t('LabelSnapSpeechLate')
+    case 'early':
+      return t('LabelSnapSpeechEarly')
+  }
+}
+
+function speechStatusMessage(status: SnapSpeechStatus, t: TypeSafeTranslations): string {
+  switch (status) {
+    case 'heading':
+      return t('MessageSnapSpeechHeading')
+    case 'no-heading':
+      return t('MessageSnapSpeechNoHeading')
+    case 'late':
+      return t('MessageSnapSpeechLate')
+    case 'early':
+      return t('MessageSnapSpeechEarly')
+  }
+}
+
+/** What the speech check heard on both sides of the proposed start. */
+function SnapSpeechTranscript({ id, speech }: { id: string; speech: SnapChapterSpeech }) {
+  const t = useTypeSafeTranslations()
+  return (
+    <dl id={id} className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs" cy-id="snap-speech-transcript">
+      <dt className="text-foreground-muted">{t('LabelSnapSpeechBefore')}</dt>
+      <dd className="break-words" cy-id="snap-speech-before">
+        {speech.before ? `…${speech.before}` : t('LabelSnapSpeechNothingHeard')}
+      </dd>
+      <dt className="text-foreground-muted">{t('LabelSnapSpeechAfter')}</dt>
+      <dd className="break-words" cy-id="snap-speech-after">
+        {speech.after ? `${speech.after}…` : t('LabelSnapSpeechNothingHeard')}
+      </dd>
+    </dl>
+  )
+}
+
 function formatDelta(delta: number): string {
   if (delta > 0) return `+${delta}`
   return String(delta)
 }
 
-export default function SnapToAudioPanel({ chapterCount, disabled = false, onSnap, onRetry, onApply, preview }: SnapToAudioPanelProps) {
+export default function SnapToAudioPanel({
+  chapterCount,
+  disabled = false,
+  onSnap,
+  onRetry,
+  onApply,
+  preview,
+  speechCheckAvailable = false
+}: SnapToAudioPanelProps) {
   const t = useTypeSafeTranslations()
   const settingsId = useId()
+  const speechIdPrefix = useId()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [optionDrafts, setOptionDrafts] = useState(defaultOptionDrafts)
   const [isRunning, setIsRunning] = useState(false)
   const [session, setSession] = useState<SnapSession | null>(null)
   const [checked, setChecked] = useState<Set<number>>(() => new Set())
   const [showUnchanged, setShowUnchanged] = useState(false)
+  const [checkSpeech, setCheckSpeech] = useState(false)
+  const [runningWithSpeech, setRunningWithSpeech] = useState(false)
+  const [expandedSpeech, setExpandedSpeech] = useState<Set<number>>(() => new Set())
 
   const rows = useMemo(() => (session ? buildSnapRows(session) : []), [session])
   const changedRows = useMemo(() => rows.filter((row) => row.changed), [rows])
@@ -148,6 +225,10 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
   const failedCount = useMemo(() => rows.filter((row) => row.reason === 'analysis-failed').length, [rows])
   const checkedChangedCount = changedRows.filter((row) => checked.has(row.index)).length
   const controlsDisabled = disabled || isRunning
+  const showSpeech = !!session && snapSessionCheckedSpeech(session)
+  const speechWarnings = useMemo(() => (session ? getSnapSpeechWarnings(session.response) : []), [session])
+  const flaggedCount = useMemo(() => changedRows.filter((row) => isSnapSpeechFlagged(row.speech)).length, [changedRows])
+  const columnCount = showSpeech ? 8 : 7
 
   /** Proposal rows are the only controls for a snap preview, so stop it whenever they go away. */
   const stopSnapPreview = useCallback(() => {
@@ -159,14 +240,19 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
   const showSession = useCallback((next: SnapSession) => {
     setSession(next)
     setChecked(getDefaultSnapChecked(buildSnapRows(next)))
+    setExpandedSpeech(new Set())
   }, [])
 
   const handleSnap = useCallback(async () => {
     if (controlsDisabled) return
     stopSnapPreview()
+    // The toggle only counts while the server still advertises the speech check
+    const verify = speechCheckAvailable && checkSpeech
+    const options = parseOptionDrafts(optionDrafts)
+    setRunningWithSpeech(verify)
     setIsRunning(true)
     try {
-      const next = await onSnap(parseOptionDrafts(optionDrafts))
+      const next = await onSnap(verify ? { ...options, verify: true } : options)
       if (next) {
         setShowUnchanged(false)
         showSession(next)
@@ -174,11 +260,12 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
     } finally {
       setIsRunning(false)
     }
-  }, [controlsDisabled, onSnap, optionDrafts, showSession, stopSnapPreview])
+  }, [checkSpeech, controlsDisabled, onSnap, optionDrafts, showSession, speechCheckAvailable, stopSnapPreview])
 
   const handleRetry = useCallback(async () => {
     if (!session || controlsDisabled) return
     stopSnapPreview()
+    setRunningWithSpeech(snapSessionCheckedSpeech(session))
     setIsRunning(true)
     try {
       const next = await onRetry(session)
@@ -212,6 +299,15 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
     setSession(null)
     setChecked(new Set())
   }, [stopSnapPreview])
+
+  const toggleSpeech = useCallback((index: number) => {
+    setExpandedSpeech((prev) => {
+      const next = new Set(prev)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+  }, [])
 
   const toggleRow = useCallback((index: number, value: boolean) => {
     setChecked((prev) => {
@@ -251,9 +347,15 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
             tune
           </IconBtn>
         </Tooltip>
+        {speechCheckAvailable && (
+          <div className="flex items-center gap-1" cy-id="snap-check-speech">
+            <Checkbox value={checkSpeech} size="small" label={t('LabelSnapCheckSpeech')} disabled={controlsDisabled} onChange={setCheckSpeech} />
+            <HelpTooltipIcon text={t('MessageSnapCheckSpeechDescription')} />
+          </div>
+        )}
         {isRunning && (
           <span role="status" className="text-foreground-muted text-sm">
-            {t('MessageSnapRunning')}
+            {runningWithSpeech ? t('MessageSnapRunningWithSpeech') : t('MessageSnapRunning')}
           </span>
         )}
       </div>
@@ -291,6 +393,17 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
             <Checkbox value={showUnchanged} size="small" label={t('LabelSnapShowUnchanged')} onChange={setShowUnchanged} />
           </div>
 
+          {showSpeech && (flaggedCount > 0 || speechWarnings.length > 0) && (
+            <div className="border-border flex flex-col gap-1 border-t px-3 py-2 text-sm" cy-id="snap-speech-notes">
+              {flaggedCount > 0 && <p className="text-warning">{t('MessageSnapSpeechFlagged', { count: flaggedCount })}</p>}
+              {speechWarnings.map((warning) => (
+                <p key={warning} className="text-warning" cy-id="snap-speech-warning">
+                  {warning}
+                </p>
+              ))}
+            </div>
+          )}
+
           {!session.response.complete && (
             <div className="border-border flex flex-wrap items-center gap-2 border-t px-3 py-2 text-sm" cy-id="snap-incomplete">
               {retryCount > 0 && <span className="text-warning">{t('MessageSnapIncomplete', { count: retryCount })}</span>}
@@ -323,6 +436,7 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
                     <th className="px-2 py-1.5 text-end font-normal">{t('LabelSnapChange')}</th>
                     <th className="px-2 py-1.5 text-start font-normal">{t('LabelSnapReason')}</th>
                     <th className="px-2 py-1.5 text-start font-normal">{t('LabelSnapConfidence')}</th>
+                    {showSpeech && <th className="px-2 py-1.5 text-start font-normal">{t('LabelSnapSpeech')}</th>}
                     <th className="w-10 px-2 py-1.5" />
                   </tr>
                 </thead>
@@ -332,60 +446,108 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
                     const isPreviewSelected = preview?.selectedChapterId === previewId
                     const isPlaying = isPreviewSelected && !!preview?.isPlayingChapter
                     const playLabel = isPlaying ? t('MessagePauseChapter') : t('MessagePlaySnapProposal')
+                    const speechStatus = getSnapSpeechStatus(row.speech)
+                    const speechFlagged = isSnapSpeechFlagged(row.speech)
+                    const speechExpanded = !!row.speech && expandedSpeech.has(row.index)
+                    const transcriptId = `${speechIdPrefix}-speech-${row.index}`
                     return (
-                      <tr
-                        key={row.clientKey}
-                        cy-id="snap-row"
-                        data-index={row.index}
-                        className={mergeClasses('border-border border-b last:border-b-0', !row.changed && 'text-foreground-muted')}
-                      >
-                        <td className="px-3 py-1">
-                          <Checkbox
-                            value={row.changed && checked.has(row.index)}
-                            size="small"
-                            ariaLabel={row.title || t('LabelTitle')}
-                            disabled={!row.changed}
-                            onChange={(value) => toggleRow(row.index, value)}
-                          />
-                        </td>
-                        <td className="max-w-48 truncate px-2 py-1" title={row.title}>
-                          {row.title}
-                        </td>
-                        <td className="px-2 py-1 font-mono whitespace-nowrap">
-                          {row.changed ? (
-                            <>
-                              {formatSnapStart(row.originalStart)}
-                              <span className="text-foreground-muted px-1" aria-hidden="true">
-                                {'→'}
-                              </span>
-                              {formatSnapStart(row.newStart)}
-                            </>
-                          ) : (
-                            formatSnapStart(row.originalStart)
+                      <Fragment key={row.clientKey}>
+                        <tr
+                          cy-id="snap-row"
+                          data-index={row.index}
+                          data-speech={speechStatus ?? undefined}
+                          className={mergeClasses(
+                            'border-border border-b last:border-b-0',
+                            !row.changed && 'text-foreground-muted',
+                            speechFlagged && 'bg-warning/10',
+                            speechExpanded && 'border-b-0'
                           )}
-                        </td>
-                        <td className="px-2 py-1 text-end font-mono whitespace-nowrap">
-                          {row.changed ? t('LabelSnapDelta', { delta: formatDelta(row.delta) }) : ''}
-                        </td>
-                        <td className="px-2 py-1">{snapReasonLabel(row.reason, t)}</td>
-                        <td className={mergeClasses('px-2 py-1', CONFIDENCE_CLASS[row.confidence])}>{confidenceLabel(row.confidence, t)}</td>
-                        <td className="px-2 py-0.5">
-                          {preview && (
-                            <Tooltip lazy text={playLabel} position="left">
-                              <IconBtn
-                                borderless
-                                size="small"
-                                ariaLabel={playLabel}
-                                loading={isPreviewSelected && preview.isLoadingChapter}
-                                className="text-foreground-muted hover:not-disabled:text-foreground"
-                                onClick={() => preview.playChapter(previewId, row.newStart)}
-                              >
-                                {isPlaying ? 'pause' : 'play_arrow'}
-                              </IconBtn>
-                            </Tooltip>
+                        >
+                          <td className="px-3 py-1">
+                            <Checkbox
+                              value={row.changed && checked.has(row.index)}
+                              size="small"
+                              ariaLabel={row.title || t('LabelTitle')}
+                              disabled={!row.changed}
+                              onChange={(value) => toggleRow(row.index, value)}
+                            />
+                          </td>
+                          <td className="max-w-48 truncate px-2 py-1" title={row.title}>
+                            {row.title}
+                          </td>
+                          <td className="px-2 py-1 font-mono whitespace-nowrap">
+                            {row.changed ? (
+                              <>
+                                {formatSnapStart(row.originalStart)}
+                                <span className="text-foreground-muted px-1" aria-hidden="true">
+                                  {'→'}
+                                </span>
+                                {formatSnapStart(row.newStart)}
+                              </>
+                            ) : (
+                              formatSnapStart(row.originalStart)
+                            )}
+                          </td>
+                          <td className="px-2 py-1 text-end font-mono whitespace-nowrap">
+                            {row.changed ? t('LabelSnapDelta', { delta: formatDelta(row.delta) }) : ''}
+                          </td>
+                          <td className="px-2 py-1">{snapReasonLabel(row.reason, t)}</td>
+                          <td className={mergeClasses('px-2 py-1', CONFIDENCE_CLASS[row.confidence])}>{confidenceLabel(row.confidence, t)}</td>
+                          {showSpeech && (
+                            <td className="px-2 py-1 whitespace-nowrap" cy-id="snap-speech">
+                              {speechStatus ? (
+                                <Tooltip lazy text={speechStatusMessage(speechStatus, t)} position="left">
+                                  <button
+                                    type="button"
+                                    className={mergeClasses('inline-flex items-center gap-1 rounded-sm hover:underline', SPEECH_STATUS_CLASS[speechStatus])}
+                                    aria-expanded={speechExpanded}
+                                    aria-controls={speechExpanded ? transcriptId : undefined}
+                                    aria-label={`${speechStatusLabel(speechStatus, t)}. ${t('MessageSnapSpeechShow')}`}
+                                    cy-id="snap-speech-toggle"
+                                    onClick={() => toggleSpeech(row.index)}
+                                  >
+                                    <span className="material-symbols text-base" aria-hidden="true">
+                                      {SPEECH_STATUS_ICON[speechStatus]}
+                                    </span>
+                                    {speechStatusLabel(speechStatus, t)}
+                                    <span className="material-symbols text-base" aria-hidden="true">
+                                      {speechExpanded ? 'expand_less' : 'expand_more'}
+                                    </span>
+                                  </button>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip lazy text={t('MessageSnapSpeechNotChecked')} position="left">
+                                  <span className="text-foreground-muted">{t('LabelSnapSpeechNotChecked')}</span>
+                                </Tooltip>
+                              )}
+                            </td>
                           )}
-                        </td>
-                      </tr>
+                          <td className="px-2 py-0.5">
+                            {preview && (
+                              <Tooltip lazy text={playLabel} position="left">
+                                <IconBtn
+                                  borderless
+                                  size="small"
+                                  ariaLabel={playLabel}
+                                  loading={isPreviewSelected && preview.isLoadingChapter}
+                                  className="text-foreground-muted hover:not-disabled:text-foreground"
+                                  onClick={() => preview.playChapter(previewId, row.newStart)}
+                                >
+                                  {isPlaying ? 'pause' : 'play_arrow'}
+                                </IconBtn>
+                              </Tooltip>
+                            )}
+                          </td>
+                        </tr>
+                        {speechExpanded && row.speech && (
+                          <tr cy-id="snap-speech-row" className={mergeClasses('border-border border-b last:border-b-0', speechFlagged && 'bg-warning/10')}>
+                            <td />
+                            <td colSpan={columnCount - 1} className="px-2 pb-2">
+                              <SnapSpeechTranscript id={transcriptId} speech={row.speech} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     )
                   })}
                 </tbody>

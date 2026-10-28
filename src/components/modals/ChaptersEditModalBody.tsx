@@ -11,6 +11,7 @@ import FindChaptersPanel from '@/components/widgets/chapters-edit/FindChaptersPa
 import { ShiftTimesFields } from '@/components/widgets/chapters-edit/ShiftTimesPanel'
 import SnapToAudioPanel from '@/components/widgets/chapters-edit/SnapToAudioPanel'
 import { useChapterEditor } from '@/hooks/useChapterEditor'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { useUnsavedChangesLeave } from '@/hooks/useUnsavedChangesLeave'
 import { blurActiveChapterEditorField } from '@/lib/chapterEditorFocus'
@@ -84,6 +85,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     initialLibraryItem: libraryItem,
     onItemUpdated
   })
+  const speechCheckAvailable = useServerFeature('chapterbotVerify')
 
   const {
     media,
@@ -243,6 +245,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
                 onRetry={handleSnapRetry}
                 onApply={handleApplySnap}
                 preview={preview}
+                speechCheckAvailable={speechCheckAvailable}
               />
             </div>
           </div>

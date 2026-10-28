@@ -43,7 +43,7 @@ import {
   getSnapErrorToast,
   getSnapRetryIndexes,
   mergeSnapRetry,
-  type SnapAdvancedOptions,
+  type SnapRequestOptions,
   type SnapRow,
   type SnapSession
 } from '@/lib/chapters/chapterSnap'
@@ -410,7 +410,7 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
 
   /** Snap the current editor rows (unsaved edits included); with a selection, only the selected rows. Saves nothing. */
   const handleSnapToAudio = useCallback(
-    async (options: SnapAdvancedOptions): Promise<SnapSession | null> => {
+    async (options: SnapRequestOptions): Promise<SnapSession | null> => {
       blurActiveChapterEditorField()
       const chapters = applyChapterTitleDrafts(newChaptersRef.current, titleDraftsRef.current)
       if (chapters.length <= 1) return null
