@@ -8,6 +8,7 @@ import { useId, useMemo, useRef, useState } from 'react'
 import InputWrapper from './InputWrapper'
 
 export interface DurationPickerProps {
+  /** Seconds; fractions are displayed rounded to whole seconds and kept until the user types a new time. */
   value?: number
   /** true → 000–999; false → 00–99 */
   showThreeDigitHour?: boolean
@@ -75,9 +76,13 @@ export default function DurationPicker({
       lastSentRef.current = null
       return
     }
-    syncingFromParentRef.current = true
     const { h, m, s } = toHMS(value)
-    setText({ hText: padZeros(clamp(h, 0, hoursMax), hoursW), mText: padZeros(m, 2), sText: padZeros(s, 2) })
+    const next = { hText: padZeros(clamp(h, 0, hoursMax), hoursW), mText: padZeros(m, 2), sText: padZeros(s, 2) }
+    // Fractional values display as whole seconds, so a new value can show the same text (16.09 -> 16.2).
+    // Then the emit effect will not run, and a pending skip would swallow the user's next edit.
+    if (next.hText === hText && next.mText === mText && next.sText === sText) return
+    syncingFromParentRef.current = true
+    setText(next)
   }, [value, hoursMax, hoursW])
 
   // emit to parent on text changes (clamped numerically)
