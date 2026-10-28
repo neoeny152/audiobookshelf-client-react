@@ -213,4 +213,74 @@ describe('<IconBtn />', () => {
     cy.get('button').click()
     cy.get('@onClickSpy').should('have.been.calledOnce')
   })
+
+  describe('variant', () => {
+    it('adds no color classes for the default variant', () => {
+      cy.mount(<IconBtn borderless>edit</IconBtn>)
+      cy.get('button').should('have.class', 'text-button-foreground-muted')
+      cy.get('button').should('not.have.class', 'text-foreground-muted')
+    })
+
+    it('applies the muted variant over the borderless colors', () => {
+      cy.mount(
+        <IconBtn borderless variant="muted">
+          edit
+        </IconBtn>
+      )
+      cy.get('button').should('have.class', 'text-foreground-muted')
+      cy.get('button').should('have.class', 'hover:not-disabled:text-foreground')
+      cy.get('button').should('not.have.class', 'text-button-foreground-muted')
+      cy.get('button').should('not.have.class', 'hover:not-disabled:text-button-foreground')
+    })
+
+    it('applies the danger variant', () => {
+      cy.mount(<IconBtn variant="danger">delete</IconBtn>)
+      cy.get('button').should('have.class', 'text-foreground-muted')
+      cy.get('button').should('have.class', 'hover:not-disabled:text-error')
+      cy.get('button').should('have.class', 'focus-visible:text-error')
+    })
+
+    it('applies the success variant', () => {
+      cy.mount(<IconBtn variant="success">check</IconBtn>)
+      cy.get('button').should('have.class', 'text-foreground-muted')
+      cy.get('button').should('have.class', 'hover:not-disabled:text-success')
+      cy.get('button').should('have.class', 'focus-visible:text-success')
+    })
+
+    it('lets className override the variant base color', () => {
+      cy.mount(
+        <IconBtn borderless variant="danger" className="text-foreground">
+          close
+        </IconBtn>
+      )
+      cy.get('button').should('have.class', 'text-foreground')
+      cy.get('button').should('not.have.class', 'text-foreground-muted')
+      cy.get('button').should('have.class', 'hover:not-disabled:text-error')
+    })
+
+    it('keeps the disabled color for every variant', () => {
+      cy.mount(
+        <IconBtn borderless variant="muted" disabled>
+          edit
+        </IconBtn>
+      )
+      cy.get('button').should('be.disabled')
+      cy.get('button').should('have.class', 'disabled:text-disabled')
+    })
+
+    it('resolves the muted color from the active theme', () => {
+      cy.document().then((doc) => {
+        doc.documentElement.className = 'theme-light'
+      })
+      cy.mount(
+        <IconBtn borderless variant="muted">
+          edit
+        </IconBtn>
+      )
+      cy.get('button').should('have.css', 'color', 'rgb(107, 114, 128)')
+      cy.document().then((doc) => {
+        doc.documentElement.className = ''
+      })
+    })
+  })
 })

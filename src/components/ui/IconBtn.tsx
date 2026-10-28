@@ -5,6 +5,19 @@ import { mergeClasses } from '@/lib/merge-classes'
 import React, { memo } from 'react'
 import ButtonBase from './ButtonBase'
 
+export type IconBtnVariant = 'default' | 'muted' | 'danger' | 'success'
+
+/**
+ * Icon color per variant. `default` keeps the ButtonBase colors; the others start muted and
+ * light up on hover / keyboard focus. Classes passed through `className` still win.
+ */
+const VARIANT_CLASSES: Record<IconBtnVariant, string> = {
+  default: '',
+  muted: 'text-foreground-muted hover:not-disabled:text-foreground focus-visible:text-foreground',
+  danger: 'text-foreground-muted hover:not-disabled:text-error focus-visible:text-error',
+  success: 'text-foreground-muted hover:not-disabled:text-success focus-visible:text-success'
+}
+
 interface IconBtnProps {
   children: React.ReactNode
   disabled?: boolean
@@ -12,6 +25,7 @@ interface IconBtnProps {
   borderless?: boolean
   loading?: boolean
   size?: 'small' | 'medium' | 'large' | 'auto' | 'custom'
+  variant?: IconBtnVariant
   iconClass?: string
   ariaLabel?: string
   to?: string
@@ -47,6 +61,7 @@ export default function IconBtn({
   borderless = false,
   loading = false,
   size = 'medium',
+  variant = 'default',
   iconClass,
   ariaLabel,
   to,
@@ -64,7 +79,7 @@ export default function IconBtn({
 
   // Icon button specific styling based on size
   const sizeClass = size === 'small' ? 'w-9 text-lg' : size === 'large' ? 'w-11 text-2xl' : size === 'medium' ? 'w-10 text-xl' : size === 'auto' ? 'w-auto' : ''
-  const classList = mergeClasses(sizeClass, className)
+  const classList = mergeClasses(sizeClass, VARIANT_CLASSES[variant], className)
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement | HTMLAnchorElement>) => {
     if (isDisabled) {
