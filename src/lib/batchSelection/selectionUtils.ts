@@ -35,7 +35,7 @@ export async function deleteEpisodesSelection(
   selectedItems: readonly SelectedMediaItem[],
   hardDelete: boolean,
   options: EpisodeBatchRunOptions = {}
-): Promise<EpisodeBatchOutcome> {
+): Promise<EpisodeBatchOutcome<EpisodeRef>> {
   return runEpisodeRequests(
     selectedEpisodeRefs(selectedItems),
     {

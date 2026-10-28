@@ -84,7 +84,7 @@ export interface EpisodeBatchUpdate {
 export const BATCH_EDIT_SOFT_LIMIT = 150
 
 /** Save episode batch updates (see runEpisodeRequests for how they are sent). */
-export async function saveEpisodeBatch(updates: readonly EpisodeBatchUpdate[], options: EpisodeBatchRunOptions = {}): Promise<EpisodeBatchOutcome> {
+export async function saveEpisodeBatch(updates: readonly EpisodeBatchUpdate[], options: EpisodeBatchRunOptions = {}): Promise<EpisodeBatchOutcome<EpisodeBatchUpdate>> {
   return runEpisodeRequests(
     updates,
     {

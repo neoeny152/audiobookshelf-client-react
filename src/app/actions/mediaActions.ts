@@ -1,6 +1,6 @@
 'use server'
 
-import { ActionResult, toActionResult } from '@/lib/actionResult'
+import { ActionResult, StatusActionResult, toActionResult, toStatusActionResult } from '@/lib/actionResult'
 import * as api from '@/lib/api'
 import {
   isPodcastMedia,
@@ -173,16 +173,16 @@ export async function updatePodcastEpisodeQuietAction(libraryItemId: string, epi
  */
 export async function batchUpdatePodcastEpisodesAction(
   episodes: { libraryItemId: string; episodeId: string; updates: UpdatePodcastEpisodePayload }[]
-): Promise<ActionResult<number>> {
-  return toActionResult(async () => (await api.batchUpdatePodcastEpisodes(episodes)).numEpisodesUpdated)
+): Promise<StatusActionResult<number>> {
+  return toStatusActionResult(async () => (await api.batchUpdatePodcastEpisodes(episodes)).numEpisodesUpdated)
 }
 
 /** Batch episode removal (fork server only, check the `batchEpisodes` server feature first). */
 export async function batchDeletePodcastEpisodesAction(
   episodes: { libraryItemId: string; episodeId: string }[],
   hardDelete: boolean
-): Promise<ActionResult<number>> {
-  return toActionResult(async () => (await api.batchDeletePodcastEpisodes(episodes, hardDelete)).numEpisodesDeleted)
+): Promise<StatusActionResult<number>> {
+  return toStatusActionResult(async () => (await api.batchDeletePodcastEpisodes(episodes, hardDelete)).numEpisodesDeleted)
 }
 
 export async function searchPodcastEpisodeAction(libraryItemId: string, title: string) {
