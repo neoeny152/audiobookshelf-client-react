@@ -290,6 +290,77 @@ export function shiftChapterTimes(
   })
 }
 
+export interface SnapProposalPick {
+  /** Row identity, so a proposal still lands on its chapter if rows were inserted or removed since the snap. */
+  clientKey: string
+  /** The start the proposal was computed from; a row whose start changed since is left alone. */
+  fromStart: number
+  toStart: number
+}
+
+/**
+ * Apply snap proposals: changes start times only (never titles, never order). The first chapter stays at 0.
+ * A pick is skipped when its row is gone or was edited since the snap, when it falls outside the book,
+ * or when it would no longer sit strictly between its neighbours. Ends of touched rows follow the next start.
+ */
+export function applySnapProposals(
+  chapters: EditableChapter[],
+  picks: SnapProposalPick[],
+  mediaDuration: number
+): { chapters: EditableChapter[]; applied: number; skipped: number } {
+  const indexByKey = new Map<string, number>()
+  chapters.forEach((chapter, i) => {
+    if (chapter.clientKey) indexByKey.set(chapter.clientKey, i)
+  })
+
+  const next = chapters.slice()
+  const moved = new Set<number>()
+  let skipped = 0
+
+  for (const pick of picks) {
+    const index = indexByKey.get(pick.clientKey)
+    if (index === undefined) {
+      skipped++
+      continue
+    }
+    const current = chapters[index]
+    if (current.start === pick.toStart) continue
+    if (index === 0 || current.start !== pick.fromStart || !Number.isFinite(pick.toStart) || pick.toStart <= 0 || pick.toStart >= mediaDuration) {
+      skipped++
+      continue
+    }
+    next[index] = { ...current, start: pick.toStart }
+    moved.add(index)
+  }
+
+  // Undo moves that break strict ordering (e.g. a neighbour was left unchecked). Reverting always converges:
+  // with no moves left the list is back to the input.
+  let i = 1
+  while (i < next.length) {
+    if ((moved.has(i) || moved.has(i - 1)) && next[i].start <= next[i - 1].start) {
+      const revert = moved.has(i) ? i : i - 1
+      next[revert] = chapters[revert]
+      moved.delete(revert)
+      skipped++
+      i = Math.max(1, revert - 1)
+      continue
+    }
+    i++
+  }
+
+  const touched = new Set<number>()
+  for (const index of moved) {
+    touched.add(index)
+    if (index > 0) touched.add(index - 1)
+  }
+  for (const index of touched) {
+    const end = index + 1 < next.length ? next[index + 1].start : mediaDuration
+    if (next[index].end !== end) next[index] = { ...next[index], end }
+  }
+
+  return { chapters: moved.size ? next : chapters, applied: moved.size, skipped }
+}
+
 export function applyMatchedClientKeys(existing: EditableChapter[], incomingRows: EditableChapter[], matchResult: ChapterMatchResult): EditableChapter[] {
   return incomingRows.map((row, incomingIndex) => {
     const incomingStart = normalizeChapterStartSec(row.start)
