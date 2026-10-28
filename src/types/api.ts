@@ -668,6 +668,11 @@ export interface SnapChapterSpeech {
   heading: boolean
   late: boolean
   early: boolean
+  /**
+   * Spoken heading heard at the start of the after-clip, normalised (e.g. "Chapter 3", "Prologue"), or null.
+   * Missing from servers that predate it.
+   */
+  heard?: string | null
 }
 
 export interface SnapChapterProposal {

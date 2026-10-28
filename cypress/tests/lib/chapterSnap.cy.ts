@@ -1,4 +1,4 @@
-import { applySnapProposals, type EditableChapter } from '@/lib/chapters/chapterEditorUtils'
+import { applySnapProposals, applySnapTitles, type EditableChapter } from '@/lib/chapters/chapterEditorUtils'
 import {
   buildSnapPayload,
   buildSnapRetryPayload,
@@ -7,6 +7,7 @@ import {
   formatSnapStart,
   getDefaultSnapChecked,
   getSnapErrorToast,
+  getSnapHeardTitle,
   getSnapSpeechStatus,
   getSnapSpeechWarnings,
   isSnapSpeechFlagged,
@@ -14,6 +15,7 @@ import {
   SNAP_DEFAULT_OPTIONS,
   snapSessionCheckedSpeech,
   toSnapSpeech,
+  withSnapTitles,
   type SnapSession
 } from '@/lib/chapters/chapterSnap'
 import type { SnapChapterProposal, SnapChaptersResponse } from '@/types/api'
@@ -175,6 +177,32 @@ describe('applySnapProposals', () => {
   it('returns the same array when nothing is picked', () => {
     const chapters = rows([0, 100])
     expect(applySnapProposals(chapters, [], mediaDuration).chapters).to.equal(chapters)
+  })
+})
+
+describe('applySnapTitles', () => {
+  it('changes only the picked titles and keeps starts, order and keys', () => {
+    const chapters = rows([0, 100, 200])
+    const result = applySnapTitles(chapters, [{ clientKey: 'ch-1', fromTitle: 'Chapter 2', toTitle: 'Chapter 3' }])
+    expect(result.applied).to.deep.equal(['ch-1'])
+    expect(result.skipped).to.equal(0)
+    expect(result.chapters.map((c) => c.title)).to.deep.equal(['Chapter 1', 'Chapter 3', 'Chapter 3'])
+    expect(result.chapters.map((c) => c.start)).to.deep.equal([0, 100, 200])
+    expect(result.chapters.map((c) => c.clientKey)).to.deep.equal(['ch-0', 'ch-1', 'ch-2'])
+    expect(chapters[1].title).to.equal('Chapter 2')
+  })
+
+  it('skips rows that are gone or were retitled since the snap, and no-ops rows that already have the title', () => {
+    const chapters = rows([0, 100, 200])
+    chapters[2] = { ...chapters[2], title: 'Edited' }
+    const result = applySnapTitles(chapters, [
+      { clientKey: 'ch-9', fromTitle: 'Chapter 10', toTitle: 'Chapter 9' },
+      { clientKey: 'ch-2', fromTitle: 'Chapter 3', toTitle: 'Chapter 4' },
+      { clientKey: 'ch-1', fromTitle: 'Chapter 2', toTitle: 'Chapter 2' }
+    ])
+    expect(result.applied).to.deep.equal([])
+    expect(result.skipped).to.equal(2)
+    expect(result.chapters).to.equal(chapters)
   })
 })
 
@@ -374,8 +402,48 @@ describe('snap speech check', () => {
       after: 'x',
       heading: false,
       late: true,
-      early: false
+      early: false,
+      heard: null
     })
+  })
+
+  it('reads the heard heading from fork servers and ignores anything else', () => {
+    expect(toSnapSpeech({ before: '', after: 'Chapter 3', heading: false, late: false, early: false, heard: ' Chapter 3 ' })?.heard).to.equal('Chapter 3')
+    expect(toSnapSpeech({ before: '', after: '', heading: false, late: false, early: false, heard: null })?.heard).to.equal(null)
+    expect(toSnapSpeech({ before: '', after: '', heading: false, late: false, early: false, heard: 3 })?.heard).to.equal(null)
+    expect(toSnapSpeech({ before: '', after: '', heading: false, late: false, early: false, heard: '  ' })?.heard).to.equal(null)
+    expect(toSnapSpeech({ before: '', after: '', heading: false, late: false, early: false, heard: 'x'.repeat(201) })?.heard).to.equal(null)
+  })
+
+  it('offers the heard title only when it differs from the title and the title was not heard', () => {
+    const heardSpeech = (heard: string | null | undefined, heading = false) => ({ ...speech({ heading }), heard })
+    // QA: "Black Ice - Part 02" with "Chapter 3 The rain didn't let up..." after the start
+    expect(getSnapHeardTitle({ title: 'Black Ice - Part 02', speech: heardSpeech('Chapter 3') })).to.equal('Chapter 3')
+    expect(getSnapHeardTitle({ title: 'chapter 3.', speech: heardSpeech('Chapter 3') })).to.equal(null)
+    expect(getSnapHeardTitle({ title: 'Chapter Twelve', speech: heardSpeech('Chapter 12', true) })).to.equal(null)
+    expect(getSnapHeardTitle({ title: 'Chapter 3: The Rain', speech: heardSpeech('Chapter 3', true) })).to.equal(null)
+    expect(getSnapHeardTitle({ title: 'Black Ice - Part 02', speech: heardSpeech(null) })).to.equal(null)
+    // stock servers and older fork servers send no heard
+    expect(getSnapHeardTitle({ title: 'Black Ice - Part 02', speech: heardSpeech(undefined) })).to.equal(null)
+    expect(getSnapHeardTitle({ title: 'Black Ice - Part 02', speech: null })).to.equal(null)
+  })
+
+  it('puts applied titles into the session rows and the retry payload', () => {
+    const session: SnapSession = {
+      snapshot,
+      response: response([
+        proposal({ index: 0, originalStart: 0, reason: 'first-chapter' }),
+        proposal({ index: 1, originalStart: 100, reason: 'not-analysed' }),
+        proposal({ index: 2, originalStart: 200 })
+      ]),
+      options: { ...SNAP_DEFAULT_OPTIONS, verify: true }
+    }
+    const next = withSnapTitles(session, new Map([['ch-1', 'Chapter 3']]))
+    expect(next.snapshot.map((c) => c.title)).to.deep.equal(['Chapter 1', 'Chapter 3', 'Chapter 3', 'Chapter 4'])
+    expect(buildSnapRows(next)[1].title).to.equal('Chapter 3')
+    expect(buildSnapRetryPayload(next.response, next.options)?.chapters[1].title).to.equal('Chapter 3')
+    expect(session.snapshot[1].title).to.equal('Chapter 2')
+    expect(withSnapTitles(session, new Map())).to.equal(session)
   })
 
   it('names the speech status, late and early first', () => {

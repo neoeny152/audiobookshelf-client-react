@@ -41,6 +41,8 @@ export const SNAP_OPTION_BOUNDS: Readonly<Record<keyof SnapAdvancedOptions, read
 
 /** The server rejects longer titles; they are only echoed back, so trimming them is harmless. */
 const MAX_SNAP_TITLE_LENGTH = 1000
+/** A heard heading is short ("Chapter 21"); anything longer is not one. */
+const MAX_HEARD_TITLE_LENGTH = 200
 
 /** One editor row as it was when the snap was requested. */
 export interface SnapSnapshotChapter {
@@ -104,7 +106,60 @@ export function toSnapSpeech(value: unknown): SnapChapterSpeech | null {
     after: typeof speech.after === 'string' ? speech.after : '',
     heading: speech.heading === true,
     late: speech.late === true,
-    early: speech.early === true
+    early: speech.early === true,
+    heard: toHeardTitle(speech.heard)
+  }
+}
+
+function toHeardTitle(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const heard = value.trim()
+  return heard && heard.length <= MAX_HEARD_TITLE_LENGTH ? heard : null
+}
+
+/** Case, punctuation and spacing do not make a title different ("chapter 3." is "Chapter 3"). */
+function comparableTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+}
+
+/**
+ * The heading the speech check heard at the start of this row, when it is worth offering as the title: the server
+ * reported one (fork servers only), the row's title differs from it, and the title's own heading was not heard (so
+ * "Chapter Twelve" or "Chapter 3: The Rain" are not offered "Chapter 12" or "Chapter 3").
+ */
+export function getSnapHeardTitle(row: Pick<SnapRow, 'title' | 'speech'>): string | null {
+  const heard = row.speech?.heard
+  if (!heard || row.speech?.heading) return null
+  return comparableTitle(heard) === comparableTitle(row.title) ? null : heard
+}
+
+/**
+ * The session after heard titles were applied in the editor (keyed by clientKey): the rows show the new titles, and a
+ * retry sends them.
+ */
+export function withSnapTitles(session: SnapSession, titles: ReadonlyMap<string, string>): SnapSession {
+  if (titles.size === 0) return session
+  const titleAt = (i: number): string | undefined => {
+    const key = session.snapshot[i]?.clientKey
+    return key === undefined ? undefined : titles.get(key)
+  }
+  return {
+    ...session,
+    snapshot: session.snapshot.map((chapter) => (titles.has(chapter.clientKey) ? { ...chapter, title: titles.get(chapter.clientKey)! } : chapter)),
+    response: {
+      ...session.response,
+      chapters: session.response.chapters.map((chapter, i) => {
+        const title = titleAt(i)
+        return title === undefined ? chapter : { ...chapter, title }
+      }),
+      proposedChapters: session.response.proposedChapters.map((chapter, i) => {
+        const title = titleAt(i)
+        return title === undefined ? chapter : { ...chapter, title }
+      })
+    }
   }
 }
 

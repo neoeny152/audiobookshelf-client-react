@@ -313,6 +313,47 @@ export interface SnapProposalPick {
   toStart: number
 }
 
+export interface SnapTitlePick {
+  /** Row identity, so a title still lands on its chapter if rows were inserted or removed since the snap. */
+  clientKey: string
+  /** The title the snap saw; a row whose title changed since is left alone. */
+  fromTitle: string
+  toTitle: string
+}
+
+/**
+ * Apply titles heard by the snap speech check: changes titles only (never starts, never order). A pick is skipped
+ * when its row is gone or its title was edited since the snap. Returns the clientKeys whose title was set.
+ */
+export function applySnapTitles(chapters: EditableChapter[], picks: SnapTitlePick[]): { chapters: EditableChapter[]; applied: string[]; skipped: number } {
+  const indexByKey = new Map<string, number>()
+  chapters.forEach((chapter, i) => {
+    if (chapter.clientKey) indexByKey.set(chapter.clientKey, i)
+  })
+
+  const next = chapters.slice()
+  const applied: string[] = []
+  let skipped = 0
+  for (const pick of picks) {
+    const index = indexByKey.get(pick.clientKey)
+    const toTitle = pick.toTitle.trim()
+    if (index === undefined || !toTitle) {
+      skipped++
+      continue
+    }
+    const current = (next[index].title || '').trim()
+    if (current === toTitle) continue
+    if (current !== pick.fromTitle.trim()) {
+      skipped++
+      continue
+    }
+    next[index] = { ...next[index], title: toTitle }
+    applied.push(pick.clientKey)
+  }
+
+  return { chapters: applied.length ? next : chapters, applied, skipped }
+}
+
 /**
  * Apply snap proposals: changes start times only (never titles, never order). The first chapter stays at 0.
  * A pick is skipped when its row is gone or was edited since the snap, when it falls outside the book,
