@@ -76,6 +76,7 @@ export default function AppBarSelectionOverlay({ libraryId }: { libraryId?: stri
   const selectedItems = selection?.selectedItems ?? EMPTY_SELECTED_ITEMS
   const selectionKind = selection?.selectionKind ?? null
   const clearSelection = selection?.clearSelection
+  const keepOnlySelected = selection?.keepOnlySelected
   const isMobile = useMediaQuery('max-md')
   const hasLibraryDownloadPost = useServerFeature('libraryDownloadPost')
 
@@ -86,7 +87,8 @@ export default function AppBarSelectionOverlay({ libraryId }: { libraryId?: stri
     selectionKind: selectionKind ?? 'book',
     libraryId,
     allFinished,
-    clearSelection
+    clearSelection,
+    keepOnlySelected
   })
 
   const handleBatchAction = (action: AppBarBatchActionId) => {

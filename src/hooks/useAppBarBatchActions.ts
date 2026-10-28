@@ -8,6 +8,7 @@ import { useGlobalToast } from '@/contexts/ToastContext'
 import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { BATCH_EDIT_SOFT_LIMIT, writeBatchEditSession } from '@/lib/batchEdit'
+import { selectionAfterEpisodeBatch } from '@/lib/batchSelection/episodeBatch'
 import { buildSelectedBooksPlayPayload, buildSelectedEpisodesPlayPayload } from '@/lib/batchSelection/selectionPlayback'
 import {
   deleteEpisodesSelection,
@@ -33,6 +34,8 @@ interface UseAppBarBatchActionsParams {
   libraryId?: string
   allFinished: boolean
   clearSelection?: () => void
+  /** Narrows the selection to these keys (the failed entries of a partially failed batch). */
+  keepOnlySelected?: (keys: ReadonlySet<string>) => void
 }
 
 export interface AppBarBatchActionsResult {
@@ -50,7 +53,8 @@ export function useAppBarBatchActions({
   selectionKind,
   libraryId,
   allFinished,
-  clearSelection
+  clearSelection,
+  keepOnlySelected
 }: UseAppBarBatchActionsParams): AppBarBatchActionsResult {
   const t = useTypeSafeTranslations()
   const router = useRouter()
@@ -183,19 +187,22 @@ export function useAppBarBatchActions({
                 const message = t('ToastEpisodeBatchDeletePartial', { succeeded: outcome.succeeded, total: outcome.total, failed: outcome.failed })
                 showToast(outcome.firstError ? `${message}: ${outcome.firstError}` : message, { type: 'warning' })
               }
+              // Failed episodes stay selected so they can be retried
+              const nextSelection = selectionAfterEpisodeBatch(outcome)
+              if (nextSelection.type === 'clear') finishBatchAction()
+              else if (nextSelection.type === 'keepOnly') keepOnlySelected?.(nextSelection.keys)
             } finally {
               setProgress(null)
             }
           },
           {
             logLabel: 'Failed to batch delete episodes',
-            errorToast: t('ToastEpisodeBatchDeleteFailed'),
-            onSuccess: finishBatchAction
+            errorToast: t('ToastEpisodeBatchDeleteFailed')
           }
         )
       }
     })
-  }, [finishBatchAction, hasBatchEpisodes, runBatch, selectedItems, showToast, t])
+  }, [finishBatchAction, hasBatchEpisodes, keepOnlySelected, runBatch, selectedItems, showToast, t])
 
   const handleDownload = useCallback(() => {
     if (!libraryId) return

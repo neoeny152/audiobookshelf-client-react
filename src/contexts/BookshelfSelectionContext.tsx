@@ -28,6 +28,8 @@ export interface BookshelfSelectionActions {
   selectItem: (scopeId: string, options: SelectItemOptions) => void
   ensureSelectionAnchor: (selectionKey: string) => void
   clearSelection: () => void
+  /** Drops every selected item whose key is not in `keys` (e.g. keep only the failed ones of a batch). */
+  keepOnlySelected: (keys: ReadonlySet<string>) => void
 }
 
 interface BookshelfSelectionContextValue extends BookshelfSelectionState, BookshelfSelectionActions {
@@ -111,6 +113,17 @@ function createSelectionStore(): SelectionStore {
     clearSelection: () => {
       anchorKey = null
       if (state !== EMPTY_STATE) setState(EMPTY_STATE)
+    },
+    keepOnlySelected: (keys) => {
+      const next = state.selectedItems.filter((item) => keys.has(item.selectionKey))
+      if (next.length === state.selectedItems.length) return
+      if (next.length === 0) {
+        anchorKey = null
+        setState(EMPTY_STATE)
+        return
+      }
+      if (anchorKey !== null && !keys.has(anchorKey)) anchorKey = null
+      setState({ ...state, selectedItems: next, selectedKeys: new Set(next.map((item) => item.selectionKey)) })
     }
   }
 
@@ -129,7 +142,7 @@ function createSelectionStore(): SelectionStore {
 const NOOP_STORE: SelectionStore = {
   getState: () => EMPTY_STATE,
   subscribe: () => () => {},
-  actions: { selectItem: () => {}, ensureSelectionAnchor: () => {}, clearSelection: () => {} }
+  actions: { selectItem: () => {}, ensureSelectionAnchor: () => {}, clearSelection: () => {}, keepOnlySelected: () => {} }
 }
 
 const BookshelfSelectionContext = createContext<SelectionStore | null>(null)

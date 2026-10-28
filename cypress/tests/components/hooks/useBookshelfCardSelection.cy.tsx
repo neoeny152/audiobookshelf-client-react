@@ -40,13 +40,16 @@ function Card({ shelf, index, scopeId = 'bookshelf:items' }: { shelf: (LibraryIt
 }
 
 function SelectionSummary() {
-  const { selectedItems, selectionKind, clearSelection } = useBookshelfSelection()
+  const { selectedItems, selectionKind, clearSelection, keepOnlySelected } = useBookshelfSelection()
   return (
     <div>
       <span data-cy="selected">{selectedItems.map((item) => item.libraryItemId).join(',')}</span>
       <span data-cy="kind">{selectionKind ?? ''}</span>
       <button type="button" data-cy="clear" onClick={clearSelection}>
         clear
+      </button>
+      <button type="button" data-cy="keep-li_5" onClick={() => keepOnlySelected(new Set(['li:li_5']))}>
+        keep li_5
       </button>
     </div>
   )
@@ -113,5 +116,26 @@ describe('useBookshelfCardSelection', () => {
       expect(renderCounts.has('li_5')).to.equal(false)
       expect(renderCounts.has('other')).to.equal(false)
     })
+  })
+
+  it('keepOnlySelected narrows the selection and keeps selection mode while something is left', () => {
+    cy.mount(<Shelf shelf={makeShelf()} />)
+
+    cy.get('[data-cy=card-li_1]').click()
+    cy.get('[data-cy=card-li_6]').click({ shiftKey: true })
+    cy.get('[data-cy=selected]').should('have.text', 'li_1,li_5,li_6')
+
+    cy.get('[data-cy=keep-li_5]').click()
+    cy.get('[data-cy=selected]').should('have.text', 'li_5')
+    cy.get('[data-cy=kind]').should('have.text', 'book')
+    cy.get('[data-cy=card-li_1]').should('have.attr', 'data-selected', 'false')
+    cy.get('[data-cy=card-li_5]').should('have.attr', 'data-selected', 'true')
+
+    // Nothing of the kept keys left: back to no selection
+    cy.get('[data-cy=card-li_5]').click()
+    cy.get('[data-cy=card-li_0]').click()
+    cy.get('[data-cy=keep-li_5]').click()
+    cy.get('[data-cy=selected]').should('have.text', '')
+    cy.get('[data-cy=card-li_0]').should('have.attr', 'data-mode', 'false')
   })
 })
