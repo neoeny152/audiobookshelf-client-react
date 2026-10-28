@@ -137,4 +137,31 @@ describe('shift-click range selection over a virtualized shelf', () => {
     expect(second.items[0]).to.equal(first.items[0])
     expect(second.items[2]).to.deep.include({ selectionKey: 'li:li_2', libraryItemId: 'li_2', title: 'Title li_2' })
   })
+
+  it('rebuilds a kept entry when its shelf entity was replaced', () => {
+    const shelf = sparseShelf()
+    const first = click(shelf, { items: [], anchor: null }, 0)
+    expect(first.items[0]).to.deep.include({ title: 'Title li_0', hasTracks: false })
+
+    // A socket update replaces the item (renamed, a scan added audio): the shelf gets a new array
+    const updated = [...shelf]
+    updated[0] = book('li_0', {
+      media: { metadata: { title: 'Renamed', authors: [] }, audioFiles: [{ ino: '1' }], tracks: [{ index: 1 }], chapters: [] }
+    })
+    const second = click(updated, first, 1)
+    expect(keysOf(second.items)).to.deep.equal(['li:li_0', 'li:li_1'])
+    expect(second.items[0]).to.deep.include({ selectionKey: 'li:li_0', title: 'Renamed', hasTracks: true })
+
+    // Unchanged entities keep their entries
+    const third = click(updated, second, 2)
+    expect(third.items[0]).to.equal(second.items[0])
+    expect(third.items[1]).to.equal(second.items[1])
+  })
+
+  it('keeps entries that are not on the clicked shelf as they are', () => {
+    const first = click(sparseShelf(), { items: [], anchor: null }, 0)
+    const second = click([book('other')], first, 0)
+    expect(second.items[0]).to.equal(first.items[0])
+    expect(keysOf(second.items)).to.deep.equal(['li:li_0', 'li:other'])
+  })
 })

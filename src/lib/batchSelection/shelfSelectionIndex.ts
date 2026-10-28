@@ -80,24 +80,40 @@ export function getShelfSelectionIndex(entities: ShelfEntities | undefined, sele
   return index
 }
 
+/** The shelf entities each selected item was built from, so a kept item can tell when its entity changed. */
+const builtFrom = new WeakMap<SelectedMediaItem, SelectionKeySource>()
+
+function buildSelectedItem(source: SelectionKeySource): SelectedMediaItem {
+  const item = toSelectedMediaItem(source.libraryItem, source.episode)
+  builtFrom.set(item, source)
+  return item
+}
+
+function isBuiltFrom(item: SelectedMediaItem, source: SelectionKeySource): boolean {
+  const built = builtFrom.get(item)
+  return !!built && built.libraryItem === source.libraryItem && built.episode === source.episode
+}
+
 /**
  * Next selected items after a click: keeps the existing entries (and their order) that are still selected,
- * then appends newly selected keys in shelf order. Only new keys are converted, so the cost is the size
- * of the selection plus the change, not the size of the shelf.
+ * then appends newly selected keys in shelf order. Only new keys and kept entries whose shelf entity was
+ * replaced since (a socket update, a rescan) are converted, so the cost is the size of the selection plus
+ * the change, not the size of the shelf. Kept entries that are not on this shelf stay as they are.
  */
 export function nextSelectedItems(prev: readonly SelectedMediaItem[], nextKeys: ReadonlySet<string>, shelfIndex: ShelfSelectionIndex): SelectedMediaItem[] {
   const next: SelectedMediaItem[] = []
   const kept = new Set<string>()
   for (const item of prev) {
     if (nextKeys.has(item.selectionKey)) {
-      next.push(item)
+      const source = shelfIndex.sourceOfKey(item.selectionKey)
+      next.push(source && !isBuiltFrom(item, source) ? buildSelectedItem(source) : item)
       kept.add(item.selectionKey)
     }
   }
   for (const key of nextKeys) {
     if (kept.has(key)) continue
     const source = shelfIndex.sourceOfKey(key)
-    if (source) next.push(toSelectedMediaItem(source.libraryItem, source.episode))
+    if (source) next.push(buildSelectedItem(source))
   }
   return next
 }
