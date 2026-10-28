@@ -3,7 +3,7 @@
 import { ENTITY_CONFIGS } from '@/app/(main)/library/[library]/[entityType]/entity-config'
 import { updateCollectionAction } from '@/app/actions/collectionActions'
 import CompilationBookshelf from '@/components/widgets/compilation/CompilationBookshelf'
-import { useBookshelfSelection } from '@/contexts/BookshelfSelectionContext'
+import { useIsBookshelfSelectionMode } from '@/contexts/BookshelfSelectionContext'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { getSortableBookshelfItemOrderBy } from '@/contexts/SortableBookshelfOverlayContext'
 import { useUser } from '@/contexts/UserContext'
@@ -32,7 +32,7 @@ export default function CollectionBookshelf({ collection, orderedBooks, setOrder
   const t = useTypeSafeTranslations()
   const { user } = useUser()
   const { library, showSubtitles, seriesSortBy } = useLibrary()
-  const { isSelectionMode } = useBookshelfSelection()
+  const isSelectionMode = useIsBookshelfSelectionMode()
 
   const shelfEntries = useMemo(() => toSortableCollectionEntries(orderedBooks), [orderedBooks])
   const shelfEntitiesDense = useMemo(() => orderedBooks as unknown as (BookshelfEntity | null)[], [orderedBooks])

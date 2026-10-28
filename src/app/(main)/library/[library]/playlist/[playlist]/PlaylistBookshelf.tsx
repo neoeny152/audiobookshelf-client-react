@@ -3,7 +3,7 @@
 import { ENTITY_CONFIGS } from '@/app/(main)/library/[library]/[entityType]/entity-config'
 import { updatePlaylistAction } from '@/app/actions/playlistActions'
 import CompilationBookshelf from '@/components/widgets/compilation/CompilationBookshelf'
-import { useBookshelfSelection } from '@/contexts/BookshelfSelectionContext'
+import { useIsBookshelfSelectionMode } from '@/contexts/BookshelfSelectionContext'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { getSortableBookshelfItemOrderBy } from '@/contexts/SortableBookshelfOverlayContext'
 import { useUser } from '@/contexts/UserContext'
@@ -39,7 +39,7 @@ export default function PlaylistBookshelf({ playlist, orderedItems, setOrderedIt
   const { user } = useUser()
   const { library, showSubtitles, seriesSortBy } = useLibrary()
   const isPodcastLibrary = library.mediaType === 'podcast'
-  const { isSelectionMode } = useBookshelfSelection()
+  const isSelectionMode = useIsBookshelfSelectionMode()
 
   const shelfEntries = useMemo(() => toSortablePlaylistItems(orderedItems), [orderedItems])
   const mediaItemProgressMap = useMemo(() => buildMediaItemProgressMap(user.mediaProgress), [user.mediaProgress])

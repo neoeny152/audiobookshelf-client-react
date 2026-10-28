@@ -3,7 +3,7 @@
 import { removeLibraryItemsWithIssuesAction } from '@/app/actions/libraryActions'
 import Btn from '@/components/ui/Btn'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
-import { useBookshelfSelection } from '@/contexts/BookshelfSelectionContext'
+import { useIsBookshelfSelectionMode } from '@/contexts/BookshelfSelectionContext'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
@@ -18,7 +18,7 @@ export default function RemoveAllIssuesButton() {
   const pathname = usePathname()
   const { showToast } = useGlobalToast()
   const { userIsAdminOrUp } = useUser()
-  const { isSelectionMode } = useBookshelfSelection()
+  const isSelectionMode = useIsBookshelfSelectionMode()
   const { library, itemCount, refetchFilterDataSilently } = useLibrary()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [isPending, startTransition] = useTransition()

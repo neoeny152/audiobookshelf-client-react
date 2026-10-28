@@ -18,7 +18,7 @@ import MediaCardDetailView from '@/components/widgets/media-card/MediaCardDetail
 import MediaCardFrame from '@/components/widgets/media-card/MediaCardFrame'
 import MediaCardOverlay from '@/components/widgets/media-card/MediaCardOverlay'
 import type { SortableBookshelfCardOptions } from '@/components/widgets/media-card/SortableBookshelfCard'
-import { useBookshelfSelectionOptional } from '@/contexts/BookshelfSelectionContext'
+import { useBookshelfSelectionActionsOptional, useIsBookshelfSelectionModeOptional } from '@/contexts/BookshelfSelectionContext'
 import { useCardSize } from '@/contexts/CardSizeContext'
 import { useBookCoverAspectRatio, useLibrary } from '@/contexts/LibraryContext'
 import { useMediaContext } from '@/contexts/MediaContext'
@@ -157,7 +157,8 @@ function MediaCard(props: MediaCardProps) {
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
   const selectionSelectHandlerRef = useRef(onSelect)
   selectionSelectHandlerRef.current = onSelect
-  const bookshelfSelection = useBookshelfSelectionOptional()
+  const bookshelfSelection = useBookshelfSelectionActionsOptional()
+  const globalSelectionActive = useIsBookshelfSelectionModeOptional()
   const tabFocusPendingRef = useRef(false)
   const hasSelectionHandler = Boolean(onSelect)
   const { onMouseDown: selectionMouseDown, suppressTextSelection } = useShiftClickTextSelectionGuard({
@@ -373,7 +374,6 @@ function MediaCard(props: MediaCardProps) {
 
   const showReadButton = !isSelectionMode && !showPlayButton && isBookMedia(media) && !!getEbookFormat(media)
 
-  const globalSelectionActive = bookshelfSelection?.isSelectionMode ?? false
   const showSelectRadioButton = !isAuthorBookshelfView && Boolean(onSelect) && (isSelectionMode || !globalSelectionActive)
 
   const {

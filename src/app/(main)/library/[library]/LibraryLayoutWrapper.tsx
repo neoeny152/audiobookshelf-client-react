@@ -1,7 +1,7 @@
 'use client'
 
 import CoverSizeWidget from '@/components/widgets/CoverSizeWidget'
-import { useBookshelfSelection } from '@/contexts/BookshelfSelectionContext'
+import { useBookshelfSelectionActions, useIsBookshelfSelectionMode } from '@/contexts/BookshelfSelectionContext'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { useAppNavigation } from '@/contexts/AppNavigationContext'
 import { useUser } from '@/contexts/UserContext'
@@ -20,7 +20,8 @@ export default function LibraryLayoutWrapper({ children }: LibraryLayoutWrapperP
   const { setLastCurrentLibraryId } = useAppNavigation()
   const { Source, serverSettings } = useUser()
   const { library, boundModal, setBoundModal } = useLibrary()
-  const { clearSelection, isSelectionMode } = useBookshelfSelection()
+  const { clearSelection } = useBookshelfSelectionActions()
+  const isSelectionMode = useIsBookshelfSelectionMode()
   const pathname = usePathname()
   const serverVersion = serverSettings?.version || 'Error'
   const installSource = Source || 'Unknown'

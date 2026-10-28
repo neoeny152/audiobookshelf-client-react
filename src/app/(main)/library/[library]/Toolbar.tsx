@@ -1,7 +1,7 @@
 'use client'
 
 import ContextMenuDropdown from '@/components/ui/ContextMenuDropdown'
-import { useBookshelfSelection } from '@/contexts/BookshelfSelectionContext'
+import { useIsBookshelfSelectionMode } from '@/contexts/BookshelfSelectionContext'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { isLibraryIssuesPage } from '@/hooks/useLibraryRouteGuard'
@@ -25,7 +25,7 @@ export default function Toolbar() {
     seriesFilterBy,
     isMatchingAllAuthors
   } = useLibrary()
-  const { isSelectionMode } = useBookshelfSelection()
+  const isSelectionMode = useIsBookshelfSelectionMode()
   const t = useTypeSafeTranslations()
 
   const isIssuesPage = isLibraryIssuesPage(pathname)

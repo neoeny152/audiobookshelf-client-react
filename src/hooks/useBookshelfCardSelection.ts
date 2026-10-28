@@ -1,6 +1,6 @@
 'use client'
 
-import { useBookshelfSelection } from '@/contexts/BookshelfSelectionContext'
+import { useBookshelfSelectionActions, useBookshelfSelectionSelector } from '@/contexts/BookshelfSelectionContext'
 import { getShelfSelectionIndex } from '@/lib/batchSelection/shelfSelectionIndex'
 import { getSelectionKey } from '@/lib/selectedMediaItem'
 import type { ShelfNavigationEntity } from '@/lib/shelfNavigationEntity'
@@ -23,16 +23,16 @@ export function useBookshelfCardSelection(
   options: UseBookshelfCardSelectionOptions
 ) {
   const { scopeId, enabled = true, isSelectable = true, selectEpisodes = false } = options
-  const { isSelectionMode, isSelected, isScopeActive, selectItem } = useBookshelfSelection()
+  const { selectItem } = useBookshelfSelectionActions()
 
   // Built once per shelf array and shared by every card on the shelf
   const shelfIndex = getShelfSelectionIndex(shelfEntities, selectEpisodes)
 
   const selectionKey = useMemo(() => getSelectionKey({ libraryItemId: libraryItem.id, episodeId: episode?.id }), [libraryItem.id, episode?.id])
 
-  const scopeActive = isScopeActive(scopeId)
-  const effectiveSelectionMode = isSelectionMode && scopeActive
-  const selected = isSelected(selectionKey)
+  // Per-card subscriptions: a click re-renders only the cards whose own values change
+  const effectiveSelectionMode = useBookshelfSelectionSelector((state) => state.selectedItems.length > 0 && state.activeScopeId === scopeId)
+  const selected = useBookshelfSelectionSelector((state) => state.selectedKeys.has(selectionKey))
 
   const onSelect = useCallback(
     (event: MouseEvent) => {
