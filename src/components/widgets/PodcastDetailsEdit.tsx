@@ -235,6 +235,7 @@ const PodcastDetailsEdit = ({ libraryItem, availableGenres = [], availableTags =
               items={podcastTypeItems}
               onChange={handlePodcastTypeChange}
               className="md:max-w-52"
+              dirty={dirtyFields.has('type')}
             />
           </div>
         </div>

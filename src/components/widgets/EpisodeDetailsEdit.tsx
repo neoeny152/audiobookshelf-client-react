@@ -209,6 +209,7 @@ export default function EpisodeDetailsEdit({ episode, onChange, onSubmit, ref }:
             value={details.episodeType || 'full'}
             items={episodeTypeItems}
             onChange={(value) => updateField('episodeType', String(value))}
+            dirty={dirtyFields.has('episodeType')}
           />
         </div>
         <div className="mt-2 min-w-0 flex-1 p-1 md:mt-0 md:w-2/5 md:flex-none">
@@ -232,7 +233,14 @@ export default function EpisodeDetailsEdit({ episode, onChange, onSubmit, ref }:
           />
         </div>
         <div className="mt-2 w-full p-1">
-          <TextareaInput value={details.subtitle} onChange={(v) => updateField('subtitle', v)} label={t('LabelSubtitle')} rows={3} trimWhitespace />
+          <TextareaInput
+            value={details.subtitle}
+            onChange={(v) => updateField('subtitle', v)}
+            label={t('LabelSubtitle')}
+            rows={3}
+            trimWhitespace
+            dirty={dirtyFields.has('subtitle')}
+          />
         </div>
         <div className="mt-2 w-full p-1">
           <SlateEditor
