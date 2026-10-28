@@ -361,18 +361,19 @@ export default function VolumeControl({ playerHandler, onOpenChange, triggerClas
           />
         </div>
         {!primaryInputCanHover && (
-          <button
-            type="button"
+          <IconBtn
+            borderless
+            size="custom"
+            variant="muted"
             onClick={toggleMute}
             onBlur={handleWidgetBlur}
-            aria-label={isMuted ? t('LabelUnmute') : t('LabelMute')}
+            ariaLabel={isMuted ? t('LabelUnmute') : t('LabelMute')}
             aria-pressed={isMuted}
-            className="text-foreground-muted hover:text-foreground mt-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded transition-colors"
+            iconClass="text-xl"
+            className="mt-1 h-8 w-8 cursor-pointer rounded transition-colors"
           >
-            <span className="material-symbols text-xl" aria-hidden="true">
-              {isMuted ? 'volume_up' : 'volume_off'}
-            </span>
-          </button>
+            {isMuted ? 'volume_up' : 'volume_off'}
+          </IconBtn>
         )}
       </div>
     </div>

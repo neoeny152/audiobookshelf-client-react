@@ -1,5 +1,6 @@
 'use client'
 
+import IconBtn from '@/components/ui/IconBtn'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 
 export type ModalSideNavigationProps = {
@@ -19,10 +20,12 @@ export default function ModalSideNavigation({ canGoPrev, canGoNext, onPrevAction
     <>
       {canGoPrev ? (
         <div className="pointer-events-none absolute -inset-s-24 top-0 bottom-0 z-1 flex h-full items-center px-6">
-          <button
-            type="button"
-            className="material-symbols text-foreground-muted hover:text-foreground pointer-events-auto cursor-pointer text-5xl transition-colors"
-            aria-label={t('ButtonPrevious')}
+          <IconBtn
+            borderless
+            size="custom"
+            variant="muted"
+            className="pointer-events-auto cursor-pointer text-5xl transition-colors"
+            ariaLabel={t('ButtonPrevious')}
             onClick={(e) => {
               e.stopPropagation()
               e.preventDefault()
@@ -31,15 +34,17 @@ export default function ModalSideNavigation({ canGoPrev, canGoNext, onPrevAction
             onMouseDown={(e) => e.preventDefault()}
           >
             arrow_back_ios_new
-          </button>
+          </IconBtn>
         </div>
       ) : null}
       {canGoNext ? (
         <div className="pointer-events-none absolute -inset-e-24 top-0 bottom-0 z-1 flex h-full items-center px-6">
-          <button
-            type="button"
-            className="material-symbols text-foreground-muted hover:text-foreground pointer-events-auto cursor-pointer text-5xl transition-colors"
-            aria-label={t('ButtonNext')}
+          <IconBtn
+            borderless
+            size="custom"
+            variant="muted"
+            className="pointer-events-auto cursor-pointer text-5xl transition-colors"
+            ariaLabel={t('ButtonNext')}
             onClick={(e) => {
               e.stopPropagation()
               e.preventDefault()
@@ -48,7 +53,7 @@ export default function ModalSideNavigation({ canGoPrev, canGoNext, onPrevAction
             onMouseDown={(e) => e.preventDefault()}
           >
             arrow_forward_ios
-          </button>
+          </IconBtn>
         </div>
       ) : null}
     </>

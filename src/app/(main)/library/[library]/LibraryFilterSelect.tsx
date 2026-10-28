@@ -1,6 +1,7 @@
 'use client'
 
 import Dropdown, { DropdownItem } from '@/components/ui/Dropdown'
+import IconBtn from '@/components/ui/IconBtn'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
@@ -487,16 +488,21 @@ export default function LibraryFilterSelect({ entityType = 'items', user }: Libr
         mobileIcon={'filter_alt'}
       />
       {showClear && (
-        <button
-          className="text-foreground-muted hover:text-foreground absolute inset-y-0 right-8 z-10 flex items-center"
+        <IconBtn
+          borderless
+          size="custom"
+          variant="muted"
+          iconClass="text-base"
+          className="absolute inset-y-0 right-8 z-10 rounded-none"
           onClick={(e) => {
             e.stopPropagation()
             handleClear()
           }}
           title={t('ButtonClearFilter')}
+          ariaLabel={t('ButtonClearFilter')}
         >
-          <span className="material-symbols text-base">close</span>
-        </button>
+          close
+        </IconBtn>
       )}
     </div>
   )

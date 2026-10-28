@@ -1,5 +1,6 @@
 'use client'
 
+import IconBtn from '@/components/ui/IconBtn'
 import LoadingIndicator from '@/components/ui/LoadingIndicator'
 import { ModalProvider } from '@/contexts/ModalContext'
 import { useClickOutside } from '@/hooks/useClickOutside'
@@ -139,14 +140,17 @@ export default function Modal({
       <div className="pointer-events-none absolute inset-x-0 top-0 h-36 w-full bg-linear-to-t from-transparent via-gray-900/50 to-gray-800/70 opacity-90" />
 
       {/* Close button */}
-      <button
-        className="safe-end-2 sm:safe-end-4 absolute top-2 z-10 inline-flex text-gray-200 transition-colors hover:text-white sm:top-4"
-        aria-label={t('ButtonCloseModal')}
+      <IconBtn
+        borderless
+        size="custom"
+        iconClass="text-xl sm:text-2xl"
+        className="safe-end-2 sm:safe-end-4 absolute top-2 z-10 inline-flex cursor-pointer text-gray-200 transition-colors hover:not-disabled:text-white sm:top-4"
+        ariaLabel={t('ButtonCloseModal')}
         onClick={clickClose}
         cy-id="modal-close-button"
       >
-        <span className="material-symbols text-xl sm:text-2xl">close</span>
-      </button>
+        close
+      </IconBtn>
 
       {/* Outer content slot */}
       {outerContent}

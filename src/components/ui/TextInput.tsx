@@ -5,6 +5,7 @@ import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { copyToClipboard } from '@/lib/clipboard'
 import { mergeClasses } from '@/lib/merge-classes'
 import { useId, useState } from 'react'
+import IconBtn from './IconBtn'
 import InputWrapper from './InputWrapper'
 import Label from './Label'
 
@@ -218,76 +219,75 @@ export default function TextInput({
 
         {clearable && value && (
           <div className="absolute inset-e-0 top-0 flex h-full items-center justify-center px-2">
-            <button
-              type="button"
+            <IconBtn
+              borderless
+              size="custom"
+              variant="muted"
               className={mergeClasses(
-                'material-symbols text-foreground-muted hover:text-foreground focus:ring-foreground-muted cursor-pointer rounded focus:ring-2 focus:ring-offset-1 focus:outline-none',
+                'focus:ring-foreground-muted cursor-pointer rounded focus:ring-2 focus:ring-offset-1 focus:outline-none focus-visible:outline-none',
                 clearButtonClassName
               )}
               style={{ fontSize: '1.1rem' }}
               onClick={handleClear}
-              aria-label={t('ButtonClear')}
+              ariaLabel={t('ButtonClear')}
               cy-id="text-input-clear"
             >
               close
-            </button>
+            </IconBtn>
           </div>
         )}
 
         {shouldShowPasswordToggle && (
           // password visibility toggle button only show on hover and focus
           <div className="pointer-events-none absolute inset-e-0 top-0 flex h-full items-center justify-center px-4 opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
-            <button
-              type="button"
-              className="text-foreground-muted hover:text-foreground focus:ring-foreground-muted flex cursor-pointer rounded text-lg focus:ring-2 focus:ring-offset-1 focus:outline-none"
+            <IconBtn
+              borderless
+              size="custom"
+              variant="muted"
+              className="focus:ring-foreground-muted cursor-pointer rounded text-lg focus:ring-2 focus:ring-offset-1 focus:outline-none focus-visible:outline-none"
               onClick={togglePasswordVisibility}
-              aria-label={showPassword ? t('ButtonHidePassword') : t('ButtonShowPassword')}
+              ariaLabel={showPassword ? t('ButtonHidePassword') : t('ButtonShowPassword')}
               aria-controls={inputId}
               cy-id="text-input-password-toggle"
             >
-              {!showPassword ? (
-                <span className="material-symbols" aria-hidden="true">
-                  visibility
-                </span>
-              ) : (
-                <span className="material-symbols" aria-hidden="true">
-                  visibility_off
-                </span>
-              )}
-            </button>
+              {!showPassword ? 'visibility' : 'visibility_off'}
+            </IconBtn>
           </div>
         )}
 
         {shouldShowDatePickerButton && (
           <div className="absolute inset-e-0 top-0 flex h-full items-center justify-center px-2">
-            <button
-              type="button"
-              className="text-foreground-muted hover:text-foreground focus:ring-foreground-muted flex cursor-pointer rounded text-lg focus:ring-2 focus:ring-offset-1 focus:outline-none"
+            <IconBtn
+              borderless
+              size="custom"
+              variant="muted"
+              iconClass="text-xl"
+              className="focus:ring-foreground-muted cursor-pointer rounded text-lg focus:ring-2 focus:ring-offset-1 focus:outline-none focus-visible:outline-none"
               onClick={openDatePicker}
-              aria-label={label || t('LabelDatetime')}
+              ariaLabel={label || t('LabelDatetime')}
               cy-id="text-input-date-picker"
             >
-              <span className="material-symbols text-xl" aria-hidden="true">
-                calendar_today
-              </span>
-            </button>
+              calendar_today
+            </IconBtn>
           </div>
         )}
 
         {showCopy && type !== 'password' && (
           <div className="absolute inset-e-0 top-0 flex h-full items-center justify-center px-2">
-            <button
-              type="button"
+            <IconBtn
+              borderless
+              size="custom"
+              variant={hasCopied ? 'default' : 'muted'}
               className={mergeClasses(
-                'material-symbols focus:ring-foreground-muted cursor-pointer rounded text-lg focus:ring-2 focus:ring-offset-1 focus:outline-none',
-                hasCopied ? 'text-success' : 'text-foreground-muted hover:text-foreground'
+                'focus:ring-foreground-muted cursor-pointer rounded text-lg focus:ring-2 focus:ring-offset-1 focus:outline-none focus-visible:outline-none',
+                hasCopied && 'text-success hover:not-disabled:text-success'
               )}
               onClick={handleCopyToClipboard}
-              aria-label={hasCopied ? t('ButtonCopiedToClipboard') : t('ButtonCopyToClipboard')}
+              ariaLabel={hasCopied ? t('ButtonCopiedToClipboard') : t('ButtonCopyToClipboard')}
               cy-id="text-input-copy"
             >
               {!hasCopied ? 'content_copy' : 'done'}
-            </button>
+            </IconBtn>
           </div>
         )}
       </InputWrapper>

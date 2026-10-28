@@ -2,6 +2,7 @@
 
 import Btn from '@/components/ui/Btn'
 import Dropdown, { DropdownItem } from '@/components/ui/Dropdown'
+import IconBtn from '@/components/ui/IconBtn'
 import MediaIconPicker from '@/components/ui/MediaIconPicker'
 import TextInput from '@/components/ui/TextInput'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
@@ -102,14 +103,16 @@ export default function LibraryDetailsTab({
               <span className="material-symbols fill text-xl text-yellow-200">folder</span>
               <TextInput value={folder.fullPath} readOnly className="flex-1 text-sm" />
               <div className="w-5">
-                <button
-                  type="button"
-                  className="material-symbols text-foreground-muted hover:text-error cursor-pointer text-xl"
+                <IconBtn
+                  borderless
+                  size="custom"
+                  variant="danger"
+                  className="cursor-pointer text-xl"
                   onClick={() => onRemoveFolder(index)}
-                  aria-label={t('ButtonRemove')}
+                  ariaLabel={t('ButtonRemove')}
                 >
                   close
-                </button>
+                </IconBtn>
               </div>
             </div>
           ))}

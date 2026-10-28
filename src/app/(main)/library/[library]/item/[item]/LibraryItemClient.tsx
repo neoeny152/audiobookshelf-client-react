@@ -2,6 +2,7 @@
 
 import { clearPodcastDownloadQueueAction } from '@/app/actions/mediaActions'
 import LibraryItemMetadataEditModal, { type MetadataEditSection } from '@/components/modals/LibraryItemMetadataEditModal'
+import IconBtn from '@/components/ui/IconBtn'
 import AudioTracksTable from '@/components/widgets/AudioTracksTable'
 import ChaptersTable from '@/components/widgets/ChaptersTable'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
@@ -190,14 +191,16 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
                   <div className="flex items-center">
                     <p className="py-1 text-sm">{t('MessageEpisodesQueuedForDownload', { count: episodeDownloadsQueued.length })}</p>
                     {userIsAdminOrUp && (
-                      <button
-                        type="button"
-                        aria-label={t('ButtonClear')}
-                        className="material-symbols hover:text-error ml-3 cursor-pointer text-xl"
+                      <IconBtn
+                        borderless
+                        size="custom"
+                        variant="danger"
+                        ariaLabel={t('ButtonClear')}
+                        className="ml-3 cursor-pointer text-xl text-inherit"
                         onClick={() => setIsClearQueueDialogOpen(true)}
                       >
                         close
-                      </button>
+                      </IconBtn>
                     )}
                   </div>
                 </div>

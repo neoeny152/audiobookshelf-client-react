@@ -1,5 +1,6 @@
 'use client'
 
+import IconBtn from '@/components/ui/IconBtn'
 import InputWrapper from '@/components/ui/InputWrapper'
 import LoadingSpinner from '@/components/widgets/LoadingSpinner'
 import { useClickOutside } from '@/hooks/useClickOutside'
@@ -201,11 +202,9 @@ export default function GlobalSearchInput({ libraryId, onSubmit, onItemSelect, o
         {isSearching || isTyping ? (
           <LoadingSpinner size="la-sm" className="text-foreground-muted scale-50" />
         ) : searchQuery ? (
-          <button onClick={handleClear} className="text-foreground-muted hover:text-foreground cursor-pointer" aria-label={t('ButtonClear')}>
-            <span className="material-symbols text-lg" aria-hidden="true">
-              close
-            </span>
-          </button>
+          <IconBtn borderless size="custom" variant="muted" iconClass="text-lg" className="cursor-pointer" onClick={handleClear} ariaLabel={t('ButtonClear')}>
+            close
+          </IconBtn>
         ) : (
           <span className="material-symbols text-foreground-muted pointer-events-none text-lg" aria-hidden="true">
             search

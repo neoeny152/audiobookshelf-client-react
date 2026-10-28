@@ -2,6 +2,7 @@
 
 import { getFilesystemPaths } from '@/app/(main)/settings/libraries/actions'
 import Btn from '@/components/ui/Btn'
+import IconBtn from '@/components/ui/IconBtn'
 import LoadingSpinner from '@/components/widgets/LoadingSpinner'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
@@ -177,9 +178,15 @@ export default function LibraryFolderChooser({ paths, onSelect, onBack }: Librar
     <div className="bg-bg absolute inset-0 z-10 flex flex-col px-4 py-4">
       {/* Header */}
       <div className="mb-2 flex items-center py-1">
-        <button type="button" onClick={onBack} className="material-symbols hover:text-foreground-muted cursor-pointer text-3xl transition-colors">
+        <IconBtn
+          borderless
+          size="custom"
+          onClick={onBack}
+          ariaLabel={t('ButtonBack')}
+          className="text-foreground hover:not-disabled:text-foreground-muted cursor-pointer text-3xl transition-colors"
+        >
           arrow_back
-        </button>
+        </IconBtn>
         <p className="px-4 text-xl">{t('HeaderChooseAFolder')}</p>
       </div>
 

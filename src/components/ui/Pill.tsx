@@ -4,6 +4,7 @@ import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { trapTabKey } from '@/lib/focusTrap'
 import { mergeClasses } from '@/lib/merge-classes'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import IconBtn from './IconBtn'
 
 interface PillProps<T> {
   item: T
@@ -255,28 +256,32 @@ export const Pill = <T,>({
           )}
         </div>
         <div className="ms-1 flex items-center gap-1" role="group" aria-label={t('LabelEditActions')}>
-          <button
-            type="button"
-            aria-label={t('ButtonCancelEdit')}
-            className="material-symbols text-foreground focus:text-error hover:text-error cursor-pointer"
+          <IconBtn
+            borderless
+            size="custom"
+            variant="danger"
+            ariaLabel={t('ButtonCancelEdit')}
+            className="text-foreground focus:text-error cursor-pointer"
             style={{ fontSize: '1rem' }}
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleCancelEdit}
             ref={cancelButtonRef}
           >
             close
-          </button>
-          <button
-            type="button"
-            aria-label={t('ButtonSaveEdit')}
-            className="material-symbols text-foreground focus:text-success hover:text-success cursor-pointer"
+          </IconBtn>
+          <IconBtn
+            borderless
+            size="custom"
+            variant="success"
+            ariaLabel={t('ButtonSaveEdit')}
+            className="text-foreground focus:text-success cursor-pointer"
             style={{ fontSize: '1rem' }}
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleSaveEdit}
             ref={saveButtonRef}
           >
             check
-          </button>
+          </IconBtn>
         </div>
         <div id={`${id}-edit-instructions`} className="sr-only">
           {readOnlyPrefix ? t('LabelEditInstructionsWithPrefix', { prefix: readOnlyPrefix }) : t('LabelEditInstructions')}
@@ -307,21 +312,24 @@ export const Pill = <T,>({
       {!disabled && (
         <div className="absolute -inset-e-1 top-0 z-20 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
           {showEditButton && (
-            <button
-              type="button"
-              aria-label={t('ButtonEdit')}
-              className="material-symbols bg-bg-alt text-foreground hover:text-warning flex h-3 w-3 cursor-pointer items-center justify-center rounded-full text-sm"
+            <IconBtn
+              borderless
+              size="custom"
+              ariaLabel={t('ButtonEdit')}
+              className="bg-bg-alt text-foreground hover:not-disabled:text-warning h-3 w-3 cursor-pointer overflow-visible rounded-full text-sm"
               onMouseDown={(e) => e.preventDefault()}
               onClick={handleEditButtonClick}
               tabIndex={-1}
             >
               edit
-            </button>
+            </IconBtn>
           )}
-          <button
-            type="button"
-            aria-label={t('ButtonRemove')}
-            className="material-symbols bg-bg-alt text-foreground hover:text-error focus:text-error flex h-3 w-3 cursor-pointer items-center justify-center rounded-full text-sm"
+          <IconBtn
+            borderless
+            size="custom"
+            variant="danger"
+            ariaLabel={t('ButtonRemove')}
+            className="bg-bg-alt text-foreground focus:text-error h-3 w-3 cursor-pointer overflow-visible rounded-full text-sm"
             onMouseDown={(e) => e.preventDefault()}
             onClick={(e) => {
               e.stopPropagation()
@@ -330,7 +338,7 @@ export const Pill = <T,>({
             tabIndex={-1}
           >
             close
-          </button>
+          </IconBtn>
         </div>
       )}
       <span className="relative transition-opacity duration-300 group-hover:opacity-75">{fullText}</span>
