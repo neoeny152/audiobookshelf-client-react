@@ -14,12 +14,13 @@ import {
   removeBrandingFromAudibleData,
   removeChapterAt,
   savedChapterListsMatch,
+  setChaptersFromTracks,
   shiftChapterTimes,
   updateChapterStart,
   validateChapters,
   type EditableChapter
 } from '@/lib/chapters/chapterEditorUtils'
-import type { AudibleChapterSearchResult, Chapter } from '@/types/api'
+import type { AudibleChapterSearchResult, AudioFile, Chapter } from '@/types/api'
 
 function audibleChapter(title: string, startOffsetMs: number, lengthMs: number) {
   const startOffsetSec = Math.floor(startOffsetMs / 1000)
@@ -90,7 +91,7 @@ describe('chapter start dirty comparison', () => {
     expect(getChapterDirtyFields(chapters[1], baseline).start).to.equal(true)
   })
 
-  it('stays clean when the only difference disappears after whole-second normalization', () => {
+  it('marks a sub-second edit as dirty (90.4 -> 90)', () => {
     const fractionalSaved: Chapter[] = [
       { id: 0, start: 0, end: 90.4, title: 'Chapter 1' },
       { id: 1, start: 90.4, end: 500, title: 'Chapter 2' }
@@ -99,8 +100,23 @@ describe('chapter start dirty comparison', () => {
     chapters[1] = { ...chapters[1], start: 90 }
     const baseline = buildChapterDirtyBaseline(chapters, fractionalSaved, mediaDuration)
 
+    expect(computeHasChanges(chapters, fractionalSaved, mediaDuration)).to.equal(true)
+    expect(getChapterDirtyFields(chapters[1], baseline).start).to.equal(true)
+  })
+
+  it('stays clean when the only difference is float noise', () => {
+    const fractionalSaved: Chapter[] = [
+      { id: 0, start: 0, end: 0.3, title: 'Chapter 1' },
+      { id: 1, start: 0.3, end: 500, title: 'Chapter 2' }
+    ]
+    const chapters = initChapters(fractionalSaved, mediaDuration)
+    chapters[1] = { ...chapters[1], start: 0.1 + 0.2 }
+    expect(chapters[1].start).not.to.equal(0.3)
+    const baseline = buildChapterDirtyBaseline(chapters, fractionalSaved, mediaDuration)
+
     expect(computeHasChanges(chapters, fractionalSaved, mediaDuration)).to.equal(false)
     expect(getChapterDirtyFields(chapters[1], baseline).start).to.equal(false)
+    expect(getChapterDirtyFields(chapters[0], baseline).duration).to.equal(false)
   })
 
   it('keeps Save dirty state and row highlighting in agreement after updateChapterStart', () => {
@@ -332,9 +348,16 @@ describe('savedChapterListsMatch', () => {
     expect(savedChapterListsMatch(a, b)).to.equal(false)
   })
 
-  it('still matches when the only start difference disappears after whole-second rounding', () => {
+  it('treats a sub-second start change as a mismatch', () => {
     const a: Chapter[] = [{ id: 0, start: 90.4, end: 500, title: 'Intro' }]
     const b: Chapter[] = [{ id: 0, start: 90, end: 500, title: 'Intro' }]
+
+    expect(savedChapterListsMatch(a, b)).to.equal(false)
+  })
+
+  it('still matches when the only start difference is float noise', () => {
+    const a: Chapter[] = [{ id: 0, start: 0.3, end: 500, title: 'Intro' }]
+    const b: Chapter[] = [{ id: 0, start: 0.1 + 0.2, end: 500, title: 'Intro' }]
 
     expect(savedChapterListsMatch(a, b)).to.equal(true)
   })
@@ -466,5 +489,98 @@ describe('first chapter start invariant', () => {
       { id: 0, start: 0, end: 200, title: 'Chapter 2' },
       { id: 1, start: 200, end: mediaDuration, title: 'Chapter 3' }
     ])
+  })
+})
+
+describe('sub-second chapter starts', () => {
+  const mediaDuration = 1000
+  const messages = {
+    startLtPrev: 'Start must be greater than previous',
+    startGteDuration: 'Start must be less than duration'
+  }
+  const saved: Chapter[] = [
+    { id: 0, start: 0, end: 16.09, title: 'Intro' },
+    { id: 1, start: 16.09, end: 120.257, title: 'Chapter 1' },
+    { id: 2, start: 120.257, end: mediaDuration, title: 'Chapter 2' }
+  ]
+
+  it('keeps loaded millisecond starts through validation and into the save payload', () => {
+    const result = validateChapters(initChapters(saved, mediaDuration), saved, mediaDuration, messages)
+
+    expect(result.hasChanges).to.eq(false)
+    expect(result.chapters.map((chapter) => chapter.start)).to.deep.eq([0, 16.09, 120.257])
+    expect(computeChapterEnds(result.chapters, mediaDuration)).to.deep.eq([
+      { id: 0, start: 0, end: 16.09, title: 'Intro' },
+      { id: 1, start: 16.09, end: 120.257, title: 'Chapter 1' },
+      { id: 2, start: 120.257, end: mediaDuration, title: 'Chapter 2' }
+    ])
+  })
+
+  it('keeps 16.09 in the save payload after editing another chapter', () => {
+    const edited = updateChapterStart(initChapters(saved, mediaDuration), 2, 130)
+    const result = validateChapters(edited, saved, mediaDuration, messages)
+    const payload = computeChapterEnds(result.chapters, mediaDuration)
+
+    expect(result.hasChanges).to.eq(true)
+    expect(payload[0].end).to.eq(16.09)
+    expect(payload[1]).to.deep.eq({ id: 1, start: 16.09, end: 130, title: 'Chapter 1' })
+  })
+
+  it('rounds starts to milliseconds when validating', () => {
+    const chapters = initChapters(saved, mediaDuration)
+    chapters[1] = { ...chapters[1], start: 16.0900004 }
+    chapters[2] = { ...chapters[2], start: 120.2566 }
+
+    const result = validateChapters(chapters, saved, mediaDuration, messages)
+
+    expect(result.chapters.map((chapter) => chapter.start)).to.deep.eq([0, 16.09, 120.257])
+    expect(result.hasChanges).to.eq(false)
+  })
+
+  it('keeps the fraction when shifting, and shifting back is clean', () => {
+    const chapters = initChapters(saved, mediaDuration)
+    const shifted = validateChapters(shiftChapterTimes(chapters, 5, null, mediaDuration), saved, mediaDuration, messages)
+    expect(shifted.chapters.map((chapter) => chapter.start)).to.deep.eq([0, 21.09, 125.257])
+    expect(shifted.hasChanges).to.eq(true)
+
+    const back = validateChapters(shiftChapterTimes(shifted.chapters, -5, null, mediaDuration), saved, mediaDuration, messages)
+    expect(back.chapters.map((chapter) => chapter.start)).to.deep.eq([0, 16.09, 120.257])
+    expect(back.hasChanges).to.eq(false)
+  })
+
+  it('accepts two starts inside the same whole second when they are ordered', () => {
+    const chapters = initChapters(saved, mediaDuration)
+    chapters[2] = { ...chapters[2], start: 16.5 }
+
+    const result = validateChapters(chapters, saved, mediaDuration, messages)
+
+    expect(result.chapters[2].error).to.eq(null)
+    expect(result.chapters[2].start).to.eq(16.5)
+  })
+
+  it('sets chapters from tracks at millisecond track boundaries', () => {
+    const audioFiles = [
+      { index: 1, duration: 16.0901234, metadata: { filename: 'Intro.mp3' } },
+      { index: 2, duration: 104.1666, metadata: { filename: 'Part 1.mp3' } },
+      { index: 3, duration: 50, metadata: { filename: 'Part 2.mp3' } }
+    ] as unknown as AudioFile[]
+
+    const { chapters } = setChaptersFromTracks(audioFiles, initChapters(saved, mediaDuration))
+    const result = validateChapters(chapters, saved, mediaDuration, messages)
+
+    expect(result.chapters.map((chapter) => chapter.start)).to.deep.eq([0, 16.09, 120.257])
+    expect(result.chapters.map((chapter) => chapter.title)).to.deep.eq(['Intro', 'Part 1', 'Part 2'])
+  })
+
+  it('imports Audible chapters at millisecond precision', () => {
+    const audibleData: AudibleChapterSearchResult = {
+      runtimeLengthSec: 1000,
+      runtimeLengthMs: 1_000_000,
+      chapters: [audibleChapter('One', 0, 16_090), audibleChapter('Two', 16_090, 104_167), audibleChapter('Three', 120_257, 500_000)]
+    }
+
+    const { chapters } = mergeAudibleChapterData(audibleData, mediaDuration)
+
+    expect(chapters.map((chapter) => chapter.start)).to.deep.eq([0, 16.09, 120.257])
   })
 })

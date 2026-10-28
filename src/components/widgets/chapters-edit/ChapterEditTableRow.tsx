@@ -7,7 +7,7 @@ import TextInput from '@/components/ui/TextInput'
 import Tooltip from '@/components/ui/Tooltip'
 import Indicator from '@/components/widgets/Indicator'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
-import type { ChapterMatchDebug, EditableChapter } from '@/lib/chapters/chapterEditorUtils'
+import { normalizeChapterStartSec, type ChapterMatchDebug, type EditableChapter } from '@/lib/chapters/chapterEditorUtils'
 import { secondsToHmsTimestamp } from '@/lib/datefns'
 import { mergeClasses } from '@/lib/merge-classes'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
@@ -220,7 +220,7 @@ function ChapterEditTableRow({
                 size="custom"
                 className={START_STEP_MINUS_CLASS}
                 disabled={cannotDecrementStart}
-                onClick={() => onStartChange(Math.max(0, chapter.start - TIME_INCREMENT))}
+                onClick={() => onStartChange(Math.max(0, normalizeChapterStartSec(chapter.start - TIME_INCREMENT)))}
               >
                 remove
               </IconBtn>
@@ -245,7 +245,7 @@ function ChapterEditTableRow({
                 size="custom"
                 className={START_STEP_PLUS_CLASS}
                 disabled={cannotIncrementStart}
-                onClick={() => onStartChange(chapter.start + TIME_INCREMENT)}
+                onClick={() => onStartChange(normalizeChapterStartSec(chapter.start + TIME_INCREMENT))}
               >
                 add
               </IconBtn>

@@ -121,9 +121,9 @@ describe('<SnapToAudioPanel /> proposal', () => {
 
   it('lists only the chapters that would move, with plain-word reasons', () => {
     cy.get('[cy-id="snap-row"]').should('have.length', 2)
-    cy.get('[cy-id="snap-row"]').eq(0).should('contain.text', 'Chapter 2').and('contain.text', '01:40').and('contain.text', '01:36')
-    cy.get('[cy-id="snap-row"]').eq(0).should('contain.text', '-4 s').and('contain.text', 'Moved before spoken heading').and('contain.text', 'High')
-    cy.get('[cy-id="snap-row"]').eq(1).should('contain.text', '+20 s').and('contain.text', 'Moved to nearest pause').and('contain.text', 'Low')
+    cy.get('[cy-id="snap-row"]').eq(0).should('contain.text', 'Chapter 2').and('contain.text', '01:40.0').and('contain.text', '01:36.7')
+    cy.get('[cy-id="snap-row"]').eq(0).should('contain.text', '-3.25 s').and('contain.text', 'Moved before spoken heading').and('contain.text', 'High')
+    cy.get('[cy-id="snap-row"]').eq(1).should('contain.text', '+20.3 s').and('contain.text', 'Moved to nearest pause').and('contain.text', 'Low')
   })
 
   it('pre-checks changed rows except low-confidence ones', () => {
@@ -143,7 +143,7 @@ describe('<SnapToAudioPanel /> proposal', () => {
     cy.get('@onApply').should('have.been.calledOnce')
     cy.get('@onApply').then((stub) => {
       const appliedRows = (stub as unknown as sinon.SinonStub).firstCall.args[0] as SnapRow[]
-      expect(appliedRows.map((row) => [row.clientKey, row.originalStart, row.newStart])).to.deep.equal([['ch-1', 100, 96]])
+      expect(appliedRows.map((row) => [row.clientKey, row.originalStart, row.newStart])).to.deep.equal([['ch-1', 100, 96.75]])
     })
     cy.get('[cy-id="snap-proposal"]').should('not.exist')
   })
@@ -153,13 +153,13 @@ describe('<SnapToAudioPanel /> proposal', () => {
     cy.contains('button', 'Apply 2 changes').click()
     cy.get('@onApply').then((stub) => {
       const appliedRows = (stub as unknown as sinon.SinonStub).firstCall.args[0] as SnapRow[]
-      expect(appliedRows.map((row) => row.newStart)).to.deep.equal([96, 220])
+      expect(appliedRows.map((row) => row.newStart)).to.deep.equal([96.75, 220.3])
     })
   })
 })
 
-describe('<SnapToAudioPanel /> rounding', () => {
-  it('flags a start rounded to just before its pause and leaves it unchecked', () => {
+describe('<SnapToAudioPanel /> sub-second proposals', () => {
+  it('shows the exact proposal inside a short pause, checked, with no rounding warning', () => {
     const session = makeSession([
       proposal({ index: 0, reason: 'first-chapter', confidence: 'high' }),
       proposal({ index: 1, proposedStart: 98.65, reason: 'nearest-longest-pause', confidence: 'medium', pause: pause(98.2, 98.9) }),
@@ -169,9 +169,13 @@ describe('<SnapToAudioPanel /> rounding', () => {
     mountPanel({ onSnap: cy.stub().as('onSnap').resolves(session) })
     cy.contains('button', 'Snap to audio').click()
     cy.get('[cy-id="snap-row"]').should('have.length', 1)
-    cy.get('[cy-id="snap-row"]').eq(0).should('contain.text', '01:38').and('contain.text', '-2 s')
-    cy.get('[cy-id="snap-row"]').eq(0).find('[cy-id="snap-before-pause"]').should('contain.text', 'just before the pause')
-    cy.get('[cy-id="snap-row"]').eq(0).find('input[type="checkbox"]').should('not.be.checked')
+    cy.get('[cy-id="snap-row"]').eq(0).should('contain.text', '01:38.6').and('contain.text', '-1.35 s')
+    cy.get('[cy-id="snap-row"]').eq(0).find('input[type="checkbox"]').should('be.checked')
+    cy.contains('button', 'Apply 1 change').click()
+    cy.get('@onApply').then((stub) => {
+      const appliedRows = (stub as unknown as sinon.SinonStub).firstCall.args[0] as SnapRow[]
+      expect(appliedRows.map((row) => row.newStart)).to.deep.equal([98.65])
+    })
   })
 })
 
@@ -182,7 +186,7 @@ describe('<SnapToAudioPanel /> preview', () => {
     mountPanel({ preview: { selectedChapterId: null, isPlayingChapter: false, isLoadingChapter: false, playChapter, destroyAudioEl } })
     cy.contains('button', 'Snap to audio').click()
     cy.get('[cy-id="snap-row"]').eq(0).find('button[aria-label="Play from proposed start"]').click()
-    cy.get('@playChapter').should('have.been.calledOnceWith', 'snap-1', 96)
+    cy.get('@playChapter').should('have.been.calledOnceWith', 'snap-1', 96.75)
   })
 
   const playingSnapPreview = () => ({

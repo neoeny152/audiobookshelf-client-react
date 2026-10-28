@@ -10,6 +10,7 @@ import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import {
   buildSnapRows,
   clampSnapOption,
+  formatSnapStart,
   getDefaultSnapChecked,
   getSnapRetryIndexes,
   SNAP_DEFAULT_OPTIONS,
@@ -17,7 +18,6 @@ import {
   type SnapRow,
   type SnapSession
 } from '@/lib/chapters/chapterSnap'
-import { secondsToTimestamp } from '@/lib/datefns'
 import { mergeClasses } from '@/lib/merge-classes'
 import type { TypeSafeTranslations } from '@/types/translations'
 import type { SnapChapterConfidence, SnapChapterReason } from '@/types/api'
@@ -354,27 +354,20 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
                         <td className="px-2 py-1 font-mono whitespace-nowrap">
                           {row.changed ? (
                             <>
-                              {secondsToTimestamp(row.originalStart)}
+                              {formatSnapStart(row.originalStart)}
                               <span className="text-foreground-muted px-1" aria-hidden="true">
                                 {'→'}
                               </span>
-                              {secondsToTimestamp(row.newStart)}
+                              {formatSnapStart(row.newStart)}
                             </>
                           ) : (
-                            secondsToTimestamp(row.originalStart)
+                            formatSnapStart(row.originalStart)
                           )}
                         </td>
                         <td className="px-2 py-1 text-end font-mono whitespace-nowrap">
                           {row.changed ? t('LabelSnapDelta', { delta: formatDelta(row.delta) }) : ''}
                         </td>
-                        <td className="px-2 py-1">
-                          {snapReasonLabel(row.reason, t)}
-                          {row.beforePause && (
-                            <span className="text-warning block text-xs" cy-id="snap-before-pause">
-                              {t('LabelSnapRoundedBeforePause')}
-                            </span>
-                          )}
-                        </td>
+                        <td className="px-2 py-1">{snapReasonLabel(row.reason, t)}</td>
                         <td className={mergeClasses('px-2 py-1', CONFIDENCE_CLASS[row.confidence])}>{confidenceLabel(row.confidence, t)}</td>
                         <td className="px-2 py-0.5">
                           {preview && (

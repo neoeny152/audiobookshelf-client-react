@@ -56,8 +56,8 @@ export function computeHasChanges(chapters: EditableChapter[], existingChapters:
     const chapterEnd = chapters[i + 1] ? chapters[i + 1].start : mediaDuration
     const existingEnd = existingChapters[i + 1] ? existingChapters[i + 1].start : mediaDuration
     if (
-      !normalizedChapterTimesEqual(chapter.start, existingChapter.start) ||
-      !normalizedChapterTimesEqual(chapterEnd, existingEnd) ||
+      !chapterStartsEqual(chapter.start, existingChapter.start) ||
+      !chapterStartsEqual(chapterEnd, existingEnd) ||
       (chapter.title || '').trim() !== (existingChapter.title || '').trim()
     ) {
       return true
@@ -70,21 +70,25 @@ export function computeHasChanges(chapters: EditableChapter[], existingChapters:
 export function savedChapterListsMatch(a: Chapter[], b: Chapter[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) {
-    if (!normalizedChapterTimesEqual(a[i].start, b[i].start)) return false
+    if (!chapterStartsEqual(a[i].start, b[i].start)) return false
     if ((a[i].title || '').trim() !== (b[i].title || '').trim()) return false
   }
   return true
 }
 
-/** Whole seconds for editor display; matches DurationPicker rounding. */
+/**
+ * Chapter starts are kept at millisecond precision (3 decimals), the precision the server stores and snap proposes.
+ * Rounding here also strips float noise from arithmetic such as shifting or summing track durations.
+ * DurationPicker only displays whole seconds; the stored start keeps its fraction until the user types a new time.
+ */
 export function normalizeChapterStartSec(start: number): number {
   if (start == null || Number.isNaN(start)) {
     return 0
   }
-  return Math.round(start)
+  return Math.round(start * 1000) / 1000
 }
 
-/** Audible/API timestamps are ms; Vue uses floor when converting to seconds. */
+/** Audible/API timestamps are ms; Vue uses floor when converting to whole seconds (remove branding). */
 export function audibleMsToChapterStartSec(ms: number): number {
   if (ms == null || Number.isNaN(ms)) {
     return 0
@@ -92,12 +96,23 @@ export function audibleMsToChapterStartSec(ms: number): number {
   return Math.floor(ms / 1000)
 }
 
+/** Audible ms to an editor start in seconds, keeping the milliseconds (Vue applies `startOffsetMs / 1000`). */
+function audibleMsToChapterStart(ms: number): number {
+  if (ms == null || Number.isNaN(ms)) {
+    return 0
+  }
+  return normalizeChapterStartSec(ms / 1000)
+}
+
 /** Starts within this many seconds compare equal (Audible ms rounding vs saved whole seconds). */
 const CHAPTER_START_TOLERANCE_SEC = 1
 
-/** Exact whole-second equality after DurationPicker-style rounding. Used for editor dirty state and saved-list identity. */
-function normalizedChapterTimesEqual(a: number, b: number): boolean {
-  return normalizeChapterStartSec(a) === normalizeChapterStartSec(b)
+/** Less than half a millisecond: differences this small are float noise, not edits. */
+const CHAPTER_START_EPSILON_SEC = 0.0005
+
+/** Millisecond equality that ignores float noise. Used for editor dirty state, saved-list identity and snap picks. */
+export function chapterStartsEqual(a: number, b: number): boolean {
+  return Math.abs(normalizeChapterStartSec(a) - normalizeChapterStartSec(b)) < CHAPTER_START_EPSILON_SEC
 }
 
 /** ±1s after rounding. Used for Audible/import matching, not user-edit dirty detection or socket identity. */
@@ -153,12 +168,12 @@ export function getChapterDirtyFields(chapter: EditableChapter, baseline: Map<st
   if (!snapshot) {
     return { start: true, title: true, duration: true }
   }
-  const startDirty = !normalizedChapterTimesEqual(chapter.start, snapshot.start)
+  const startDirty = !chapterStartsEqual(chapter.start, snapshot.start)
   const titleDirty = (chapter.title || '').trim() !== snapshot.title
   return {
     start: startDirty,
     title: titleDirty,
-    duration: startDirty || !normalizedChapterTimesEqual(chapter.end, snapshot.end)
+    duration: startDirty || !chapterStartsEqual(chapter.end, snapshot.end)
   }
 }
 
@@ -293,7 +308,7 @@ export function shiftChapterTimes(
 export interface SnapProposalPick {
   /** Row identity, so a proposal still lands on its chapter if rows were inserted or removed since the snap. */
   clientKey: string
-  /** The whole-second start the proposal was computed from; a row whose start changed since is left alone. */
+  /** The start the proposal was computed from; a row whose start changed since is left alone. */
   fromStart: number
   toStart: number
 }
@@ -302,7 +317,7 @@ export interface SnapProposalPick {
  * Apply snap proposals: changes start times only (never titles, never order). The first chapter stays at 0.
  * A pick is skipped when its row is gone or was edited since the snap, when it falls outside the book,
  * or when it would no longer sit strictly between its neighbours. Ends of touched rows follow the next start.
- * Starts are compared as whole seconds (as the editor saves them), so fractional starts loaded from the server match.
+ * Starts are compared at millisecond precision, ignoring float noise; the applied start is the proposal rounded to 3 decimals.
  */
 export function applySnapProposals(
   chapters: EditableChapter[],
@@ -325,13 +340,13 @@ export function applySnapProposals(
       continue
     }
     const current = chapters[index]
-    const currentStart = normalizeChapterStartSec(current.start)
-    if (currentStart === pick.toStart) continue
-    if (index === 0 || currentStart !== pick.fromStart || !Number.isFinite(pick.toStart) || pick.toStart <= 0 || pick.toStart >= mediaDuration) {
+    const toStart = normalizeChapterStartSec(pick.toStart)
+    if (Number.isFinite(pick.toStart) && chapterStartsEqual(current.start, toStart)) continue
+    if (index === 0 || !chapterStartsEqual(current.start, pick.fromStart) || !Number.isFinite(pick.toStart) || toStart <= 0 || toStart >= mediaDuration) {
       skipped++
       continue
     }
-    next[index] = { ...current, start: pick.toStart }
+    next[index] = { ...current, start: toStart }
     moved.add(index)
   }
 
@@ -379,11 +394,11 @@ export function applyMatchedClientKeys(existing: EditableChapter[], incomingRows
 
 function buildAudibleIncomingChapters(audibleData: AudibleChapterSearchResult, mediaDuration: number): EditableChapter[] {
   return audibleData.chapters
-    .filter((chap) => audibleMsToChapterStartSec(chap.startOffsetMs) < mediaDuration)
+    .filter((chap) => audibleMsToChapterStart(chap.startOffsetMs) < mediaDuration)
     .map((chap, index) => ({
       id: index,
-      start: audibleMsToChapterStartSec(chap.startOffsetMs),
-      end: Math.min(mediaDuration, audibleMsToChapterStartSec(chap.startOffsetMs + chap.lengthMs)),
+      start: audibleMsToChapterStart(chap.startOffsetMs),
+      end: Math.min(mediaDuration, audibleMsToChapterStart(chap.startOffsetMs + chap.lengthMs)),
       title: chap.title,
       error: null as string | null
     }))

@@ -1,5 +1,6 @@
-import { normalizeChapterStartSec, type EditableChapter } from '@/lib/chapters/chapterEditorUtils'
+import { chapterStartsEqual, normalizeChapterStartSec, type EditableChapter } from '@/lib/chapters/chapterEditorUtils'
 import type { StatusActionResult } from '@/lib/actionResult'
+import { secondsToTimestamp } from '@/lib/datefns'
 import type { SnapChapterConfidence, SnapChapterPause, SnapChapterReason, SnapChaptersPayload, SnapChaptersResponse } from '@/types/api'
 import type { TranslationKey } from '@/types/translations'
 
@@ -51,12 +52,10 @@ export interface SnapRow {
   originalStart: number
   /** Raw server proposal (may be fractional). */
   proposedStart: number
-  /** What Apply writes into the editor (whole seconds, like every other editor start). */
+  /** What Apply writes into the editor: the proposal at millisecond precision, like every other editor start. */
   newStart: number
   delta: number
   changed: boolean
-  /** No whole second fits inside the pause, so newStart sits just before it (in the previous chapter's tail). */
-  beforePause: boolean
   reason: SnapChapterReason
   confidence: SnapChapterConfidence
   pause: SnapChapterPause | null
@@ -75,8 +74,8 @@ export function clampSnapOption(key: keyof SnapAdvancedOptions, value: number): 
 
 /**
  * Request for the CURRENT editor rows (so unsaved edits are snapped). With a selection, only the selected
- * rows are snapped; the others come back `not-requested`. Starts are sent as whole seconds, the value the editor
- * saves: freshly loaded chapters can still hold the server's fractional starts.
+ * rows are snapped; the others come back `not-requested`. Starts are sent at millisecond precision, the value the
+ * editor saves.
  */
 export function buildSnapPayload(
   chapters: EditableChapter[],
@@ -145,28 +144,12 @@ export function mergeSnapRetry(previous: SnapChaptersResponse, retry: SnapChapte
   }
 }
 
-/**
- * The editor keeps whole-second starts. Pick a whole second that is still inside the chosen pause
- * (earliest-safe first), so rounding never pushes a start into speech. When no whole second fits in the pause,
- * or there is no pause (file-start), round down: up to a second early lands in the previous chapter's tail,
- * whereas rounding up can land in the spoken heading.
- */
-export function snapStartToWholeSecond(proposedStart: number, pause: SnapChapterPause | null): number {
-  const floor = Math.floor(proposedStart)
-  if (pause) {
-    if (floor >= pause.start && floor <= pause.end) return floor
-    const ceil = Math.ceil(proposedStart)
-    if (ceil >= pause.start && ceil <= pause.end) return ceil
-  }
-  return Math.max(0, floor)
-}
-
 export function buildSnapRows(session: SnapSession): SnapRow[] {
   return session.response.chapters.map((entry, i) => {
     const snapshotRow = session.snapshot[i]
     const originalStart = snapshotRow ? snapshotRow.start : entry.originalStart
-    const newStart = entry.changed ? snapStartToWholeSecond(entry.proposedStart, entry.pause) : originalStart
-    const changed = newStart !== originalStart
+    const newStart = entry.changed ? normalizeChapterStartSec(entry.proposedStart) : originalStart
+    const changed = !chapterStartsEqual(newStart, originalStart)
     return {
       index: i,
       clientKey: snapshotRow?.clientKey ?? `index-${i}`,
@@ -174,9 +157,8 @@ export function buildSnapRows(session: SnapSession): SnapRow[] {
       originalStart,
       proposedStart: entry.proposedStart,
       newStart,
-      delta: newStart - originalStart,
+      delta: changed ? round3(newStart - originalStart) : 0,
       changed,
-      beforePause: changed && !!entry.pause && newStart < entry.pause.start,
       reason: entry.reason,
       confidence: entry.confidence,
       pause: entry.pause
@@ -184,9 +166,19 @@ export function buildSnapRows(session: SnapSession): SnapRow[] {
   })
 }
 
-/** Every row that would move is pre-checked, except low-confidence ones and ones rounded to just before their pause. */
+/**
+ * Snap moves are often under a second, so the panel shows starts with tenths (e.g. `01:36.7`). Truncates like
+ * `secondsToTimestamp` so 59.99 shows as 00:59.9, never 00:59.10 or 01:00.0.
+ */
+export function formatSnapStart(seconds: number): string {
+  if (seconds == null || Number.isNaN(seconds) || seconds < 0) return secondsToTimestamp(seconds)
+  const tenths = Math.floor(round3(seconds) * 10 + 1e-6)
+  return `${secondsToTimestamp(Math.floor(tenths / 10))}.${tenths % 10}`
+}
+
+/** Every row that would move is pre-checked, except low-confidence ones. */
 export function getDefaultSnapChecked(rows: SnapRow[]): Set<number> {
-  return new Set(rows.filter((row) => row.changed && !row.beforePause && (row.confidence === 'high' || row.confidence === 'medium')).map((row) => row.index))
+  return new Set(rows.filter((row) => row.changed && (row.confidence === 'high' || row.confidence === 'medium')).map((row) => row.index))
 }
 
 export interface SnapErrorToast {

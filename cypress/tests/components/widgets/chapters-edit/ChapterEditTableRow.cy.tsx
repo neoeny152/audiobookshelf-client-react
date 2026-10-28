@@ -73,3 +73,16 @@ describe('<ChapterEditTableRow /> first chapter timestamp', () => {
     cy.get('@onStartChange').should('have.been.called')
   })
 })
+
+describe('<ChapterEditTableRow /> sub-second start', () => {
+  it('shows whole seconds but steps the exact start by one second', () => {
+    mountRow({ chapter: makeChapter({ id: 1, start: 16.09, title: 'Chapter 2' }) })
+
+    cy.get('[cy-id="duration-picker-wrapper"] input').eq(2).should('have.value', '16')
+    cy.get('@onStartChange').should('not.have.been.called')
+    cy.get('button[aria-label="Add 1 second"]').click()
+    cy.get('@onStartChange').should('have.been.calledOnceWith', 17.09)
+    cy.get('button[aria-label="Subtract 1 second"]').click()
+    cy.get('@onStartChange').should('have.been.calledWith', 15.09)
+  })
+})
