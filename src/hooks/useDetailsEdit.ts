@@ -104,6 +104,26 @@ function stringArraysEqual(a: unknown[], b: unknown[]) {
   return a.length === b.length && a.every((item) => b.includes(item))
 }
 
+/** '', null, and undefined are the same empty value (inputs write ''). */
+function isEmptyValue(value: unknown) {
+  return (value ?? '') === ''
+}
+
+/** Keys that identify an edited object array item (authors, series). Other keys are not edited by the form. */
+const OBJECT_ITEM_COMPARE_KEYS = ['id', 'name', 'sequence']
+
+/** Order-sensitive compare of object arrays by id, name, and sequence. */
+function objectArraysEqual(a: unknown[], b: unknown[]) {
+  return (
+    a.length === b.length &&
+    a.every((item, index) => {
+      const current = (item ?? {}) as Record<string, unknown>
+      const initial = (b[index] ?? {}) as Record<string, unknown>
+      return OBJECT_ITEM_COMPARE_KEYS.every((key) => current[key] === initial[key] || (isEmptyValue(current[key]) && isEmptyValue(initial[key])))
+    })
+  )
+}
+
 /** Display-only keys the details form does not edit. */
 const NON_EDITABLE_METADATA_KEYS = [
   'titleIgnorePrefix',
@@ -212,11 +232,11 @@ export function useDetailsEdit<TDetails extends Record<string, any>>({
           if (currentValue.every((item: unknown) => typeof item !== 'object')) {
             return !stringArraysEqual(currentValue, initialValue)
           }
-          return JSON.stringify(currentValue) !== JSON.stringify(initialValue)
+          return !objectArraysEqual(currentValue, initialValue)
         }
 
         // '', null, and undefined are the same empty value (inputs write '')
-        if ((currentValue ?? '') === '' && (initialValue ?? '') === '') {
+        if (isEmptyValue(currentValue) && isEmptyValue(initialValue)) {
           return false
         }
 
