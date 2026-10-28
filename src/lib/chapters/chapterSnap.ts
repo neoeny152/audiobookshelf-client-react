@@ -1,7 +1,15 @@
 import { chapterStartsEqual, normalizeChapterStartSec, type EditableChapter } from '@/lib/chapters/chapterEditorUtils'
 import type { StatusActionResult } from '@/lib/actionResult'
 import { secondsToTimestamp } from '@/lib/datefns'
-import type { SnapChapterConfidence, SnapChapterPause, SnapChapterReason, SnapChaptersPayload, SnapChaptersResponse } from '@/types/api'
+import type {
+  SnapChapterConfidence,
+  SnapChapterPause,
+  SnapChapterReason,
+  SnapChapterSpeech,
+  SnapChaptersOptions,
+  SnapChaptersPayload,
+  SnapChaptersResponse
+} from '@/types/api'
 import type { TranslationKey } from '@/types/translations'
 
 /** The advanced settings the panel exposes; the server echoes back what it used. */
@@ -11,6 +19,9 @@ export interface SnapAdvancedOptions {
   noiseDb: number
   headingLookbackSec: number
 }
+
+/** What one snap request asks for: the advanced settings, plus the speech check when the server has it. */
+export type SnapRequestOptions = SnapAdvancedOptions & { verify?: boolean }
 
 /** Server defaults (`chapterSnap.js` DEFAULT_OPTIONS). */
 export const SNAP_DEFAULT_OPTIONS: Readonly<SnapAdvancedOptions> = Object.freeze({
@@ -42,7 +53,8 @@ export interface SnapSnapshotChapter {
 export interface SnapSession {
   snapshot: SnapSnapshotChapter[]
   response: SnapChaptersResponse
-  options: SnapAdvancedOptions
+  /** Reused for the retry, so a retry checks speech when the first request did. */
+  options: SnapRequestOptions
 }
 
 export interface SnapRow {
@@ -59,7 +71,12 @@ export interface SnapRow {
   reason: SnapChapterReason
   confidence: SnapChapterConfidence
   pause: SnapChapterPause | null
+  /** Null unless the speech check ran for this chapter. */
+  speech: SnapChapterSpeech | null
 }
+
+/** Speech check verdict for one row, worst first: the heading sits on the wrong side of the start, then heard or not. */
+export type SnapSpeechStatus = 'late' | 'early' | 'heading' | 'no-heading'
 
 function round3(value: number): number {
   return Math.round(value * 1000) / 1000
@@ -72,6 +89,50 @@ export function clampSnapOption(key: keyof SnapAdvancedOptions, value: number): 
   return Math.min(max, Math.max(min, value))
 }
 
+/** `options` for the request body: `verify` is only sent when true, so a server without the speech check is never asked. */
+function toPayloadOptions(options: SnapRequestOptions): SnapChaptersOptions {
+  const { verify, ...rest } = options
+  return verify === true ? { ...rest, verify: true } : rest
+}
+
+/** The speech check's result for one chapter, or null when it did not run (or sent something unexpected). */
+export function toSnapSpeech(value: unknown): SnapChapterSpeech | null {
+  if (!value || typeof value !== 'object') return null
+  const speech = value as Record<string, unknown>
+  return {
+    before: typeof speech.before === 'string' ? speech.before : '',
+    after: typeof speech.after === 'string' ? speech.after : '',
+    heading: speech.heading === true,
+    late: speech.late === true,
+    early: speech.early === true
+  }
+}
+
+export function getSnapSpeechStatus(speech: SnapChapterSpeech | null): SnapSpeechStatus | null {
+  if (!speech) return null
+  if (speech.late) return 'late'
+  if (speech.early) return 'early'
+  return speech.heading ? 'heading' : 'no-heading'
+}
+
+/** The speech check heard the heading on the wrong side of the proposed start. */
+export function isSnapSpeechFlagged(speech: SnapChapterSpeech | null): boolean {
+  return !!speech && (speech.late || speech.early)
+}
+
+/** Whether this snap ran the speech check (the server echoes `verify` only then). */
+export function snapSessionCheckedSpeech(session: SnapSession): boolean {
+  return session.options.verify === true || session.response.options?.verify === true
+}
+
+/**
+ * The server's speech check warnings (busy, time limit, chapters over the per-request limit). Its other warnings are
+ * developer notes about the retry contract, which the panel already explains.
+ */
+export function getSnapSpeechWarnings(response: SnapChaptersResponse): string[] {
+  return (response.warnings ?? []).filter((warning) => typeof warning === 'string' && /^speech check/i.test(warning))
+}
+
 /**
  * Request for the CURRENT editor rows (so unsaved edits are snapped). With a selection, only the selected
  * rows are snapped; the others come back `not-requested`. Starts are sent at millisecond precision, the value the
@@ -80,7 +141,7 @@ export function clampSnapOption(key: keyof SnapAdvancedOptions, value: number): 
 export function buildSnapPayload(
   chapters: EditableChapter[],
   selectedKeys: ReadonlySet<string>,
-  options: SnapAdvancedOptions
+  options: SnapRequestOptions
 ): { payload: SnapChaptersPayload; snapshot: SnapSnapshotChapter[] } {
   const snapshot = chapters.map((chapter, i) => ({
     clientKey: chapter.clientKey ?? `index-${i}`,
@@ -93,7 +154,7 @@ export function buildSnapPayload(
       const title = chapter.title.slice(0, MAX_SNAP_TITLE_LENGTH)
       return title ? { id: i, title, start: chapter.start } : { id: i, start: chapter.start }
     }),
-    options: { ...options }
+    options: toPayloadOptions(options)
   }
 
   if (selectedKeys.size > 0) {
@@ -113,13 +174,13 @@ export function getSnapRetryIndexes(response: SnapChaptersResponse): number[] {
  * Server retry contract: resend this response's proposedChapters as `chapters` (bounds come from the neighbours
  * in the request) and `indexes` set to the not-analysed chapters. Null when there is nothing to retry.
  */
-export function buildSnapRetryPayload(response: SnapChaptersResponse, options: SnapAdvancedOptions): SnapChaptersPayload | null {
+export function buildSnapRetryPayload(response: SnapChaptersResponse, options: SnapRequestOptions): SnapChaptersPayload | null {
   const indexes = getSnapRetryIndexes(response)
   if (!indexes.length) return null
   return {
     chapters: response.proposedChapters.map((chapter, i) => ({ id: i, title: chapter.title, start: chapter.start })),
     indexes,
-    options: { ...options }
+    options: toPayloadOptions(options)
   }
 }
 
@@ -161,7 +222,8 @@ export function buildSnapRows(session: SnapSession): SnapRow[] {
       changed,
       reason: entry.reason,
       confidence: entry.confidence,
-      pause: entry.pause
+      pause: entry.pause,
+      speech: toSnapSpeech(entry.speech)
     }
   })
 }
@@ -176,9 +238,14 @@ export function formatSnapStart(seconds: number): string {
   return `${secondsToTimestamp(Math.floor(tenths / 10))}.${tenths % 10}`
 }
 
-/** Every row that would move is pre-checked, except low-confidence ones. */
+/**
+ * Every row that would move is pre-checked, except low-confidence ones and ones the speech check flagged as late or
+ * early (the server already lowers those to low; this does not depend on it).
+ */
 export function getDefaultSnapChecked(rows: SnapRow[]): Set<number> {
-  return new Set(rows.filter((row) => row.changed && (row.confidence === 'high' || row.confidence === 'medium')).map((row) => row.index))
+  return new Set(
+    rows.filter((row) => row.changed && (row.confidence === 'high' || row.confidence === 'medium') && !isSnapSpeechFlagged(row.speech)).map((row) => row.index)
+  )
 }
 
 export interface SnapErrorToast {

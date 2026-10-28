@@ -622,6 +622,8 @@ export interface SnapChaptersOptions {
   leadSec?: number
   headingLookbackSec?: number
   snapToFileStart?: boolean
+  /** Speech check (only when the server advertises `chapterbotVerify`; a 400 otherwise). Fills each chapter's `speech`. */
+  verify?: boolean
 }
 
 export interface SnapChaptersPayload {
@@ -655,6 +657,19 @@ export interface SnapChapterPause {
   crossesFileBoundary: boolean
 }
 
+/**
+ * What the speech check heard around a proposed start (`options.verify`).
+ * `late`: the chapter heading is heard just before the start; `early`: it is heard well after it.
+ * `heading`: it is heard right after the start (the start looks right).
+ */
+export interface SnapChapterSpeech {
+  before: string
+  after: string
+  heading: boolean
+  late: boolean
+  early: boolean
+}
+
 export interface SnapChapterProposal {
   index: number
   id: number | string
@@ -667,7 +682,8 @@ export interface SnapChapterProposal {
   reason: SnapChapterReason
   confidence: SnapChapterConfidence
   trackIndex: number
-  speech: unknown
+  /** Null unless the speech check ran for this chapter. */
+  speech: SnapChapterSpeech | null
 }
 
 /** Proposal only: the server saves nothing. */
@@ -676,7 +692,8 @@ export interface SnapChaptersResponse {
   duration: number
   /** False when the time limit was hit or a segment failed; see the retry contract in `buildSnapRetryPayload`. */
   complete: boolean
-  options: Required<SnapChaptersOptions>
+  /** `verify` is only echoed when the speech check ran. */
+  options: Required<Omit<SnapChaptersOptions, 'verify'>> & { verify?: boolean }
   stats: {
     segments: number
     ffmpegCalls: number

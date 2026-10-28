@@ -7,8 +7,13 @@ import {
   formatSnapStart,
   getDefaultSnapChecked,
   getSnapErrorToast,
+  getSnapSpeechStatus,
+  getSnapSpeechWarnings,
+  isSnapSpeechFlagged,
   mergeSnapRetry,
   SNAP_DEFAULT_OPTIONS,
+  snapSessionCheckedSpeech,
+  toSnapSpeech,
   type SnapSession
 } from '@/lib/chapters/chapterSnap'
 import type { SnapChapterProposal, SnapChaptersResponse } from '@/types/api'
@@ -330,6 +335,89 @@ describe('snap rows and retry', () => {
     expect(merged.chapters[2].delta).to.equal(3.75)
     expect(merged.chapters[3].reason).to.equal('inside-pause')
     expect(buildSnapRetryPayload(merged, SNAP_DEFAULT_OPTIONS)).to.equal(null)
+  })
+})
+
+describe('snap speech check', () => {
+  const snapshot = [0, 100, 200, 300].map((start, i) => ({ clientKey: `ch-${i}`, start, title: `Chapter ${i + 1}` }))
+  const speech = (partial: Partial<{ heading: boolean; late: boolean; early: boolean }>) => ({
+    before: 'and that was the end of it',
+    after: 'chapter two the long road',
+    heading: false,
+    late: false,
+    early: false,
+    ...partial
+  })
+
+  it('sends verify only when the speech check is on', () => {
+    expect(buildSnapPayload(rows([0, 100]), new Set(), { ...SNAP_DEFAULT_OPTIONS, verify: true }).payload.options).to.deep.equal({
+      ...SNAP_DEFAULT_OPTIONS,
+      verify: true
+    })
+    expect(buildSnapPayload(rows([0, 100]), new Set(), { ...SNAP_DEFAULT_OPTIONS, verify: false }).payload.options).not.to.have.property('verify')
+  })
+
+  it('keeps the speech check on the retry', () => {
+    const first = response(
+      [proposal({ index: 0, originalStart: 0, reason: 'first-chapter' }), proposal({ index: 1, originalStart: 100, reason: 'not-analysed' })],
+      false
+    )
+    expect(buildSnapRetryPayload(first, { ...SNAP_DEFAULT_OPTIONS, verify: true })?.options).to.have.property('verify', true)
+    expect(buildSnapRetryPayload(first, SNAP_DEFAULT_OPTIONS)?.options).not.to.have.property('verify')
+  })
+
+  it('reads the speech verdict and ignores malformed ones', () => {
+    expect(toSnapSpeech(null)).to.equal(null)
+    expect(toSnapSpeech('heard')).to.equal(null)
+    expect(toSnapSpeech({ before: 7, after: 'x', heading: 'yes', late: true })).to.deep.equal({
+      before: '',
+      after: 'x',
+      heading: false,
+      late: true,
+      early: false
+    })
+  })
+
+  it('names the speech status, late and early first', () => {
+    expect(getSnapSpeechStatus(null)).to.equal(null)
+    expect(getSnapSpeechStatus(speech({ heading: true }))).to.equal('heading')
+    expect(getSnapSpeechStatus(speech({}))).to.equal('no-heading')
+    expect(getSnapSpeechStatus(speech({ late: true }))).to.equal('late')
+    expect(getSnapSpeechStatus(speech({ early: true }))).to.equal('early')
+    expect(isSnapSpeechFlagged(speech({ late: true }))).to.equal(true)
+    expect(isSnapSpeechFlagged(speech({ heading: true }))).to.equal(false)
+    expect(isSnapSpeechFlagged(null)).to.equal(false)
+  })
+
+  it('does not pre-check rows the speech check flagged, whatever their confidence', () => {
+    const result = buildSnapRows({
+      snapshot,
+      response: response([
+        proposal({ index: 0, originalStart: 0, reason: 'first-chapter', confidence: 'high' }),
+        proposal({ index: 1, originalStart: 100, proposedStart: 99, reason: 'nearest-longest-pause', confidence: 'high', speech: speech({ heading: true }) }),
+        proposal({ index: 2, originalStart: 200, proposedStart: 199, reason: 'nearest-longest-pause', confidence: 'high', speech: speech({ late: true }) }),
+        proposal({ index: 3, originalStart: 300, proposedStart: 299, reason: 'nearest-longest-pause', confidence: 'medium', speech: speech({ early: true }) })
+      ]),
+      options: { ...SNAP_DEFAULT_OPTIONS, verify: true }
+    })
+    expect(result[1].speech?.heading).to.equal(true)
+    expect(result[0].speech).to.equal(null)
+    expect([...getDefaultSnapChecked(result)]).to.deep.equal([1])
+  })
+
+  it('knows whether a session checked speech', () => {
+    const plain: SnapSession = { snapshot, response: response([]), options: { ...SNAP_DEFAULT_OPTIONS } }
+    expect(snapSessionCheckedSpeech(plain)).to.equal(false)
+    expect(snapSessionCheckedSpeech({ ...plain, options: { ...SNAP_DEFAULT_OPTIONS, verify: true } })).to.equal(true)
+  })
+
+  it('keeps only the speech check warnings', () => {
+    const r = response([])
+    r.warnings = [
+      'Time limit reached: 1 of 3 segments not analysed. Resend with ...',
+      'Speech check skipped: chapterbot is busy, 4 chapters not checked, try again later'
+    ]
+    expect(getSnapSpeechWarnings(r)).to.deep.equal(['Speech check skipped: chapterbot is busy, 4 chapters not checked, try again later'])
   })
 })
 
