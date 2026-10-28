@@ -72,6 +72,8 @@ export interface ServerStatus {
   /** Present only when the server has not been initialized yet */
   MetadataPath?: string
   app: string
+  /** Optional endpoints this server has (see `lib/serverFeatures.ts`). Absent on a stock server. */
+  serverFeatures?: string[]
 }
 
 // Server settings interface
