@@ -1,5 +1,6 @@
 'use client'
 
+import { cancelEpubJobAction, getEpubJobAction, startEpubJobAction } from '@/app/actions/epubActions'
 import AddToCollectionModal from '@/components/modals/AddToCollectionModal'
 import AddToPlaylistModal from '@/components/modals/AddToPlaylistModal'
 import PodcastCheckNewEpisodesModal from '@/components/modals/PodcastCheckNewEpisodesModal'
@@ -12,14 +13,29 @@ import IconBtn from '@/components/ui/IconBtn'
 import ReadIconBtn from '@/components/ui/ReadIconBtn'
 import Tooltip from '@/components/ui/Tooltip'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
+import EpubFromAudio, { type EpubFromAudioActions } from '@/components/widgets/EpubFromAudio'
+import type { MediaCardMoreMenuSubitem } from '@/components/widgets/media-card/MediaCardMoreMenu'
 import { useMediaCardActions } from '@/components/widgets/media-card/useMediaCardActions'
 import { useMediaContext } from '@/contexts/MediaContext'
+import { useSocketEvent } from '@/contexts/SocketContext'
+import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { withBasePath } from '@/lib/basePath'
+import { canMakeEpubFromAudio, toEpubJob } from '@/lib/epubFromAudio'
 import { getEbookFormat } from '@/lib/ereader/ereaderEbook'
-import { PlayerState, type BookLibraryItem, type PodcastLibraryItem, type RssFeed } from '@/types/api'
-import { useCallback, useMemo } from 'react'
+import { PlayerState, type BookLibraryItem, type EpubJob, type PodcastLibraryItem, type RssFeed } from '@/types/api'
+import { useRouter } from 'next/navigation'
+import { useCallback, useMemo, useState } from 'react'
+
+const EPUB_FROM_AUDIO_ACTION = 'makeEpubFromAudio'
+
+const epubFromAudioActions: EpubFromAudioActions = {
+  start: startEpubJobAction,
+  get: getEpubJobAction,
+  cancel: cancelEpubJobAction
+}
 
 interface LibraryItemActionButtonsProps {
   libraryItem: BookLibraryItem | PodcastLibraryItem
@@ -54,6 +70,27 @@ export default function LibraryItemActionButtons({
     playerLoadState
   } = useMediaContext()
   const t = useTypeSafeTranslations()
+  const router = useRouter()
+  const { showToast } = useGlobalToast()
+
+  // EPUB from audio: only when the server advertises it (never on a stock server)
+  const epubFromAudioAvailable = useServerFeature('chapterbotEpub')
+  const showEpubFromAudio = epubFromAudioAvailable && userCanUpdate && canMakeEpubFromAudio(libraryItem)
+  const [epubConfirmOpen, setEpubConfirmOpen] = useState(false)
+  const [epubJobEvent, setEpubJobEvent] = useState<EpubJob | null>(null)
+  const extraToolSubitems = useMemo<MediaCardMoreMenuSubitem[] | undefined>(
+    () => (showEpubFromAudio ? [{ text: t('ButtonMakeEpubFromAudio'), func: EPUB_FROM_AUDIO_ACTION }] : undefined),
+    [showEpubFromAudio, t]
+  )
+  const handleEpubJobEvent = useCallback((data: unknown) => {
+    const job = toEpubJob(data)
+    if (job) setEpubJobEvent(job)
+  }, [])
+  useSocketEvent<unknown>('chapterbot_epub_done', handleEpubJobEvent)
+  useSocketEvent<unknown>('chapterbot_epub_failed', handleEpubJobEvent)
+  const notifyEpub = useCallback((message: string, type: 'success' | 'error' | 'warning' | 'info') => showToast(message, { type }), [showToast])
+  // The server rescans the item (item_updated); refresh as well so the new ebook shows even if that event is missed
+  const handleEpubFinished = useCallback(() => router.refresh(), [router])
 
   const mediaProgress = libraryItem.media?.id ? getMediaItemProgress(libraryItem.media.id) : undefined
   const isRead = mediaProgress?.isFinished ?? false
@@ -112,7 +149,8 @@ export default function LibraryItemActionButtons({
       window.location.href = withBasePath(`/library/${libraryItem.libraryId}`)
     },
     onOpenMatch,
-    playerControls
+    playerControls,
+    extraToolSubitems
   })
 
   const handleQueueClick = useCallback(() => {
@@ -155,6 +193,10 @@ export default function LibraryItemActionButtons({
 
   const handleContextMenuAction = useCallback(
     ({ action, data }: { action: string; data?: Record<string, string> }) => {
+      if (action === EPUB_FROM_AUDIO_ACTION) {
+        setEpubConfirmOpen(true)
+        return
+      }
       handleMoreAction(action, data)
     },
     [handleMoreAction]
@@ -238,6 +280,19 @@ export default function LibraryItemActionButtons({
           />
         )}
       </div>
+
+      {showEpubFromAudio && (
+        <EpubFromAudio
+          libraryItemId={libraryItem.id}
+          bookTitle={libraryItem.media.metadata.title ?? ''}
+          confirmOpen={epubConfirmOpen}
+          onConfirmClose={() => setEpubConfirmOpen(false)}
+          actions={epubFromAudioActions}
+          notify={notifyEpub}
+          jobEvent={epubJobEvent}
+          onFinished={handleEpubFinished}
+        />
+      )}
 
       {confirmState && (
         <ConfirmDialog

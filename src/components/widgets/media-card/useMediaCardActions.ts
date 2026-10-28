@@ -64,6 +64,8 @@ interface UseMediaCardActionsProps {
   /** Invoked for the Match menu action. Host owns modal state (card, page, bookshelf, etc.). */
   onOpenMatch?: () => void
   playerControls: PlayerHandlerControls
+  /** Host-only entries for the Tools submenu; the host handles their actions before calling handleMoreAction. */
+  extraToolSubitems?: MediaCardMoreMenuSubitem[]
 }
 
 export function useMediaCardActions({
@@ -87,7 +89,8 @@ export function useMediaCardActions({
   onShareChange,
   onDeleteSuccess,
   onOpenMatch,
-  playerControls
+  playerControls,
+  extraToolSubitems
 }: UseMediaCardActionsProps) {
   const sortableCompilation = useSortableCompilation()
   const router = useRouter()
@@ -608,6 +611,9 @@ export function useMediaCardActions({
     if (userIsAdminOrUp && isBookMediaWithTracks(media)) {
       toolSubitems.push({ text: t('LabelToolsMakeM4b'), func: 'makeM4b' }, { text: t('LabelToolsEmbedMetadata'), func: 'embedMetadata' })
     }
+    if (extraToolSubitems?.length) {
+      toolSubitems.push(...extraToolSubitems)
+    }
     if (toolSubitems.length) {
       items.push({ text: t('HeaderTools'), subitems: toolSubitems })
     }
@@ -695,6 +701,7 @@ export function useMediaCardActions({
     continueSeriesShelf,
     episode,
     ereaderDevices,
+    extraToolSubitems,
     isPodcast,
     isQueued,
     isStreaming,
