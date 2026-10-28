@@ -37,10 +37,12 @@ export type EpisodeModalProps = Omit<ModalProps, 'outerContent' | 'sideNavigatio
   EpisodeModalItemSource & {
     additionalProcessing?: boolean
     children: ReactNode
+    /** If set, prev/next wait for `proceed()` (e.g. confirm unsaved episode edits). */
+    onBeforeNavigate?: (proceed: () => void) => void
   }
 
 export default function EpisodeModal(props: EpisodeModalProps) {
-  const { additionalProcessing = false, children, isOpen, onClose, persistent, zIndexClass, bgOpacityClass, className, style } = props
+  const { additionalProcessing = false, children, isOpen, onClose, persistent, zIndexClass, bgOpacityClass, className, style, onBeforeNavigate } = props
 
   const navCtxMode = 'navCtx' in props
   const navCtx = navCtxMode ? props.navCtx : undefined
@@ -149,13 +151,17 @@ export default function EpisodeModal(props: EpisodeModalProps) {
 
   const handleGoPrev = useCallback(() => {
     blurActiveElement()
-    goPrev()
-  }, [blurActiveElement, goPrev])
+    const proceed = () => goPrev()
+    if (onBeforeNavigate) onBeforeNavigate(proceed)
+    else proceed()
+  }, [blurActiveElement, goPrev, onBeforeNavigate])
 
   const handleGoNext = useCallback(() => {
     blurActiveElement()
-    goNext()
-  }, [blurActiveElement, goNext])
+    const proceed = () => goNext()
+    if (onBeforeNavigate) onBeforeNavigate(proceed)
+    else proceed()
+  }, [blurActiveElement, goNext, onBeforeNavigate])
 
   const mediaTitle = resolvedLibraryItem?.media.metadata.title ?? ''
   const outerContent = useMemo(() => {

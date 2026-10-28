@@ -2,13 +2,16 @@
 
 import { updatePodcastEpisodeAction } from '@/app/actions/mediaActions'
 import EpisodeModal, { useEpisodeModal, type EpisodeModalItemSource } from '@/components/modals/EpisodeModal'
+import type { UnsavedChangesLeaveHandle } from '@/components/modals/LibraryItemModal'
 import ModalFooter from '@/components/modals/ModalFooter'
 import LoadingIndicator from '@/components/ui/LoadingIndicator'
+import ConfirmDialog from '@/components/widgets/ConfirmDialog'
 import EpisodeDetailsEdit, { type EpisodeDetailsEditRef, type EpisodeDetailsEditSubmitResult } from '@/components/widgets/EpisodeDetailsEdit'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import { useUnsavedChangesLeave } from '@/hooks/useUnsavedChangesLeave'
 import type { PodcastEpisode, PodcastLibraryItem } from '@/types/api'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition, type TransitionStartFunction } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition, type Ref, type TransitionStartFunction } from 'react'
 
 export type EpisodeEditModalProps = {
   isOpen: boolean
@@ -23,6 +26,8 @@ type EpisodeEditModalContentProps = {
   onClose: () => void
   onSaved?: (episode: PodcastEpisode, libraryItem: PodcastLibraryItem) => void
   stableBodyHeight: boolean
+  /** Lets the parent intercept leave (close, prev/next) while the episode is dirty. */
+  closeRequestRef?: Ref<UnsavedChangesLeaveHandle | null>
 }
 
 function createPlaceholderEpisode(episodeId: string, libraryItemId: string): PodcastEpisode {
@@ -37,7 +42,15 @@ function createPlaceholderEpisode(episodeId: string, libraryItemId: string): Pod
   }
 }
 
-function EpisodeEditModalContent({ isOpen, startSaveTransition, isSavePending, onClose, onSaved, stableBodyHeight }: EpisodeEditModalContentProps) {
+function EpisodeEditModalContent({
+  isOpen,
+  startSaveTransition,
+  isSavePending,
+  onClose,
+  onSaved,
+  stableBodyHeight,
+  closeRequestRef
+}: EpisodeEditModalContentProps) {
   const { resolvedEpisode, resolvedLibraryItem, fetchPending, pendingEpisodeId, syncResolvedEpisode } = useEpisodeModal()
   const t = useTypeSafeTranslations()
   const { showToast } = useGlobalToast()
@@ -46,6 +59,7 @@ function EpisodeEditModalContent({ isOpen, startSaveTransition, isSavePending, o
   const detailsRef = useRef<EpisodeDetailsEditRef>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [footerShadow, setFooterShadow] = useState(false)
+  const { showLeaveConfirm, cancelLeave, discardAndLeave, completePendingLeave } = useUnsavedChangesLeave({ isDirty: hasChanges, closeRequestRef })
 
   const resolvedEpisodeId = resolvedEpisode?.id
 
@@ -109,6 +123,7 @@ function EpisodeEditModalContent({ isOpen, startSaveTransition, isSavePending, o
       if (!libraryItemId || !episodeId) return
 
       if (!result.hasChanges) {
+        if (completePendingLeave()) return
         if (saveAndCloseRef.current) {
           saveAndCloseRef.current = false
           onClose()
@@ -135,6 +150,8 @@ function EpisodeEditModalContent({ isOpen, startSaveTransition, isSavePending, o
           showToast(t('ToastItemUpdateSuccess'), { type: 'success' })
           syncResolvedEpisode(updatedEpisode, updatedLibraryItem)
           onSaved?.(updatedEpisode, updatedLibraryItem)
+          setHasChanges(false)
+          if (completePendingLeave()) return
           if (shouldCloseAfterSave) {
             saveAndCloseRef.current = false
             onClose()
@@ -145,7 +162,7 @@ function EpisodeEditModalContent({ isOpen, startSaveTransition, isSavePending, o
         }
       })
     },
-    [onClose, onSaved, resolvedEpisode?.id, resolvedLibraryItem?.id, showToast, startSaveTransition, syncResolvedEpisode, t]
+    [completePendingLeave, onClose, onSaved, resolvedEpisode?.id, resolvedLibraryItem?.id, showToast, startSaveTransition, syncResolvedEpisode, t]
   )
 
   const handleSave = (close: boolean = false) => {
@@ -219,6 +236,17 @@ function EpisodeEditModalContent({ isOpen, startSaveTransition, isSavePending, o
           disabled: saveDisabled
         }}
       />
+
+      <ConfirmDialog
+        isOpen={showLeaveConfirm}
+        message={t('MessageConfirmCloseDetailsWithChanges')}
+        altButtonText={t('ButtonDiscard')}
+        yesButtonText={t('ButtonSave')}
+        processing={isSavePending}
+        onClose={cancelLeave}
+        onAlt={discardAndLeave}
+        onConfirm={() => handleSave(false)}
+      />
     </div>
   )
 }
@@ -231,22 +259,33 @@ export default function EpisodeEditModal(props: EpisodeEditModalProps) {
   const { isOpen, onClose, onSaved } = props
   const navCtxMode = 'navCtx' in props
   const [isSavePending, startSaveTransition] = useTransition()
+  const closeRequestRef = useRef<UnsavedChangesLeaveHandle | null>(null)
+
+  const requestLeaveOrProceed = useCallback((proceed: () => void) => {
+    if (closeRequestRef.current) closeRequestRef.current.requestLeave(proceed)
+    else proceed()
+  }, [])
+
+  const handleClose = useCallback(() => requestLeaveOrProceed(onClose), [onClose, requestLeaveOrProceed])
 
   return (
     <EpisodeModal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       {...(navCtxMode ? { navCtx: props.navCtx } : { libraryItem: props.libraryItem, episode: props.episode })}
       additionalProcessing={isSavePending}
       className="sm:max-w-(--content-vw) md:max-w-[800px]"
+      onBeforeNavigate={requestLeaveOrProceed}
     >
       <EpisodeEditModalContent
         isOpen={isOpen}
         startSaveTransition={startSaveTransition}
         isSavePending={isSavePending}
+        // Unguarded: footer Save and Close must not re-enter requestLeave.
         onClose={onClose}
         onSaved={onSaved}
         stableBodyHeight={navCtxMode}
+        closeRequestRef={closeRequestRef}
       />
     </EpisodeModal>
   )
