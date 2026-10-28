@@ -130,7 +130,10 @@ export function snapSessionCheckedSpeech(session: SnapSession): boolean {
  * developer notes about the retry contract, which the panel already explains.
  */
 export function getSnapSpeechWarnings(response: SnapChaptersResponse): string[] {
-  return (response.warnings ?? []).filter((warning) => typeof warning === 'string' && /^speech check/i.test(warning))
+  // The server's "Resend with indexes" hint is for API callers; the panel has no way to act on it.
+  return (response.warnings ?? [])
+    .filter((warning) => typeof warning === 'string' && /^speech check/i.test(warning))
+    .map((warning) => warning.replace(/\s*Resend with "indexes".*$/i, ''))
 }
 
 /**
