@@ -1,6 +1,6 @@
 'use client'
 
-import { batchGetLibraryItemsAction, batchUpdateLibraryItemsAction } from '@/app/actions/mediaActions'
+import { batchGetLibraryItemsAction, batchGetSelectedEpisodesAction, batchUpdateLibraryItemsAction } from '@/app/actions/mediaActions'
 import Btn from '@/components/ui/Btn'
 import LoadingIndicator from '@/components/ui/LoadingIndicator'
 import Tooltip from '@/components/ui/Tooltip'
@@ -26,7 +26,6 @@ import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { allowProgrammaticNavigationWithoutTrapCleanup, useUnsavedNavigationGuard } from '@/hooks/useUnsavedNavigationGuard'
 import { clearBatchEditSession, cloneLibraryItemForBatchEdit, readBatchEditSession, saveEpisodeBatchSequential, type BatchEditSession } from '@/lib/batchEdit'
 import type { SelectionKind } from '@/lib/selectedMediaItem'
-import { getUniqueLibraryItemIds } from '@/lib/selectedMediaItem'
 import type { BookLibraryItem, LibraryItem, PodcastEpisode, PodcastLibraryItem, UpdateLibraryItemMediaPayload } from '@/types/api'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -87,27 +86,12 @@ export default function BatchEditClient({ libraryId }: BatchEditClientProps) {
       setLoading(true)
       try {
         if (batchSession.selectionKind === 'episode') {
-          const uniqueLibraryItemIds = getUniqueLibraryItemIds(batchSession.items)
-          const response = await batchGetLibraryItemsAction(uniqueLibraryItemIds)
-          const libraryItemsById = new Map(response.libraryItems.map((item) => [item.id, item]))
-          const entries: EpisodeBatchEntry[] = []
-
-          for (const selected of batchSession.items) {
-            if (!selected.episodeId) continue
-            const libraryItem = libraryItemsById.get(selected.libraryItemId)
-            if (!libraryItem || libraryItem.mediaType !== 'podcast') continue
-            const podcastItem = libraryItem as PodcastLibraryItem
-            const episode = podcastItem.media.episodes?.find((ep) => ep.id === selected.episodeId)
-            if (!episode) {
-              showToast(t('ToastFailedToUpdate'), { type: 'error' })
-              continue
-            }
-            entries.push({
-              episode: { ...episode },
-              libraryItemId: podcastItem.id,
-              podcastTitle: podcastItem.media.metadata.title || podcastItem.id
-            })
+          const selections = batchSession.items.flatMap((item) => (item.episodeId ? [{ libraryItemId: item.libraryItemId, episodeId: item.episodeId }] : []))
+          const response = await batchGetSelectedEpisodesAction(selections)
+          if (response.missing > 0) {
+            showToast(t('ToastFailedToUpdate'), { type: 'error' })
           }
+          const entries: EpisodeBatchEntry[] = response.entries.map((entry) => ({ ...entry, episode: { ...entry.episode } }))
 
           if (entries.length === 0) {
             clearBatchEditSession()

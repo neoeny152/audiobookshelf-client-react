@@ -1,6 +1,7 @@
 'use server'
 
 import * as api from '@/lib/api'
+import { toPlaylistMembershipSummary } from '@/lib/playlistItems'
 import type { Playlist, PlaylistItemPayload } from '@/types/api'
 import { revalidatePath } from 'next/cache'
 
@@ -28,16 +29,18 @@ export async function createPlaylistAction(payload: {
   return created
 }
 
+/** Returns the playlist slimmed to what the playlist modal shows (see toPlaylistMembershipSummary). */
 export async function batchAddToPlaylistAction(playlistId: string, items: PlaylistItemPayload[]): Promise<Playlist> {
   const updated = await api.batchAddToPlaylist(playlistId, items)
   revalidatePlaylistDetailPage(updated)
-  return updated
+  return toPlaylistMembershipSummary(updated)
 }
 
+/** Returns the playlist slimmed to what the playlist modal shows (see toPlaylistMembershipSummary). */
 export async function batchRemoveFromPlaylistAction(playlistId: string, items: PlaylistItemPayload[]): Promise<Playlist> {
   const updated = await api.batchRemoveFromPlaylist(playlistId, items)
   revalidatePlaylistDetailPage(updated)
-  return updated
+  return toPlaylistMembershipSummary(updated)
 }
 
 export async function updatePlaylistAction(
