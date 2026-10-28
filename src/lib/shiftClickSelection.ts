@@ -27,8 +27,13 @@ export interface ShiftClickSelectionParams {
   clickedIndex: number
   shiftKey: boolean
   anchorKey: string | null
-  /** Item keys in current display order (filter + sort). */
-  orderedKeys: readonly string[]
+  /**
+   * Item keys in current display order (filter + sort). A null/undefined slot (an unloaded page of a
+   * virtualized shelf, or an entry that cannot be selected) keeps its position but is never selected.
+   */
+  orderedKeys: readonly (string | null | undefined)[]
+  /** Optional O(1) position lookup for `anchorKey`; defaults to a scan of `orderedKeys`. */
+  indexOfKey?: (key: string) => number
   /** Desired selection state for the clicked item when not range-selecting. */
   selectClicked: boolean
   /** When false, the key is skipped during shift-range operations. */
@@ -52,12 +57,13 @@ export function applyShiftClickSelection({
   shiftKey,
   anchorKey,
   orderedKeys,
+  indexOfKey,
   selectClicked,
   isKeySelectable = () => true
 }: ShiftClickSelectionParams): ShiftClickSelectionResult {
   const next = new Set(prevSelected)
 
-  const anchorIndex = anchorKey ? orderedKeys.indexOf(anchorKey) : -1
+  const anchorIndex = anchorKey ? (indexOfKey ? indexOfKey(anchorKey) : orderedKeys.indexOf(anchorKey)) : -1
 
   let result: ShiftClickSelectionResult
 
@@ -68,7 +74,7 @@ export function applyShiftClickSelection({
     let isSelecting = false
     for (let i = loopStart; i <= loopEnd; i++) {
       const key = orderedKeys[i]
-      if (!isKeySelectable(key)) continue
+      if (key == null || !isKeySelectable(key)) continue
       if (!next.has(key)) {
         isSelecting = true
         break
@@ -77,7 +83,7 @@ export function applyShiftClickSelection({
 
     for (let i = loopStart; i <= loopEnd; i++) {
       const key = orderedKeys[i]
-      if (!isKeySelectable(key)) continue
+      if (key == null || !isKeySelectable(key)) continue
       if (isSelecting) {
         next.add(key)
       } else {

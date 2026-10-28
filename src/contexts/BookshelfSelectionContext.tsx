@@ -1,13 +1,7 @@
 'use client'
 
-import {
-  getSelectionKey,
-  getSelectionKind,
-  toSelectedMediaItem,
-  type SelectedMediaItem,
-  type SelectionKeySource,
-  type SelectionKind
-} from '@/lib/selectedMediaItem'
+import { nextSelectedItems, type ShelfSelectionIndex } from '@/lib/batchSelection/shelfSelectionIndex'
+import { getSelectionKind, type SelectedMediaItem, type SelectionKind } from '@/lib/selectedMediaItem'
 import { applyShiftClickSelection } from '@/lib/shiftClickSelection'
 import type { LibraryItem, PodcastEpisode } from '@/types/api'
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -15,8 +9,8 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
 export interface SelectItemOptions {
   shiftKey?: boolean
   index: number
-  orderedKeys: readonly string[]
-  orderedSources: readonly SelectionKeySource[]
+  /** Keys and sources of the shelf the click came from (see getShelfSelectionIndex). */
+  shelfIndex: ShelfSelectionIndex
   selectionKey: string
   libraryItem: LibraryItem
   episode?: PodcastEpisode
@@ -37,19 +31,6 @@ interface BookshelfSelectionContextValue {
 }
 
 const BookshelfSelectionContext = createContext<BookshelfSelectionContextValue | null>(null)
-
-function itemsFromKeys(keys: Set<string>, orderedSources: readonly SelectionKeySource[], existing: SelectedMediaItem[]): SelectedMediaItem[] {
-  const byKey = new Map(existing.map((item) => [item.selectionKey, item]))
-  for (const source of orderedSources) {
-    const key = getSelectionKey({ libraryItemId: source.libraryItem.id, episodeId: source.episode?.id })
-    if (keys.has(key)) {
-      byKey.set(key, toSelectedMediaItem(source.libraryItem, source.episode))
-    }
-  }
-  return Array.from(keys)
-    .map((key) => byKey.get(key))
-    .filter((item): item is SelectedMediaItem => item != null)
-}
 
 export function BookshelfSelectionProvider({ children }: { children: ReactNode }) {
   const [selectedItems, setSelectedItems] = useState<SelectedMediaItem[]>([])
@@ -92,9 +73,9 @@ export function BookshelfSelectionProvider({ children }: { children: ReactNode }
       return
     }
 
-    const { shiftKey = false, index, orderedKeys, orderedSources, selectionKey, libraryItem, episode, isKeySelectable } = options
+    const { shiftKey = false, index, shelfIndex, selectionKey, libraryItem, episode, isKeySelectable } = options
 
-    if (anchorKeyRef.current && !orderedKeys.includes(anchorKeyRef.current)) {
+    if (anchorKeyRef.current && shelfIndex.indexOfKey(anchorKeyRef.current) < 0) {
       anchorKeyRef.current = null
     }
 
@@ -108,13 +89,14 @@ export function BookshelfSelectionProvider({ children }: { children: ReactNode }
       clickedIndex: index,
       shiftKey,
       anchorKey: anchorKeyRef.current,
-      orderedKeys,
+      orderedKeys: shelfIndex.keys,
+      indexOfKey: shelfIndex.indexOfKey,
       selectClicked,
       isKeySelectable
     })
 
     anchorKeyRef.current = anchorKey
-    const next = itemsFromKeys(nextSelected, orderedSources, prev)
+    const next = nextSelectedItems(prev, nextSelected, shelfIndex)
 
     let nextKind = selectionKindRef.current
     if (next.length === 0) {

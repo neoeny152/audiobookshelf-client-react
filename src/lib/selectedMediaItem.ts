@@ -72,26 +72,9 @@ export function toSelectedMediaItem(libraryItem: LibraryItem, episode?: PodcastE
   return libraryItemToSelectedMediaItem(libraryItem)
 }
 
-export function orderedLibraryItemSelectionKeys(items: readonly LibraryItem[], selectEpisodes = false): string[] {
-  const keys: string[] = []
-  for (const item of items) {
-    if (selectEpisodes) {
-      const episode = item.recentEpisode
-      if (episode) keys.push(episodeSelectionKey(episode.id))
-      continue
-    }
-    keys.push(libraryItemSelectionKey(item.id))
-  }
-  return keys
-}
-
 export interface SelectionKeySource {
   libraryItem: LibraryItem
   episode?: PodcastEpisode
-}
-
-export function orderedSelectionKeysFromSources(sources: readonly SelectionKeySource[]): string[] {
-  return sources.map((source) => getSelectionKey({ libraryItemId: source.libraryItem.id, episodeId: source.episode?.id }))
 }
 
 export function getUniqueLibraryItemIds(selectedItems: readonly SelectedMediaItem[]): string[] {
