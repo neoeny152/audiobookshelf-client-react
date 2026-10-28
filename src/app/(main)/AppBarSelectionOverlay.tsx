@@ -12,6 +12,7 @@ import { useUser } from '@/contexts/UserContext'
 import { type AppBarBatchActionId, useAppBarBatchActions } from '@/hooks/useAppBarBatchActions'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import { areAllSelectedItemsFinished } from '@/lib/batchSelection/selectionProgress'
 import { getSelectionCountMessageKey, type SelectedMediaItem, type SelectionKind } from '@/lib/selectedMediaItem'
 import type { MediaProgress } from '@/types/api'
 import { useMemo } from 'react'
@@ -19,22 +20,10 @@ import { useMemo } from 'react'
 const countBadgeClasses = 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 md:hidden'
 const EMPTY_SELECTED_ITEMS: readonly SelectedMediaItem[] = []
 
-function findProgressForSelectedItem(item: SelectedMediaItem, progressList: readonly MediaProgress[]): MediaProgress | undefined {
-  if (item.episodeId) {
-    return progressList.find((p) => (p.mediaItemId ?? p.episodeId) === item.episodeId)
-  }
-  return progressList.find((p) => p.libraryItemId === item.libraryItemId && !p.episodeId)
-}
-
 function useSelectionBatchState(selectedItems: readonly SelectedMediaItem[], mediaProgress: readonly MediaProgress[]) {
   return useMemo(() => {
     const allPlayable = selectedItems.length > 0 && selectedItems.every((item) => item.hasTracks)
-    const allFinished =
-      selectedItems.length > 0 &&
-      selectedItems.every((item) => {
-        const progress = findProgressForSelectedItem(item, mediaProgress)
-        return Boolean(progress?.isFinished)
-      })
+    const allFinished = areAllSelectedItemsFinished(selectedItems, mediaProgress)
     return { allPlayable, allFinished }
   }, [selectedItems, mediaProgress])
 }
