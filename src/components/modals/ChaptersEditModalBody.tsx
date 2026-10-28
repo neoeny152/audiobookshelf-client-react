@@ -9,6 +9,7 @@ import ConfirmDialog from '@/components/widgets/ConfirmDialog'
 import ChaptersModalTable from '@/components/widgets/chapters-edit/ChaptersModalTable'
 import FindChaptersPanel from '@/components/widgets/chapters-edit/FindChaptersPanel'
 import { ShiftTimesFields } from '@/components/widgets/chapters-edit/ShiftTimesPanel'
+import SnapToAudioPanel from '@/components/widgets/chapters-edit/SnapToAudioPanel'
 import { useChapterEditor } from '@/hooks/useChapterEditor'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { useUnsavedChangesLeave } from '@/hooks/useUnsavedChangesLeave'
@@ -120,6 +121,9 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     handleToggleAllChaptersSelected,
     handleRemoveSelected,
     handleSetChaptersFromTracks,
+    handleSnapToAudio,
+    handleSnapRetry,
+    handleApplySnap,
     setConfirmState,
     handleSave,
     handleAddChapterFromInput,
@@ -230,6 +234,16 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
                   <HelpTooltipIcon text={t('MessageSetChaptersFromTracksDescription')} />
                 </div>
               </div>
+            </div>
+            <div className="border-border mt-3 border-t pt-3">
+              <SnapToAudioPanel
+                chapterCount={newChapters.length}
+                disabled={isPending}
+                onSnap={handleSnapToAudio}
+                onRetry={handleSnapRetry}
+                onApply={handleApplySnap}
+                preview={preview}
+              />
             </div>
           </div>
 
