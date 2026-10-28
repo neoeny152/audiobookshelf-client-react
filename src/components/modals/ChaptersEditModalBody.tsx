@@ -11,12 +11,13 @@ import FindChaptersPanel from '@/components/widgets/chapters-edit/FindChaptersPa
 import { ShiftTimesFields } from '@/components/widgets/chapters-edit/ShiftTimesPanel'
 import { useChapterEditor } from '@/hooks/useChapterEditor'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import { useUnsavedChangesLeave } from '@/hooks/useUnsavedChangesLeave'
 import { blurActiveChapterEditorField } from '@/lib/chapterEditorFocus'
 import { secondsToTimestamp } from '@/lib/datefns'
 import { formatDuration } from '@/lib/formatDuration'
 import { mergeClasses } from '@/lib/merge-classes'
 import { isBookMediaWithTracks, type AudibleChapterSearchResult, type BookLibraryItem } from '@/types/api'
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react'
 
 interface ChaptersEditModalBodyProps {
   /** Lets the parent intercept leave (section change, hub back, close) while chapters are dirty. */
@@ -76,9 +77,7 @@ function LookupComparison({
 function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, onItemUpdated }: ChaptersEditContentProps) {
   const t = useTypeSafeTranslations()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const pendingLeaveRef = useRef<(() => void) | null>(null)
   const [footerShadow, setFooterShadow] = useState(false)
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
 
   const editor = useChapterEditor({
     initialLibraryItem: libraryItem,
@@ -173,43 +172,15 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     }
   }, [destroyAudioEl])
 
-  const requestLeave = useCallback(
-    (onAllow: () => void) => {
-      if (hasChanges) {
-        pendingLeaveRef.current = onAllow
-        setShowCloseConfirm(true)
-        return
-      }
-      destroyAudioEl()
-      onAllow()
-    },
-    [destroyAudioEl, hasChanges]
-  )
-
-  const handleCancelLeave = useCallback(() => {
-    pendingLeaveRef.current = null
-    setShowCloseConfirm(false)
-  }, [])
-
-  const handleDiscardAndLeave = useCallback(() => {
-    const onAllow = pendingLeaveRef.current
-    pendingLeaveRef.current = null
-    setShowCloseConfirm(false)
-    destroyAudioEl()
-    onAllow?.()
-  }, [destroyAudioEl])
+  const { showLeaveConfirm, cancelLeave, discardAndLeave, captureLeave } = useUnsavedChangesLeave({
+    isDirty: hasChanges,
+    closeRequestRef,
+    onBeforeLeave: destroyAudioEl
+  })
 
   const handleSaveAndLeave = useCallback(() => {
-    const onAllow = pendingLeaveRef.current
-    handleSave(() => {
-      pendingLeaveRef.current = null
-      setShowCloseConfirm(false)
-      destroyAudioEl()
-      onAllow?.()
-    })
-  }, [destroyAudioEl, handleSave])
-
-  useImperativeHandle(closeRequestRef, () => ({ requestLeave }), [requestLeave])
+    handleSave(captureLeave())
+  }, [captureLeave, handleSave])
 
   const footerDisabled = !hasChanges || isPending
 
@@ -350,13 +321,13 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
       {confirmState && <ConfirmDialog isOpen message={confirmState.message} onClose={() => setConfirmState(null)} onConfirm={() => confirmState.onConfirm()} />}
 
       <ConfirmDialog
-        isOpen={showCloseConfirm}
+        isOpen={showLeaveConfirm}
         message={t('MessageConfirmCloseChaptersWithChanges')}
         altButtonText={t('ButtonDiscard')}
         yesButtonText={t('ButtonSave')}
         processing={isPending}
-        onClose={handleCancelLeave}
-        onAlt={handleDiscardAndLeave}
+        onClose={cancelLeave}
+        onAlt={discardAndLeave}
         onConfirm={handleSaveAndLeave}
       />
     </>

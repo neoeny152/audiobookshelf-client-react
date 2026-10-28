@@ -10,20 +10,10 @@ import PodcastDetailsEdit, { PodcastDetailsEditRef, PodcastUpdatePayload } from 
 import { useLibrary } from '@/contexts/LibraryContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import { useUnsavedChangesLeave } from '@/hooks/useUnsavedChangesLeave'
 import type { BookMedia, BookMetadata, PodcastMedia, PodcastMetadata } from '@/types/api'
 import { BookLibraryItem, PodcastLibraryItem } from '@/types/api'
-import {
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-  type Ref,
-  type TransitionStartFunction
-} from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type Ref, type TransitionStartFunction } from 'react'
 
 function createPlaceholderBookLibraryItem(id: string, libraryId: string): BookLibraryItem {
   const metadata: BookMetadata = {
@@ -113,8 +103,7 @@ export function LibraryItemEditModalContent({
   const { filterData, library } = useLibrary()
   const [hasChanges, setHasChanges] = useState(false)
   const saveAndCloseRef = useRef(false)
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
-  const pendingLeaveRef = useRef<(() => void) | null>(null)
+  const { showLeaveConfirm, cancelLeave, discardAndLeave, completePendingLeave } = useUnsavedChangesLeave({ isDirty: hasChanges, closeRequestRef })
 
   const bookDetailsRef = useRef<BookDetailsEditRef>(null)
   const podcastDetailsRef = useRef<PodcastDetailsEditRef>(null)
@@ -188,12 +177,7 @@ export function LibraryItemEditModalContent({
       if (!itemId) return
 
       if (!details.hasChanges) {
-        if (pendingLeaveRef.current) {
-          const onAllow = pendingLeaveRef.current
-          pendingLeaveRef.current = null
-          setShowCloseConfirm(false)
-          onAllow()
-        } else if (saveAndCloseRef.current) {
+        if (!completePendingLeave() && saveAndCloseRef.current) {
           onClose()
         }
         return
@@ -211,12 +195,7 @@ export function LibraryItemEditModalContent({
           }
           showToast(t('ToastItemUpdateSuccess'), { type: 'success' })
           setHasChanges(false)
-          if (pendingLeaveRef.current) {
-            const onAllow = pendingLeaveRef.current
-            pendingLeaveRef.current = null
-            setShowCloseConfirm(false)
-            onAllow()
-          } else if (saveAndCloseRef.current) {
+          if (!completePendingLeave() && saveAndCloseRef.current) {
             onClose()
           }
         } catch (error) {
@@ -225,7 +204,7 @@ export function LibraryItemEditModalContent({
         }
       })
     },
-    [onClose, resolvedItem?.id, showToast, startSaveTransition, t]
+    [completePendingLeave, onClose, resolvedItem?.id, showToast, startSaveTransition, t]
   )
 
   const handleSave = useCallback(
@@ -241,35 +220,9 @@ export function LibraryItemEditModalContent({
     [resolvedItem]
   )
 
-  const requestLeave = useCallback(
-    (onAllow: () => void) => {
-      if (!hasChanges) {
-        onAllow()
-        return
-      }
-      pendingLeaveRef.current = onAllow
-      setShowCloseConfirm(true)
-    },
-    [hasChanges]
-  )
-
-  const handleCancelLeave = useCallback(() => {
-    pendingLeaveRef.current = null
-    setShowCloseConfirm(false)
-  }, [])
-
-  const handleDiscardAndLeave = useCallback(() => {
-    const onAllow = pendingLeaveRef.current
-    pendingLeaveRef.current = null
-    setShowCloseConfirm(false)
-    onAllow?.()
-  }, [])
-
   const handleSaveAndLeave = useCallback(() => {
     handleSave(false)
   }, [handleSave])
-
-  useImperativeHandle(closeRequestRef, () => ({ requestLeave }), [requestLeave])
 
   const isPodcast = resolvedItem?.mediaType === 'podcast'
   const saveDisabled = !hasChanges || isSavePending || !resolvedItem || fetchPending
@@ -380,13 +333,13 @@ export function LibraryItemEditModalContent({
       />
 
       <ConfirmDialog
-        isOpen={showCloseConfirm}
+        isOpen={showLeaveConfirm}
         message={t('MessageConfirmCloseDetailsWithChanges')}
         altButtonText={t('ButtonDiscard')}
         yesButtonText={t('ButtonSave')}
         processing={isSavePending}
-        onClose={handleCancelLeave}
-        onAlt={handleDiscardAndLeave}
+        onClose={cancelLeave}
+        onAlt={discardAndLeave}
         onConfirm={handleSaveAndLeave}
       />
     </div>

@@ -13,9 +13,10 @@ import PodcastMatchView from '@/components/widgets/match/PodcastMatchView'
 import { useBookProviders, useMetadata, usePodcastProviders } from '@/contexts/MetadataContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import { useUnsavedChangesLeave } from '@/hooks/useUnsavedChangesLeave'
 import { getLibraryItemCoverUrl } from '@/lib/coverUtils'
 import { BookLibraryItem, BookSearchResult, isBookMedia, isPodcastMedia, PodcastLibraryItem, PodcastSearchResult } from '@/types/api'
-import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, useTransition, type Ref } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition, type Ref } from 'react'
 
 interface MatchProps {
   libraryItem: BookLibraryItem | PodcastLibraryItem
@@ -84,8 +85,6 @@ export default function Match({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const searchInitItemIdRef = useRef<string | null>(null)
   const [hasScrollbar, setHasScrollbar] = useState(false)
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
-  const pendingLeaveRef = useRef<(() => void) | null>(null)
 
   const media = useMemo(() => libraryItem.media || {}, [libraryItem.media])
   const mediaMetadata = useMemo(() => media.metadata || {}, [media.metadata])
@@ -281,32 +280,11 @@ export default function Match({
   }, [])
 
   // A selected match is only applied on Submit, so leaving with one selected discards it.
-  const requestLeave = useCallback(
-    (onAllow: () => void) => {
-      if (!selectedMatchOrig) {
-        onAllow()
-        return
-      }
-      pendingLeaveRef.current = onAllow
-      setShowCloseConfirm(true)
-    },
-    [selectedMatchOrig]
-  )
-
-  const handleCancelLeave = useCallback(() => {
-    pendingLeaveRef.current = null
-    setShowCloseConfirm(false)
-  }, [])
-
-  const handleDiscardAndLeave = useCallback(() => {
-    const onAllow = pendingLeaveRef.current
-    pendingLeaveRef.current = null
-    setShowCloseConfirm(false)
-    handleClearSelectedMatch()
-    onAllow?.()
-  }, [handleClearSelectedMatch])
-
-  useImperativeHandle(closeRequestRef, () => ({ requestLeave }), [requestLeave])
+  const { showLeaveConfirm, cancelLeave, discardAndLeave } = useUnsavedChangesLeave({
+    isDirty: !!selectedMatchOrig,
+    closeRequestRef,
+    onDiscard: handleClearSelectedMatch
+  })
 
   const handleCardArrowKey = useCallback(
     (direction: 'up' | 'down', index: number) => {
@@ -480,12 +458,12 @@ export default function Match({
       ) : null}
 
       <ConfirmDialog
-        isOpen={showCloseConfirm}
+        isOpen={showLeaveConfirm}
         message={t('MessageConfirmCloseMatchWithChanges')}
         yesButtonText={t('ButtonDiscard')}
         yesButtonClassName="bg-error text-error-foreground"
-        onClose={handleCancelLeave}
-        onConfirm={handleDiscardAndLeave}
+        onClose={cancelLeave}
+        onConfirm={discardAndLeave}
       />
     </>
   )
