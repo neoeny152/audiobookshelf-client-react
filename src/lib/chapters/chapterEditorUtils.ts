@@ -648,9 +648,19 @@ export function removeChapterAt(chapters: EditableChapter[], id: number): Editab
   return chapters.filter((c) => c.id !== id)
 }
 
+/**
+ * Whole-second midpoint when it lands strictly after `prev`; with fractional starts the floor can fall at or
+ * below `prev` (16.09 / 17.2 -> 16), so fall back to the millisecond midpoint.
+ */
+function midpointChapterStart(prev: number, next: number): number {
+  const wholeSecond = Math.floor((prev + next) / 2)
+  return wholeSecond > prev ? wholeSecond : normalizeChapterStartSec((prev + next) / 2)
+}
+
 export function insertChapterBelow(chapters: EditableChapter[], chapter: EditableChapter): EditableChapter[] {
   const nextChapter = chapters[chapter.id + 1]
-  const start = nextChapter && nextChapter.start > chapter.start + 1 ? Math.floor((chapter.start + nextChapter.start) / 2) : chapter.start + 1
+  const start =
+    nextChapter && nextChapter.start > chapter.start + 1 ? midpointChapterStart(chapter.start, nextChapter.start) : normalizeChapterStartSec(chapter.start + 1)
   const insert: EditableChapter = {
     id: chapter.id + 1,
     start,

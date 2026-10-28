@@ -301,6 +301,45 @@ describe('insertChapterBelow', () => {
     expect(result[1].start).to.be.lessThan(result[2].start)
   })
 
+  it('keeps the inserted start after a fractional parent when the floored midpoint would fall below it', () => {
+    const chapters = [
+      { id: 0, start: 0, end: 16.09, title: 'A', error: null, clientKey: 'ch-0' },
+      { id: 1, start: 16.09, end: 17.2, title: 'B', error: null, clientKey: 'ch-1' },
+      { id: 2, start: 17.2, end: 500, title: 'C', error: null, clientKey: 'ch-2' }
+    ]
+    const result = insertChapterBelow(chapters, chapters[1])
+
+    expect(result).to.have.length(4)
+    expect(result[2].start).to.equal(16.645)
+    expect(result[2].start).to.be.greaterThan(result[1].start)
+    expect(result[2].start).to.be.lessThan(result[3].start)
+    const validated = validateChapters(result, [], 500, {
+      startLtPrev: 'Start must be greater than previous',
+      startGteDuration: 'Start must be less than duration'
+    })
+    expect(validated.chapters.every((chapter) => !chapter.error)).to.equal(true)
+  })
+
+  it('still prefers a whole-second midpoint when it lands after a fractional parent', () => {
+    const chapters = [
+      { id: 0, start: 10.5, end: 20.25, title: 'A', error: null, clientKey: 'ch-0' },
+      { id: 1, start: 20.25, end: 500, title: 'B', error: null, clientKey: 'ch-1' }
+    ]
+    const result = insertChapterBelow(chapters, chapters[0])
+
+    expect(result[1].start).to.equal(15)
+  })
+
+  it('inserts one second after a fractional last chapter without float noise', () => {
+    const chapters = [
+      { id: 0, start: 0, end: 0.1, title: 'A', error: null, clientKey: 'ch-0' },
+      { id: 1, start: 0.1, end: 500, title: 'B', error: null, clientKey: 'ch-1' }
+    ]
+    const result = insertChapterBelow(chapters, chapters[1])
+
+    expect(result[2].start).to.equal(1.1)
+  })
+
   it('inserts one second after the last chapter', () => {
     const chapters = [
       { id: 0, start: 0, end: 100, title: 'A', error: null, clientKey: 'ch-0' },
