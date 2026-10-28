@@ -178,10 +178,43 @@ describe('<SnapToAudioPanel /> rounding', () => {
 describe('<SnapToAudioPanel /> preview', () => {
   it('previews the proposed start with the editor player', () => {
     const playChapter = cy.stub().as('playChapter')
-    mountPanel({ preview: { selectedChapterId: null, isPlayingChapter: false, isLoadingChapter: false, playChapter } })
+    const destroyAudioEl = cy.stub().as('destroyAudioEl')
+    mountPanel({ preview: { selectedChapterId: null, isPlayingChapter: false, isLoadingChapter: false, playChapter, destroyAudioEl } })
     cy.contains('button', 'Snap to audio').click()
     cy.get('[cy-id="snap-row"]').eq(0).find('button[aria-label="Play from proposed start"]').click()
     cy.get('@playChapter').should('have.been.calledOnceWith', 'snap-1', 96)
+  })
+
+  const playingSnapPreview = () => ({
+    selectedChapterId: 'snap-1',
+    isPlayingChapter: true,
+    isLoadingChapter: false,
+    playChapter: cy.stub().as('playChapter'),
+    destroyAudioEl: cy.stub().as('destroyAudioEl')
+  })
+
+  it('stops a playing proposal preview when the proposal is applied', () => {
+    mountPanel({ preview: playingSnapPreview() })
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('@destroyAudioEl').should('have.been.calledOnce')
+    cy.contains('button', 'Apply 1 change').click()
+    cy.get('@destroyAudioEl').should('have.been.calledTwice')
+  })
+
+  it('stops a playing proposal preview when the proposal is closed', () => {
+    mountPanel({ preview: playingSnapPreview() })
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('[cy-id="snap-proposal"]').contains('button', 'Close').click()
+    cy.get('@destroyAudioEl').should('have.been.calledTwice')
+    cy.get('[cy-id="snap-proposal"]').should('not.exist')
+  })
+
+  it('leaves a chapter-table preview playing', () => {
+    const destroyAudioEl = cy.stub().as('destroyAudioEl')
+    mountPanel({ preview: { selectedChapterId: 3, isPlayingChapter: true, isLoadingChapter: false, playChapter: cy.stub(), destroyAudioEl } })
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('[cy-id="snap-proposal"]').contains('button', 'Close').click()
+    cy.get('@destroyAudioEl').should('not.have.been.called')
   })
 })
 

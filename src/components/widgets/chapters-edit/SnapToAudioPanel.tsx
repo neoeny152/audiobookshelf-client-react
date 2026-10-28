@@ -29,7 +29,10 @@ export interface SnapPreviewControls {
   isPlayingChapter: boolean
   isLoadingChapter: boolean
   playChapter: (chapterId: number | string, chapterStart: number) => void
+  destroyAudioEl: () => void
 }
+
+const SNAP_PREVIEW_PREFIX = 'snap-'
 
 export interface SnapToAudioPanelProps {
   chapterCount: number
@@ -146,6 +149,13 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
   const checkedChangedCount = changedRows.filter((row) => checked.has(row.index)).length
   const controlsDisabled = disabled || isRunning
 
+  /** Proposal rows are the only controls for a snap preview, so stop it whenever they go away. */
+  const stopSnapPreview = useCallback(() => {
+    if (!preview) return
+    const id = preview.selectedChapterId
+    if (typeof id === 'string' && id.startsWith(SNAP_PREVIEW_PREFIX)) preview.destroyAudioEl()
+  }, [preview])
+
   const showSession = useCallback((next: SnapSession) => {
     setSession(next)
     setChecked(getDefaultSnapChecked(buildSnapRows(next)))
@@ -153,6 +163,7 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
 
   const handleSnap = useCallback(async () => {
     if (controlsDisabled) return
+    stopSnapPreview()
     setIsRunning(true)
     try {
       const next = await onSnap(parseOptionDrafts(optionDrafts))
@@ -163,10 +174,11 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
     } finally {
       setIsRunning(false)
     }
-  }, [controlsDisabled, onSnap, optionDrafts, showSession])
+  }, [controlsDisabled, onSnap, optionDrafts, showSession, stopSnapPreview])
 
   const handleRetry = useCallback(async () => {
     if (!session || controlsDisabled) return
+    stopSnapPreview()
     setIsRunning(true)
     try {
       const next = await onRetry(session)
@@ -184,20 +196,22 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
     } finally {
       setIsRunning(false)
     }
-  }, [controlsDisabled, onRetry, session])
+  }, [controlsDisabled, onRetry, session, stopSnapPreview])
 
   const handleApply = useCallback(() => {
     const picked = changedRows.filter((row) => checked.has(row.index))
     if (!picked.length) return
+    stopSnapPreview()
     onApply(picked)
     setSession(null)
     setChecked(new Set())
-  }, [changedRows, checked, onApply])
+  }, [changedRows, checked, onApply, stopSnapPreview])
 
   const handleClose = useCallback(() => {
+    stopSnapPreview()
     setSession(null)
     setChecked(new Set())
-  }, [])
+  }, [stopSnapPreview])
 
   const toggleRow = useCallback((index: number, value: boolean) => {
     setChecked((prev) => {
@@ -314,7 +328,7 @@ export default function SnapToAudioPanel({ chapterCount, disabled = false, onSna
                 </thead>
                 <tbody>
                   {visibleRows.map((row) => {
-                    const previewId = `snap-${row.index}`
+                    const previewId = `${SNAP_PREVIEW_PREFIX}${row.index}`
                     const isPreviewSelected = preview?.selectedChapterId === previewId
                     const isPlaying = isPreviewSelected && !!preview?.isPlayingChapter
                     const playLabel = isPlaying ? t('MessagePauseChapter') : t('MessagePlaySnapProposal')
