@@ -7,6 +7,7 @@ import { useUser } from '@/contexts/UserContext'
 import { useChapterPreviewAudio } from '@/hooks/useChapterPreviewAudio'
 import { useItemPageSocket } from '@/hooks/useItemPageSocket'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import { callStatusAction } from '@/lib/actionResult'
 import {
   applyChapterTitleDrafts,
   applySnapProposals,
@@ -432,7 +433,7 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
       }
 
       const { payload, snapshot } = buildSnapPayload(chapters, selectedKeys, options)
-      const result = await snapChaptersAction(libraryItem.id, payload)
+      const result = await callStatusAction(() => snapChaptersAction(libraryItem.id, payload))
       if (!result.ok) {
         showSnapError(result)
         return null
@@ -447,7 +448,7 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
     async (session: SnapSession): Promise<SnapSession | null> => {
       const payload = buildSnapRetryPayload(session.response, session.options)
       if (!payload) return session
-      const result = await snapChaptersAction(libraryItem.id, payload)
+      const result = await callStatusAction(() => snapChaptersAction(libraryItem.id, payload))
       if (!result.ok) {
         showSnapError(result)
         return null
