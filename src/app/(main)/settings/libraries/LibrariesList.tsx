@@ -5,6 +5,7 @@ import ConfirmDialog from '@/components/widgets/ConfirmDialog'
 import SortableList from '@/components/widgets/SortableList'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import { ActionResult } from '@/lib/actionResult'
 import { Library } from '@/types/api'
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { deleteLibrary } from './actions'
@@ -12,7 +13,7 @@ import LibrariesListRow from './LibrariesListRow'
 
 interface LibrariesListProps {
   libraries: Library[]
-  saveLibraryOrderAction: (reorderObjects: { id: string; newOrder: number }[]) => void
+  saveLibraryOrderAction: (reorderObjects: { id: string; newOrder: number }[]) => Promise<ActionResult<unknown>>
   onEditLibrary?: (library: Library) => void
   onAddLibrary?: () => void
 }
@@ -33,9 +34,14 @@ export default function LibrariesList(props: LibrariesListProps) {
   }, [librariesData])
 
   const handleSortChange = (sortedItems: Library[]) => {
+    const previousLibraries = libraries
     setLibraries(sortedItems as Library[])
     startTransition(async () => {
-      saveLibraryOrderAction(sortedItems.map((item, index) => ({ id: item.id, newOrder: index })))
+      const result = await saveLibraryOrderAction(sortedItems.map((item, index) => ({ id: item.id, newOrder: index })))
+      if (!result.ok) {
+        setLibraries(previousLibraries)
+        showToast(result.error || t('ToastFailedToUpdate'), { type: 'error' })
+      }
     })
   }
 
@@ -58,7 +64,12 @@ export default function LibrariesList(props: LibrariesListProps) {
     const updatedLibraries = libraries.filter((lib) => lib.id !== delRef.current?.id)
     setLibraries(updatedLibraries)
     try {
-      await deleteLibrary(delRef.current?.id)
+      const result = await deleteLibrary(delRef.current?.id)
+      if (!result.ok) {
+        setLibraries(libraries)
+        showToast(result.error || t('ToastLibraryDeleteFailed'), { type: 'error' })
+        return
+      }
       showToast(t('ToastLibraryDeleteSuccess'), { type: 'success' })
     } catch (error) {
       // Revert UI on error

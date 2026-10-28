@@ -6,6 +6,7 @@ import LibraryIcon from '@/components/ui/LibraryIcon'
 import LoadingSpinner from '@/components/widgets/LoadingSpinner'
 import type { SortableListDragHandleProps } from '@/components/widgets/SortableList'
 import { useTasks } from '@/contexts/TasksContext'
+import { useGlobalToast } from '@/contexts/ToastContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { DRAG_HANDLE_COARSE_POINTER_MIN_TOUCH, DRAG_HANDLE_GRAB_CURSOR } from '@/lib/dragHandleClasses'
 import { mergeClasses } from '@/lib/merge-classes'
@@ -24,6 +25,7 @@ interface LibrariesListRowProps {
 export default function LibrariesListRow({ item, handleDeleteLibrary, handleEditLibrary, sortableDragHandleProps }: LibrariesListRowProps) {
   const t = useTypeSafeTranslations()
   const { getTasksByLibraryId } = useTasks()
+  const { showToast } = useGlobalToast()
 
   const libraryTasks = useMemo(() => getTasksByLibraryId(item.id), [getTasksByLibraryId, item.id])
 
@@ -41,21 +43,19 @@ export default function LibrariesListRow({ item, handleDeleteLibrary, handleEdit
     contextMenuItems.splice(2, 0, { text: t('ButtonMatchBooks'), action: 'matchBooks' })
   }
 
-  const handleScanLibrary = useCallback(() => {
-    try {
-      requestScanLibrary(item.id)
-    } catch (error) {
-      console.error('Failed to start scan', error)
+  const handleScanLibrary = useCallback(async () => {
+    const result = await requestScanLibrary(item.id)
+    if (!result.ok) {
+      showToast(result.error || t('ToastLibraryScanFailedToStart'), { type: 'error' })
     }
-  }, [item.id])
+  }, [item.id, showToast, t])
 
-  const handleMatchBooks = useCallback(() => {
-    try {
-      matchAll(item.id)
-    } catch (error) {
-      console.error('Failed to start matching', error)
+  const handleMatchBooks = useCallback(async () => {
+    const result = await matchAll(item.id)
+    if (!result.ok) {
+      showToast(result.error || t('ToastFailedToMatch'), { type: 'error' })
     }
-  }, [item.id])
+  }, [item.id, showToast, t])
 
   const handleContextMenuActions = useCallback(
     (params: { action: string; data?: Record<string, string> }) => {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useLibraries } from '@/contexts/LibrariesContext'
+import { useGlobalToast } from '@/contexts/ToastContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { Library } from '@/types/api'
 import { useCallback, useEffect, useState } from 'react'
@@ -17,6 +18,7 @@ interface LibraryClientProps {
 export default function LibrariesClient({ libraries }: LibraryClientProps) {
   const t = useTypeSafeTranslations()
   const { setLibraries } = useLibraries()
+  const { showToast } = useGlobalToast()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingLibrary, setEditingLibrary] = useState<Library | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -55,20 +57,21 @@ export default function LibrariesClient({ libraries }: LibraryClientProps) {
           settings: formData.settings
         } as Library
 
-        if (editingLibrary) {
-          await editLibrary(editingLibrary.id, payload)
-        } else {
-          await createLibrary(payload)
+        const result = editingLibrary ? await editLibrary(editingLibrary.id, payload) : await createLibrary(payload)
+        if (!result.ok) {
+          showToast(result.error || (editingLibrary ? t('ToastFailedToUpdate') : t('ToastLibraryCreateFailed')), { type: 'error' })
+          return
         }
 
         handleCloseModal()
       } catch (error) {
         console.error('Failed to save library:', error)
+        showToast(editingLibrary ? t('ToastFailedToUpdate') : t('ToastLibraryCreateFailed'), { type: 'error' })
       } finally {
         setIsProcessing(false)
       }
     },
-    [editingLibrary, handleCloseModal]
+    [editingLibrary, handleCloseModal, showToast, t]
   )
 
   return (

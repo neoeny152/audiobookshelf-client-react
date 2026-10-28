@@ -1,6 +1,7 @@
 import Btn from '@/components/ui/Btn'
 import PageMessage from '@/components/ui/PageMessage'
 import { useTasks } from '@/contexts/TasksContext'
+import { useGlobalToast } from '@/contexts/ToastContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { Library } from '@/types/api'
 import { useMemo, useTransition } from 'react'
@@ -18,6 +19,7 @@ export default function LibraryEmptyState({ library, showScanButton, variant = '
   const t = useTypeSafeTranslations()
   const [isPending, startTransition] = useTransition()
   const { getTasksByLibraryId } = useTasks()
+  const { showToast } = useGlobalToast()
 
   const isLibraryTaskRunning = useMemo(() => {
     return getTasksByLibraryId(library.id).some((task) => task.action === 'library-scan' && !task.isFinished)
@@ -26,9 +28,13 @@ export default function LibraryEmptyState({ library, showScanButton, variant = '
   const handleScanLibrary = () => {
     startTransition(async () => {
       try {
-        await requestScanLibrary(library.id)
+        const result = await requestScanLibrary(library.id)
+        if (!result.ok) {
+          showToast(result.error || t('ToastLibraryScanFailedToStart'), { type: 'error' })
+        }
       } catch (error) {
         console.error('Failed to scan library', error)
+        showToast(t('ToastLibraryScanFailedToStart'), { type: 'error' })
       }
     })
   }

@@ -9,6 +9,7 @@ import { SeriesCard } from '@/components/widgets/media-card/SeriesCard'
 import { useCardSize } from '@/contexts/CardSizeContext'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { useSocketEvent } from '@/contexts/SocketContext'
+import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
 import { useLibraryItemUpdated } from '@/hooks/useLibraryItemUpdated'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
@@ -111,6 +112,7 @@ function applyUserUpdatedToShelves(
 export default function LibraryClient({ personalized, libraryItemCount: libraryItemCountProp }: LibraryClientProps) {
   const t = useTypeSafeTranslations()
   const [, startScanTransition] = useTransition()
+  const { showToast } = useGlobalToast()
   const { sizeMultiplier } = useCardSize()
   const { user, serverSettings, ereaderDevices, userIsAdminOrUp, getMediaItemProgress } = useUser()
   const { library, showSubtitles, updateSetting, setContextMenuItems, setContextMenuActionHandler, homeBookshelfView } = useLibrary()
@@ -345,14 +347,18 @@ export default function LibraryClient({ personalized, libraryItemCount: libraryI
       } else if (action === 'scan') {
         startScanTransition(async () => {
           try {
-            await requestScanLibrary(library.id)
+            const result = await requestScanLibrary(library.id)
+            if (!result.ok) {
+              showToast(result.error || t('ToastLibraryScanFailedToStart'), { type: 'error' })
+            }
           } catch (error) {
             console.error('Failed to start library scan', error)
+            showToast(t('ToastLibraryScanFailedToStart'), { type: 'error' })
           }
         })
       }
     },
-    [library.id, startScanTransition, updateSetting]
+    [library.id, showToast, startScanTransition, t, updateSetting]
   )
 
   useEffect(() => {

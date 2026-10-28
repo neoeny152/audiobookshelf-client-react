@@ -1,6 +1,7 @@
 'use client'
 
 import Btn from '@/components/ui/Btn'
+import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { Library } from '@/types/api'
@@ -13,6 +14,7 @@ export default function LibraryHomeEmptyClient() {
   const t = useTypeSafeTranslations()
   const router = useRouter()
   const { userIsAdminOrUp } = useUser()
+  const { showToast } = useGlobalToast()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
@@ -39,15 +41,20 @@ export default function LibraryHomeEmptyClient() {
             settings: formData.settings
           } as Library
 
-          const created = await createLibrary(payload)
+          const result = await createLibrary(payload)
+          if (!result.ok) {
+            showToast(result.error || t('ToastLibraryCreateFailed'), { type: 'error' })
+            return
+          }
           setIsModalOpen(false)
-          router.push(`/library/${created.id}`)
+          router.push(`/library/${result.data.id}`)
         } catch (error) {
           console.error('Failed to create library:', error)
+          showToast(t('ToastLibraryCreateFailed'), { type: 'error' })
         }
       })
     },
-    [router]
+    [router, showToast, t]
   )
 
   return (
