@@ -1,5 +1,6 @@
-import { batchGetLibraryItemsAction, getExpandedLibraryItemAction, getPodcastEpisodeAction } from '@/app/actions/mediaActions'
+import { batchGetLibraryItemsAction, getExpandedLibraryItemAction } from '@/app/actions/mediaActions'
 import type { PlayerQueueItem } from '@/contexts/MediaContext'
+import { fetchSelectedPodcasts } from '@/lib/batchSelection/selectionEpisodes'
 import { buildBookQueueItem, buildEpisodeQueueItem } from '@/lib/playerQueue'
 import type { SelectedMediaItem } from '@/lib/selectedMediaItem'
 import type { LibraryItem } from '@/types/api'
@@ -43,19 +44,17 @@ export async function buildSelectedBooksPlayPayload(
 }
 
 export async function buildSelectedEpisodesPlayPayload(selectedItems: readonly SelectedMediaItem[]): Promise<SelectionPlayPayload> {
-  const libraryItemCache = new Map<string, LibraryItem>()
+  const podcasts = await fetchSelectedPodcasts(selectedItems)
   const queueItems: PlayerQueueItem[] = []
 
   for (const selected of selectedItems) {
     if (!selected.episodeId) continue
 
-    let libraryItem = libraryItemCache.get(selected.libraryItemId)
-    if (!libraryItem) {
-      libraryItem = await getExpandedLibraryItemAction(selected.libraryItemId)
-      libraryItemCache.set(selected.libraryItemId, libraryItem)
-    }
+    const podcast = podcasts.get(selected.libraryItemId)
+    const episode = podcast?.episodesById.get(selected.episodeId)
+    if (!podcast || !episode) continue
 
-    const episode = await getPodcastEpisodeAction(selected.libraryItemId, selected.episodeId)
+    const { libraryItem } = podcast
     const podcastTitle = isPodcastMedia(libraryItem.media) ? (libraryItem.media.metadata?.title ?? '') : ''
     const queueItem = buildEpisodeQueueItem({
       libraryItem,
@@ -75,7 +74,7 @@ export async function buildSelectedEpisodesPlayPayload(selectedItems: readonly S
     throw new Error('No playable episodes in selection')
   }
 
-  const firstLibraryItem = libraryItemCache.get(firstSelected.libraryItemId) ?? (await getExpandedLibraryItemAction(firstSelected.libraryItemId))
+  const firstLibraryItem = podcasts.get(firstSelected.libraryItemId)?.libraryItem ?? (await getExpandedLibraryItemAction(firstSelected.libraryItemId))
 
   return {
     libraryItem: firstLibraryItem,

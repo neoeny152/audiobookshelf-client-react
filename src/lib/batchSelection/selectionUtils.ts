@@ -1,5 +1,6 @@
 import { batchDeleteLibraryItemsAction, batchEmbedMetadataAction, batchScanLibraryItemsAction } from '@/app/actions/batchActions'
-import { batchUpdateMediaFinishedAction, deleteLibraryItemMediaEpisodeAction, getPodcastEpisodeAction } from '@/app/actions/mediaActions'
+import { batchUpdateMediaFinishedAction, deleteLibraryItemMediaEpisodeAction } from '@/app/actions/mediaActions'
+import { fetchSelectedPodcasts } from '@/lib/batchSelection/selectionEpisodes'
 import { downloadLibraryItemFile, downloadLibraryItems } from '@/lib/download'
 import type { SelectedMediaItem } from '@/lib/selectedMediaItem'
 
@@ -25,10 +26,11 @@ export async function deleteEpisodesSelection(selectedItems: readonly SelectedMe
 }
 
 export async function downloadEpisodesSelection(selectedItems: readonly SelectedMediaItem[]) {
+  const podcasts = await fetchSelectedPodcasts(selectedItems)
   for (const item of selectedItems) {
     if (!item.episodeId) continue
-    const episode = await getPodcastEpisodeAction(item.libraryItemId, item.episodeId)
-    if (!episode.audioFile) continue
+    const episode = podcasts.get(item.libraryItemId)?.episodesById.get(item.episodeId)
+    if (!episode?.audioFile) continue
     downloadLibraryItemFile(item.libraryItemId, episode.audioFile.ino, episode.audioFile.metadata?.filename)
   }
 }
