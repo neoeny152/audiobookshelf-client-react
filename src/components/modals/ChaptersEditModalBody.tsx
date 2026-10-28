@@ -126,6 +126,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     handleSnapToAudio,
     handleSnapRetry,
     handleApplySnap,
+    handleApplySnapTitles,
     setConfirmState,
     handleSave,
     handleAddChapterFromInput,
@@ -244,6 +245,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
                 onSnap={handleSnapToAudio}
                 onRetry={handleSnapRetry}
                 onApply={handleApplySnap}
+                onApplyTitles={handleApplySnapTitles}
                 preview={preview}
                 speechCheckAvailable={speechCheckAvailable}
               />

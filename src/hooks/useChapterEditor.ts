@@ -11,6 +11,7 @@ import { callStatusAction } from '@/lib/actionResult'
 import {
   applyChapterTitleDrafts,
   applySnapProposals,
+  applySnapTitles,
   buildBulkChapters,
   buildChapterDirtyBaseline,
   buildIdenticalChapters,
@@ -34,7 +35,8 @@ import {
   updateChapterTitle,
   validateChapters,
   type EditableChapter,
-  type ChapterMatchDebug
+  type ChapterMatchDebug,
+  type SnapTitlePick
 } from '@/lib/chapters/chapterEditorUtils'
 import { SHOW_CHAPTER_MATCH_DEBUG } from '@/lib/chapters/chapterMatching'
 import {
@@ -464,6 +466,29 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
     [mediaDuration, runValidation, showToast, t]
   )
 
+  /** Write titles heard by the snap speech check into the editor as unsaved changes (titles only). Returns the applied clientKeys. */
+  const handleApplySnapTitles = useCallback(
+    (picks: SnapTitlePick[]): string[] => {
+      blurActiveChapterEditorField()
+      const chapters = applyChapterTitleDrafts(newChaptersRef.current, titleDraftsRef.current)
+      const result = applySnapTitles(chapters, picks)
+      if (result.applied.length > 0) {
+        const applied = new Set(result.applied)
+        for (const chapter of result.chapters) {
+          if (chapter.clientKey && applied.has(chapter.clientKey)) titleDraftsRef.current.delete(chapter.id)
+        }
+        runValidation(result.chapters)
+      }
+      if (result.skipped > 0) {
+        showToast(t('ToastSnapTitlesAppliedSomeSkipped', { count: result.applied.length, skipped: result.skipped }), { type: 'warning' })
+      } else if (result.applied.length > 0) {
+        showToast(t('ToastSnapTitlesApplied', { count: result.applied.length }), { type: 'success' })
+      }
+      return result.applied
+    },
+    [runValidation, showToast, t]
+  )
+
   const setBulkChapterCount = useCallback((count: number) => {
     setBulkChapterCountState(clampBulkChapterCount(count))
   }, [])
@@ -583,6 +608,7 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
     handleSnapToAudio,
     handleSnapRetry,
     handleApplySnap,
+    handleApplySnapTitles,
     setConfirmState,
     handleSave,
     handleAddChapterFromInput,

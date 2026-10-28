@@ -7,11 +7,13 @@ import IconBtn from '@/components/ui/IconBtn'
 import TextInput from '@/components/ui/TextInput'
 import Tooltip from '@/components/ui/Tooltip'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import type { SnapTitlePick } from '@/lib/chapters/chapterEditorUtils'
 import {
   buildSnapRows,
   clampSnapOption,
   formatSnapStart,
   getDefaultSnapChecked,
+  getSnapHeardTitle,
   getSnapRetryIndexes,
   getSnapSpeechStatus,
   getSnapSpeechWarnings,
@@ -22,7 +24,8 @@ import {
   type SnapRequestOptions,
   type SnapRow,
   type SnapSession,
-  type SnapSpeechStatus
+  type SnapSpeechStatus,
+  withSnapTitles
 } from '@/lib/chapters/chapterSnap'
 import { mergeClasses } from '@/lib/merge-classes'
 import type { TypeSafeTranslations } from '@/types/translations'
@@ -49,6 +52,11 @@ export interface SnapToAudioPanelProps {
   onRetry: (session: SnapSession) => Promise<SnapSession | null>
   /** Write the given rows' new starts into the editor as unsaved changes. Returns how many were applied. */
   onApply: (rows: SnapRow[]) => number
+  /**
+   * Write titles the speech check heard into the editor as unsaved changes (titles only). Returns the clientKeys that
+   * were applied. Without it the panel does not offer heard titles.
+   */
+  onApplyTitles?: (picks: SnapTitlePick[]) => string[]
   preview?: SnapPreviewControls
   /** The server advertises the speech check (`chapterbotVerify`); shows the Check speech toggle. */
   speechCheckAvailable?: boolean
@@ -202,6 +210,7 @@ export default function SnapToAudioPanel({
   onSnap,
   onRetry,
   onApply,
+  onApplyTitles,
   preview,
   speechCheckAvailable = false
 }: SnapToAudioPanelProps) {
@@ -217,15 +226,33 @@ export default function SnapToAudioPanel({
   const [checkSpeech, setCheckSpeech] = useState(false)
   const [runningWithSpeech, setRunningWithSpeech] = useState(false)
   const [expandedSpeech, setExpandedSpeech] = useState<Set<number>>(() => new Set())
+  /** Rows whose heard title was applied in this session; they stay listed after the offer goes away. */
+  const [retitled, setRetitled] = useState<Set<number>>(() => new Set())
 
   const rows = useMemo(() => (session ? buildSnapRows(session) : []), [session])
   const changedRows = useMemo(() => rows.filter((row) => row.changed), [rows])
-  const visibleRows = showUnchanged ? rows : changedRows
+  const showSpeech = !!session && snapSessionCheckedSpeech(session)
+  /** Heard titles worth offering, by row index (only when the speech check ran and the editor can take them). */
+  const heardTitles = useMemo(() => {
+    const titles = new Map<number, string>()
+    if (!showSpeech || !onApplyTitles) return titles
+    for (const row of rows) {
+      const heard = getSnapHeardTitle(row)
+      if (heard) titles.set(row.index, heard)
+    }
+    return titles
+  }, [onApplyTitles, rows, showSpeech])
+  /** Rows a checkbox can pick: ones that would move, and ones with a heard title to use. */
+  const selectableRows = useMemo(() => rows.filter((row) => row.changed || heardTitles.has(row.index)), [heardTitles, rows])
+  const visibleRows = useMemo(
+    () => (showUnchanged ? rows : rows.filter((row) => row.changed || heardTitles.has(row.index) || retitled.has(row.index))),
+    [heardTitles, retitled, rows, showUnchanged]
+  )
+  const checkedHeardRows = rows.filter((row) => heardTitles.has(row.index) && checked.has(row.index))
   const retryCount = useMemo(() => (session ? getSnapRetryIndexes(session.response).length : 0), [session])
   const failedCount = useMemo(() => rows.filter((row) => row.reason === 'analysis-failed').length, [rows])
   const checkedChangedCount = changedRows.filter((row) => checked.has(row.index)).length
   const controlsDisabled = disabled || isRunning
-  const showSpeech = !!session && snapSessionCheckedSpeech(session)
   const speechWarnings = useMemo(() => (session ? getSnapSpeechWarnings(session.response) : []), [session])
   const flaggedCount = useMemo(() => changedRows.filter((row) => isSnapSpeechFlagged(row.speech)).length, [changedRows])
   const columnCount = showSpeech ? 8 : 7
@@ -241,6 +268,7 @@ export default function SnapToAudioPanel({
     setSession(next)
     setChecked(getDefaultSnapChecked(buildSnapRows(next)))
     setExpandedSpeech(new Set())
+    setRetitled(new Set())
   }, [])
 
   const handleSnap = useCallback(async () => {
@@ -292,13 +320,33 @@ export default function SnapToAudioPanel({
     onApply(picked)
     setSession(null)
     setChecked(new Set())
+    setRetitled(new Set())
   }, [changedRows, checked, onApply, stopSnapPreview])
 
   const handleClose = useCallback(() => {
     stopSnapPreview()
     setSession(null)
     setChecked(new Set())
+    setRetitled(new Set())
   }, [stopSnapPreview])
+
+  /** Use the heard titles of these rows as chapter titles (unsaved); the proposal stays open with the new titles. */
+  const applyHeardTitles = useCallback(
+    (targets: SnapRow[]) => {
+      if (!onApplyTitles || !session) return
+      const picks = targets.flatMap((row) => {
+        const heard = heardTitles.get(row.index)
+        return heard ? [{ clientKey: row.clientKey, fromTitle: row.title, toTitle: heard }] : []
+      })
+      if (!picks.length) return
+      const applied = new Set(onApplyTitles(picks))
+      if (!applied.size) return
+      const titles = new Map(picks.filter((pick) => applied.has(pick.clientKey)).map((pick) => [pick.clientKey, pick.toTitle]))
+      setSession(withSnapTitles(session, titles))
+      setRetitled((prev) => new Set([...prev, ...targets.filter((row) => applied.has(row.clientKey)).map((row) => row.index)]))
+    },
+    [heardTitles, onApplyTitles, session]
+  )
 
   const toggleSpeech = useCallback((index: number) => {
     setExpandedSpeech((prev) => {
@@ -318,14 +366,15 @@ export default function SnapToAudioPanel({
     })
   }, [])
 
-  const toggleAllChanged = useCallback(
+  const toggleAllSelectable = useCallback(
     (value: boolean) => {
-      setChecked(value ? new Set(changedRows.map((row) => row.index)) : new Set())
+      setChecked(value ? new Set(selectableRows.map((row) => row.index)) : new Set())
     },
-    [changedRows]
+    [selectableRows]
   )
 
-  const allChangedChecked = changedRows.length > 0 && checkedChangedCount === changedRows.length
+  const checkedSelectableCount = selectableRows.filter((row) => checked.has(row.index)).length
+  const allSelectableChecked = selectableRows.length > 0 && checkedSelectableCount === selectableRows.length
 
   return (
     <div className="w-full min-w-0" cy-id="snap-to-audio-panel" aria-busy={isRunning || undefined}>
@@ -423,12 +472,12 @@ export default function SnapToAudioPanel({
                   <tr className="border-border text-foreground-muted border-b text-start text-xs">
                     <th className="w-10 px-3 py-1.5">
                       <Checkbox
-                        value={allChangedChecked}
-                        partial={checkedChangedCount > 0 && !allChangedChecked}
+                        value={allSelectableChecked}
+                        partial={checkedSelectableCount > 0 && !allSelectableChecked}
                         size="small"
                         ariaLabel={t('LabelSnapSelectAllChanges')}
-                        disabled={changedRows.length === 0}
-                        onChange={toggleAllChanged}
+                        disabled={selectableRows.length === 0}
+                        onChange={toggleAllSelectable}
                       />
                     </th>
                     <th className="px-2 py-1.5 text-start font-normal">{t('LabelTitle')}</th>
@@ -450,6 +499,8 @@ export default function SnapToAudioPanel({
                     const speechFlagged = isSnapSpeechFlagged(row.speech)
                     const speechExpanded = !!row.speech && expandedSpeech.has(row.index)
                     const transcriptId = `${speechIdPrefix}-speech-${row.index}`
+                    const heardTitle = heardTitles.get(row.index)
+                    const selectable = row.changed || !!heardTitle
                     return (
                       <Fragment key={row.clientKey}>
                         <tr
@@ -465,14 +516,14 @@ export default function SnapToAudioPanel({
                         >
                           <td className="px-3 py-1">
                             <Checkbox
-                              value={row.changed && checked.has(row.index)}
+                              value={selectable && checked.has(row.index)}
                               size="small"
                               ariaLabel={row.title || t('LabelTitle')}
-                              disabled={!row.changed}
+                              disabled={!selectable}
                               onChange={(value) => toggleRow(row.index, value)}
                             />
                           </td>
-                          <td className="max-w-48 truncate px-2 py-1" title={row.title}>
+                          <td className="max-w-48 truncate px-2 py-1" title={row.title} cy-id="snap-row-title">
                             {row.title}
                           </td>
                           <td className="px-2 py-1 font-mono whitespace-nowrap">
@@ -520,6 +571,22 @@ export default function SnapToAudioPanel({
                                   <span className="text-foreground-muted">{t('LabelSnapSpeechNotChecked')}</span>
                                 </Tooltip>
                               )}
+                              {heardTitle && (
+                                <div className="flex items-center gap-2" cy-id="snap-heard-title">
+                                  <Tooltip lazy text={t('MessageSnapSpeechHeardTitle', { heard: heardTitle, title: row.title })} position="left">
+                                    <span className="text-foreground max-w-40 truncate text-xs">{t('LabelSnapSpeechHeard', { title: heardTitle })}</span>
+                                  </Tooltip>
+                                  <button
+                                    type="button"
+                                    className="text-primary text-xs hover:underline disabled:opacity-50"
+                                    disabled={controlsDisabled}
+                                    cy-id="snap-use-heard-title"
+                                    onClick={() => applyHeardTitles([row])}
+                                  >
+                                    {t('ButtonSnapUseHeardTitle')}
+                                  </button>
+                                </div>
+                              )}
                             </td>
                           )}
                           <td className="px-2 py-0.5">
@@ -556,6 +623,11 @@ export default function SnapToAudioPanel({
           )}
 
           <div className="border-border flex flex-wrap justify-end gap-2 border-t px-3 py-2">
+            {heardTitles.size > 0 && (
+              <Btn size="small" disabled={controlsDisabled || checkedHeardRows.length === 0} onClick={() => applyHeardTitles(checkedHeardRows)}>
+                {t('ButtonSnapUseHeardTitles', { count: checkedHeardRows.length })}
+              </Btn>
+            )}
             <Btn size="small" disabled={isRunning} onClick={handleClose}>
               {t('ButtonClose')}
             </Btn>

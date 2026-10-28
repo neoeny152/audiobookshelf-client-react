@@ -1,4 +1,5 @@
 import SnapToAudioPanel, { type SnapToAudioPanelProps } from '@/components/widgets/chapters-edit/SnapToAudioPanel'
+import type { SnapTitlePick } from '@/lib/chapters/chapterEditorUtils'
 import { SNAP_DEFAULT_OPTIONS, type SnapRow, type SnapSession } from '@/lib/chapters/chapterSnap'
 import type { SnapChapterProposal, SnapChapterSpeech, SnapChaptersResponse } from '@/types/api'
 
@@ -377,5 +378,124 @@ describe('<SnapToAudioPanel /> speech check', () => {
     cy.contains('button', 'Snap to audio').click()
     cy.get('[cy-id="snap-speech-warning"]').should('have.length', 1).and('contain.text', warning)
     cy.get('[cy-id="snap-speech-notes"]').should('not.contain.text', 'developer note')
+  })
+})
+
+describe('<SnapToAudioPanel /> heard titles', () => {
+  const speech = (partial: Partial<SnapChapterSpeech>): SnapChapterSpeech => ({
+    before: 'and the door slammed behind her',
+    after: "Chapter 3 The rain didn't let up all night",
+    heading: false,
+    late: false,
+    early: false,
+    ...partial
+  })
+
+  /** QA: file-style titles, while the narrator reads out chapter numbers. */
+  function heardSession(heard: Partial<Record<number, string | null>> = { 1: 'Chapter 2', 2: 'Chapter 3', 3: 'Chapter 4' }): SnapSession {
+    const session = makeSession([
+      proposal({ index: 0, reason: 'first-chapter', confidence: 'high' }),
+      proposal({ index: 1, proposedStart: 96.75, reason: 'heading-lookback', confidence: 'high', pause: pause(95, 97), speech: speech({ heard: heard[1] }) }),
+      // start stays put, but the narrator says a different heading
+      proposal({ index: 2, reason: 'inside-pause', confidence: 'high', pause: pause(199, 201), speech: speech({ heard: heard[2] }) }),
+      // the title's own heading was heard: nothing to offer
+      proposal({
+        index: 3,
+        proposedStart: 295,
+        reason: 'nearest-longest-pause',
+        confidence: 'medium',
+        pause: pause(294, 295.3),
+        speech: speech({ heading: true, heard: heard[3] })
+      })
+    ])
+    session.snapshot = session.snapshot.map((chapter, i) => ({ ...chapter, title: i === 3 ? 'Chapter Four' : `Black Ice - Part 0${i + 1}` }))
+    session.options = { ...session.options, verify: true }
+    session.response.options = { ...session.response.options, verify: true }
+    return session
+  }
+
+  function mountHeard(session = heardSession(), applyTitles?: (picks: SnapTitlePick[]) => string[]) {
+    mountPanel({
+      speechCheckAvailable: true,
+      onSnap: cy.stub().resolves(session),
+      onApplyTitles: cy
+        .stub()
+        .as('onApplyTitles')
+        .callsFake(applyTitles ?? ((picks: SnapTitlePick[]) => picks.map((pick) => pick.clientKey)))
+    })
+    cy.contains('button', 'Snap to audio').click()
+  }
+
+  it('shows the heard title with a per-row action when it differs from the title', () => {
+    mountHeard()
+    // the unchanged row is listed because it has a heard title to offer
+    cy.get('[cy-id="snap-row"]').should('have.length', 3)
+    cy.get('[cy-id="snap-row"]').eq(0).find('[cy-id="snap-heard-title"]').should('contain.text', 'Heard: Chapter 2').and('contain.text', 'Use heard title')
+    cy.get('[cy-id="snap-row"]').eq(1).should('have.attr', 'data-index', '2').find('[cy-id="snap-heard-title"]').should('contain.text', 'Heard: Chapter 3')
+    cy.get('[cy-id="snap-row"]').eq(1).find('[cy-id="snap-speech"]').should('contain.text', 'Heading not heard')
+    cy.get('[cy-id="snap-row"]').eq(2).find('[cy-id="snap-heard-title"]').should('not.exist')
+    // the unchanged row can be checked for the bulk action but is not pre-checked
+    cy.get('[cy-id="snap-row"]').eq(1).find('input[type="checkbox"]').should('not.be.disabled').and('not.be.checked')
+  })
+
+  it('uses the heard title for one row without touching the starts', () => {
+    mountHeard()
+    cy.get('[cy-id="snap-row"]').eq(1).find('[cy-id="snap-use-heard-title"]').click()
+    cy.get('@onApplyTitles').should('have.been.calledOnceWith', [{ clientKey: 'ch-2', fromTitle: 'Black Ice - Part 03', toTitle: 'Chapter 3' }])
+    cy.get('@onApply').should('not.have.been.called')
+    // the row stays listed with its new title and no offer; the proposal stays open
+    cy.get('[cy-id="snap-row"]').should('have.length', 3)
+    cy.get('[cy-id="snap-row"]').eq(1).find('[cy-id="snap-row-title"]').should('have.text', 'Chapter 3')
+    cy.get('[cy-id="snap-row"]').eq(1).find('[cy-id="snap-heard-title"]').should('not.exist')
+    cy.get('[cy-id="snap-row"]').eq(0).find('[cy-id="snap-heard-title"]').should('exist')
+    cy.contains('button', 'Apply 2 changes').should('exist')
+  })
+
+  it('uses the heard titles for the checked rows', () => {
+    mountHeard()
+    // only the pre-checked moved row has a heard title so far
+    cy.contains('button', 'Use heard title for 1 checked row').should('not.be.disabled')
+    cy.get('[cy-id="snap-row"]').eq(1).find('input[type="checkbox"]').click()
+    cy.contains('button', 'Use heard titles for 2 checked rows').click()
+    cy.get('@onApplyTitles').should('have.been.calledOnceWith', [
+      { clientKey: 'ch-1', fromTitle: 'Black Ice - Part 02', toTitle: 'Chapter 2' },
+      { clientKey: 'ch-2', fromTitle: 'Black Ice - Part 03', toTitle: 'Chapter 3' }
+    ])
+    cy.get('[cy-id="snap-row-title"]').then(($titles) => {
+      expect([...$titles].map((el) => el.textContent)).to.deep.equal(['Chapter 2', 'Chapter 3', 'Chapter Four'])
+    })
+    cy.get('[cy-id="snap-heard-title"]').should('not.exist')
+    cy.contains('button', /Use heard title/).should('not.exist')
+    // the start changes are still there to apply
+    cy.contains('button', 'Apply 2 changes').click()
+    cy.get('@onApply').should('have.been.calledOnce')
+  })
+
+  it('disables the bulk action when no checked row has a heard title', () => {
+    mountHeard()
+    cy.get('[cy-id="snap-row"]').eq(0).find('input[type="checkbox"]').click()
+    cy.contains('button', 'Use heard titles for checked rows').should('be.disabled')
+  })
+
+  it('keeps the offer when the editor skipped the title', () => {
+    mountHeard(heardSession(), () => [])
+    cy.get('[cy-id="snap-row"]').eq(0).find('[cy-id="snap-use-heard-title"]').click()
+    cy.get('@onApplyTitles').should('have.been.calledOnce')
+    cy.get('[cy-id="snap-row"]').eq(0).find('[cy-id="snap-row-title"]').should('have.text', 'Black Ice - Part 02')
+    cy.get('[cy-id="snap-row"]').eq(0).find('[cy-id="snap-heard-title"]').should('exist')
+  })
+
+  it('offers nothing when the server sends no heard title (stock or older servers)', () => {
+    mountHeard(heardSession({}))
+    cy.get('[cy-id="snap-row"]').should('have.length', 2)
+    cy.get('[cy-id="snap-heard-title"]').should('not.exist')
+    cy.contains('button', /Use heard title/).should('not.exist')
+  })
+
+  it('offers nothing without an editor to take the titles', () => {
+    mountPanel({ speechCheckAvailable: true, onSnap: cy.stub().resolves(heardSession()) })
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('[cy-id="snap-row"]').should('have.length', 2)
+    cy.get('[cy-id="snap-heard-title"]').should('not.exist')
   })
 })
