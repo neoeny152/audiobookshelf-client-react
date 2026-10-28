@@ -31,11 +31,13 @@ interface AddToPlaylistModalProps {
   selectionKind?: SelectionKind
 }
 
+function playlistItemKey(libraryItemId: string, episodeId?: string | null) {
+  return `${libraryItemId}:${episodeId ?? ''}`
+}
+
 function playlistIncludesAllItems(playlist: Playlist, items: readonly PlaylistItemPayload[]) {
-  const playlistItems = playlist.items ?? []
-  return items.every((item) =>
-    playlistItems.some((playlistItem) => playlistItem.libraryItemId === item.libraryItemId && (playlistItem.episodeId ?? null) === (item.episodeId ?? null))
-  )
+  const playlistItemKeys = new Set((playlist.items ?? []).map((playlistItem) => playlistItemKey(playlistItem.libraryItemId, playlistItem.episodeId)))
+  return items.every((item) => playlistItemKeys.has(playlistItemKey(item.libraryItemId, item.episodeId)))
 }
 
 export default function AddToPlaylistModal({ isOpen, onClose, libraryId, items, headerTitle, selectionKind }: AddToPlaylistModalProps) {
