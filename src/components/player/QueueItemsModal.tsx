@@ -242,8 +242,8 @@ export default function QueueItemsModal({ isOpen, zIndexClass, onClose }: QueueI
         return 'border-0 bg-warning/10'
       }
 
-      const stripeBg = index % 2 === 0 ? 'bg-white/5' : 'bg-bg'
-      return mergeClasses('border-0 hover:bg-white/10 focus-within:bg-white/10', stripeBg)
+      const stripeBg = index % 2 === 0 ? 'bg-row-stripe' : 'bg-bg'
+      return mergeClasses('border-0 hover:bg-row-hover focus-within:bg-row-hover', stripeBg)
     },
     [isStreaming]
   )

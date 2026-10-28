@@ -161,6 +161,13 @@ describe('<Checkbox />', () => {
       cy.get('[cy-id="checkbox-wrapper"]').should('have.class', 'border-border')
     })
 
+    it('uses the success theme token for the default check color', () => {
+      cy.mount(<Checkbox value={true} />)
+      cy.get('svg').should('have.class', 'text-success')
+      cy.get('svg').should('not.have.class', 'text-green-500')
+      cy.get('svg').should('have.css', 'color', 'rgb(76, 175, 80)')
+    })
+
     it('applies custom check color', () => {
       cy.mount(<Checkbox value={true} checkColorClass="text-blue-500" />)
       cy.get('svg').should('have.class', 'text-blue-500')

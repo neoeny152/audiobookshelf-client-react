@@ -98,6 +98,8 @@
   --color-table-header-bg: var(--tc-table-header-bg);
   --color-table-row-bg-even: var(--tc-table-row-bg-even);
   --color-table-row-bg-hover: var(--tc-table-row-bg-hover);
+  --color-row-stripe: var(--tc-row-stripe);
+  --color-row-hover: var(--tc-row-hover);
 
   --font-sans: 'Source Sans Pro';
   --font-mono: 'Ubuntu Mono';

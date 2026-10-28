@@ -22,7 +22,7 @@ export default function Checkbox({
   value = false,
   label,
   size = 'medium',
-  checkColorClass = 'text-green-500',
+  checkColorClass = 'text-success',
   labelClass = '',
   disabled = false,
   partial = false,

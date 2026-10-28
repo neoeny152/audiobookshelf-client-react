@@ -37,6 +37,10 @@
   --tc-table-row-bg-even: #353535;
   --tc-table-row-bg-hover: #ffffff0b;
 
+  /* Striped list rows that are not DataTable rows (e.g. the player queue) */
+  --tc-row-stripe: #ffffff0d;
+  --tc-row-hover: #ffffff1a;
+
   --tc-page-gradient: linear-gradient(
     to right bottom,
     #2e2e2e,
@@ -121,6 +125,10 @@
   --tc-table-row-bg-even: #f3f3f3;
   --tc-table-row-bg-hover: #0000000d;
 
+  /* Striped list rows that are not DataTable rows (e.g. the player queue) */
+  --tc-row-stripe: #0000000a;
+  --tc-row-hover: #00000014;
+
   --tc-page-gradient: linear-gradient(
     to right bottom,
     #f5f5f5,
@@ -190,6 +198,10 @@
   --tc-table-header-bg: #0f0f0f;
   --tc-table-row-bg-even: #0d0d0d;
   --tc-table-row-bg-hover: #ffffff12;
+
+  /* Striped list rows that are not DataTable rows (e.g. the player queue) */
+  --tc-row-stripe: #ffffff0d;
+  --tc-row-hover: #ffffff1a;
 
   --tc-page-gradient: linear-gradient(
     to right bottom,
