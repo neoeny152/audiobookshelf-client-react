@@ -2,6 +2,7 @@
 
 import { DetailsEditRef, UpdatePayload, useDetailsEdit } from '@/hooks/useDetailsEdit'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import { mergeClasses } from '@/lib/merge-classes'
 import { Author, BookLibraryItem, BookMetadata, Series } from '@/types/api'
 import React, { useCallback, useMemo } from 'react'
 import Checkbox from '../ui/Checkbox'
@@ -85,7 +86,9 @@ const BookDetailsEdit = ({
     updateField: handleFieldUpdate,
     updateTags,
     submitForm,
-    initialDetails
+    initialDetails,
+    dirtyFields,
+    tagsDirty
   } = useDetailsEdit<Details>({
     metadata: editMetadata,
     tags: editTags,
@@ -97,6 +100,8 @@ const BookDetailsEdit = ({
     batchAppendLogic,
     trimFields: BOOK_TEXT_TRIM_FIELDS
   })
+
+  const dirtyClass = useCallback((field: keyof Details) => (dirtyFields.has(field) ? 'text-info' : undefined), [dirtyFields])
 
   const authorItems = useMemo(() => details.authors.map((a) => ({ value: a.id, content: a.name })), [details.authors])
   const handleAddAuthor = useCallback(
@@ -213,10 +218,22 @@ const BookDetailsEdit = ({
       >
         <div className="-mx-1 flex flex-wrap">
           <div className="w-full px-1 md:w-1/2">
-            <TextInput value={details.title || ''} onChange={handleFieldUpdate('title')} label={t('LabelTitle')} trimWhitespace />
+            <TextInput
+              value={details.title || ''}
+              onChange={handleFieldUpdate('title')}
+              customInputClass={dirtyClass('title')}
+              label={t('LabelTitle')}
+              trimWhitespace
+            />
           </div>
           <div className="mt-2 grow px-1 md:mt-0">
-            <TextInput value={details.subtitle || ''} onChange={handleFieldUpdate('subtitle')} label={t('LabelSubtitle')} trimWhitespace />
+            <TextInput
+              value={details.subtitle || ''}
+              onChange={handleFieldUpdate('subtitle')}
+              customInputClass={dirtyClass('subtitle')}
+              label={t('LabelSubtitle')}
+              trimWhitespace
+            />
           </div>
         </div>
 
@@ -229,10 +246,17 @@ const BookDetailsEdit = ({
               label={t('LabelAuthors')}
               items={availableAuthors}
               allowNew
+              dirty={dirtyFields.has('authors')}
             />
           </div>
           <div className="mt-2 grow px-1 md:mt-0 md:w-28">
-            <TextInput value={details.publishedYear || ''} onChange={handleFieldUpdate('publishedYear')} type="number" label={t('LabelPublishYear')} />
+            <TextInput
+              value={details.publishedYear || ''}
+              onChange={handleFieldUpdate('publishedYear')}
+              type="number"
+              label={t('LabelPublishYear')}
+              customInputClass={dirtyClass('publishedYear')}
+            />
           </div>
         </div>
 
@@ -245,11 +269,18 @@ const BookDetailsEdit = ({
               onItemAdded={handleAddSeries}
               onItemRemoved={handleRemoveSeries}
               onItemEdited={handleEditSeries}
+              dirty={dirtyFields.has('series')}
             />
           </div>
         </div>
 
-        <SlateEditor srcContent={initialDetails.description || ''} onUpdate={handleFieldUpdate('description')} label={t('LabelDescription')} className="mt-2" />
+        <SlateEditor
+          srcContent={initialDetails.description || ''}
+          onUpdate={handleFieldUpdate('description')}
+          label={t('LabelDescription')}
+          className="mt-2"
+          dirty={dirtyFields.has('description')}
+        />
 
         <div className="-mx-1 mt-2 flex flex-wrap">
           <div className="w-full px-1 md:w-1/2">
@@ -260,6 +291,7 @@ const BookDetailsEdit = ({
               label={t('LabelGenres')}
               items={availableGenres}
               allowNew
+              dirty={dirtyFields.has('genres')}
             />
           </div>
           <div className="mt-2 grow px-1 md:mt-0">
@@ -270,6 +302,7 @@ const BookDetailsEdit = ({
               label={t('LabelTags')}
               items={availableTags}
               allowNew
+              dirty={tagsDirty}
             />
           </div>
         </div>
@@ -283,12 +316,14 @@ const BookDetailsEdit = ({
               label={t('LabelNarrators')}
               items={availableNarrators}
               allowNew
+              dirty={dirtyFields.has('narrators')}
             />
           </div>
           <div className="mt-2 w-1/2 px-1 md:mt-0 md:w-1/4">
             <TextInput
               value={details.isbn || ''}
               onChange={handleFieldUpdate('isbn')}
+              customInputClass={dirtyClass('isbn')}
               label="ISBN" // i18n-ignore
               trimWhitespace
             />
@@ -297,6 +332,7 @@ const BookDetailsEdit = ({
             <TextInput
               value={details.asin || ''}
               onChange={handleFieldUpdate('asin')}
+              customInputClass={dirtyClass('asin')}
               label="ASIN" // i18n-ignore
               trimWhitespace
             />
@@ -305,10 +341,22 @@ const BookDetailsEdit = ({
 
         <div className="-mx-1 mt-2 flex flex-wrap">
           <div className="w-full px-1 md:w-1/4">
-            <TextInput value={details.publisher || ''} onChange={handleFieldUpdate('publisher')} label={t('LabelPublisher')} trimWhitespace />
+            <TextInput
+              value={details.publisher || ''}
+              onChange={handleFieldUpdate('publisher')}
+              customInputClass={dirtyClass('publisher')}
+              label={t('LabelPublisher')}
+              trimWhitespace
+            />
           </div>
           <div className="mt-2 w-1/2 px-1 md:mt-0 md:w-1/4">
-            <TextInput value={details.language || ''} onChange={handleFieldUpdate('language')} label={t('LabelLanguage')} trimWhitespace />
+            <TextInput
+              value={details.language || ''}
+              onChange={handleFieldUpdate('language')}
+              customInputClass={dirtyClass('language')}
+              label={t('LabelLanguage')}
+              trimWhitespace
+            />
           </div>
           <div className="mt-2 flex w-full items-center gap-6 px-1 md:contents">
             <div className="flex h-10 flex-1 items-center md:mt-6 md:w-1/4 md:flex-none md:px-1">
@@ -316,7 +364,7 @@ const BookDetailsEdit = ({
                 value={details.explicit}
                 onChange={handleFieldUpdate('explicit')}
                 label={t('LabelExplicit')}
-                labelClass="ps-2 text-base font-semibold"
+                labelClass={mergeClasses('ps-2 text-base font-semibold', dirtyClass('explicit'))}
               />
             </div>
             <div className="flex h-10 flex-1 items-center md:mt-6 md:w-1/4 md:flex-none md:px-1">
@@ -324,7 +372,7 @@ const BookDetailsEdit = ({
                 value={details.abridged}
                 onChange={handleFieldUpdate('abridged')}
                 label={t('LabelAbridged')}
-                labelClass="ps-2 text-base font-semibold"
+                labelClass={mergeClasses('ps-2 text-base font-semibold', dirtyClass('abridged'))}
               />
             </div>
           </div>

@@ -135,7 +135,10 @@ export default function EpisodeDetailsEdit({ episode, onChange, onSubmit, ref }:
     return payload
   }, [details, initial])
 
-  const hasChanges = useMemo(() => Object.keys(getUpdatePayload()).length > 0, [getUpdatePayload])
+  /** Payload keys that differ from the initial values (per-field dirty styling). */
+  const dirtyFields = useMemo(() => new Set(Object.keys(getUpdatePayload())), [getUpdatePayload])
+  const hasChanges = dirtyFields.size > 0
+  const dirtyClass = (field: keyof EpisodeDetails) => (dirtyFields.has(field) ? 'text-info' : undefined)
 
   useEffect(() => {
     onChange?.({ episodeId: episode.id, hasChanges })
@@ -183,10 +186,22 @@ export default function EpisodeDetailsEdit({ episode, onChange, onSubmit, ref }:
     >
       <div className="-mx-1 flex flex-wrap">
         <div className="w-1/2 p-1 md:w-1/5">
-          <TextInput value={details.season} onChange={(v) => updateField('season', v)} label={t('LabelSeason')} trimWhitespace />
+          <TextInput
+            value={details.season}
+            onChange={(v) => updateField('season', v)}
+            customInputClass={dirtyClass('season')}
+            label={t('LabelSeason')}
+            trimWhitespace
+          />
         </div>
         <div className="w-1/2 p-1 md:w-1/5">
-          <TextInput value={details.episode} onChange={(v) => updateField('episode', v)} label={t('LabelEpisode')} trimWhitespace />
+          <TextInput
+            value={details.episode}
+            onChange={(v) => updateField('episode', v)}
+            customInputClass={dirtyClass('episode')}
+            label={t('LabelEpisode')}
+            trimWhitespace
+          />
         </div>
         <div className="mt-2 w-28 p-1 md:mt-0 md:w-1/5">
           <Dropdown
@@ -202,18 +217,30 @@ export default function EpisodeDetailsEdit({ episode, onChange, onSubmit, ref }:
             type="datetime-local"
             value={pubDateInput}
             onChange={handlePubDateChange}
+            customInputClass={dirtyClass('pubDate')}
             label={t('LabelPubDate')}
             error={pubDateInvalid || undefined}
           />
         </div>
         <div className="mt-2 w-full p-1">
-          <TextInput value={details.title} onChange={(v) => updateField('title', v)} label={t('LabelTitle')} trimWhitespace />
+          <TextInput
+            value={details.title}
+            onChange={(v) => updateField('title', v)}
+            customInputClass={dirtyClass('title')}
+            label={t('LabelTitle')}
+            trimWhitespace
+          />
         </div>
         <div className="mt-2 w-full p-1">
           <TextareaInput value={details.subtitle} onChange={(v) => updateField('subtitle', v)} label={t('LabelSubtitle')} rows={3} trimWhitespace />
         </div>
         <div className="mt-2 w-full p-1">
-          <SlateEditor srcContent={initial.description || ''} onUpdate={(v) => updateField('description', v)} label={t('LabelDescription')} />
+          <SlateEditor
+            srcContent={initial.description || ''}
+            onUpdate={(v) => updateField('description', v)}
+            label={t('LabelDescription')}
+            dirty={dirtyFields.has('description')}
+          />
         </div>
       </div>
 

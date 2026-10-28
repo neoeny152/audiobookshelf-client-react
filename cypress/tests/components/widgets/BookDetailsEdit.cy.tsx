@@ -73,4 +73,26 @@ describe('BookDetailsEdit', () => {
     cy.get('[cy-id="slate-editor"] [contenteditable="true"]').type('{backspace}')
     lastHasChanges().should('equal', false)
   })
+
+  it('highlights only the fields that differ from the saved values', () => {
+    mountBook('')
+    cy.get('input[aria-label="Title"]').as('title').should('not.have.class', 'text-info')
+    cy.get('input[aria-label="Subtitle"]').should('not.have.class', 'text-info')
+
+    cy.get('@title').type(' Two')
+    cy.get('@title').should('have.class', 'text-info')
+    cy.get('input[aria-label="Subtitle"]').should('not.have.class', 'text-info')
+    cy.get('[role="list"]').first().should('not.have.class', 'text-info')
+
+    cy.get('@title').clear().type('Book Title')
+    cy.get('@title').should('not.have.class', 'text-info')
+    lastHasChanges().should('equal', false)
+  })
+
+  it('highlights the authors list when an author is removed', () => {
+    mountBook('')
+    cy.get('[role="list"]').first().as('authors').should('not.have.class', 'text-info')
+    cy.get('@authors').find('[role="listitem"]').first().find('button[aria-label="Remove"]').click({ force: true })
+    cy.get('@authors').should('have.class', 'text-info')
+  })
 })

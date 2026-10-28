@@ -49,9 +49,10 @@ interface EditableProps {
   disabled: boolean
   readOnly: boolean
   placeholder?: string
+  dirty?: boolean
 }
 
-export const Editable = memo(({ editor, disabled, readOnly, placeholder }: EditableProps) => {
+export const Editable = memo(({ editor, disabled, readOnly, placeholder, dirty = false }: EditableProps) => {
   const { openModal } = useLinkModalContext()
   const editableRef = useRef<HTMLDivElement>(null)
   const [isMounted, setIsMounted] = useState(false)
@@ -206,11 +207,11 @@ export const Editable = memo(({ editor, disabled, readOnly, placeholder }: Edita
         'relative whitespace-pre-wrap wrap-break-word',
         'p-1 w-full h-26 min-h-26 resize-y overflow-y-auto overflow-x-hidden text-base focus:outline-none',
         // Apply disabled/readonly styling based on state
-        disabled ? 'text-disabled cursor-not-allowed pointer-events-none' : readOnly ? 'text-read-only' : 'text-foreground',
+        disabled ? 'text-disabled cursor-not-allowed pointer-events-none' : readOnly ? 'text-read-only' : dirty ? 'text-info' : 'text-foreground',
         // Element-specific styles using child selectors
         slateElementStyles
       ),
-    [disabled, readOnly]
+    [disabled, readOnly, dirty]
   )
 
   // Render a placeholder during SSR to prevent hydration mismatches

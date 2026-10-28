@@ -2,6 +2,7 @@
 
 import { DetailsEditRef, UpdatePayload, useDetailsEdit } from '@/hooks/useDetailsEdit'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import { mergeClasses } from '@/lib/merge-classes'
 import { PodcastLibraryItem, PodcastMetadata } from '@/types/api'
 import React, { useCallback, useMemo } from 'react'
 import Checkbox from '../ui/Checkbox'
@@ -55,7 +56,9 @@ const PodcastDetailsEdit = ({ libraryItem, availableGenres = [], availableTags =
     updateField: handleFieldUpdate,
     updateTags,
     submitForm,
-    initialDetails
+    initialDetails,
+    dirtyFields,
+    tagsDirty
   } = useDetailsEdit<Details>({
     metadata: editMetadata,
     tags: editTags,
@@ -67,6 +70,8 @@ const PodcastDetailsEdit = ({ libraryItem, availableGenres = [], availableTags =
     batchAppendLogic,
     trimFields: PODCAST_TEXT_TRIM_FIELDS
   })
+
+  const dirtyClass = useCallback((field: keyof Details) => (dirtyFields.has(field) ? 'text-info' : undefined), [dirtyFields])
 
   const podcastTypeItems = useMemo<DropdownItem[]>(
     () => [
@@ -122,22 +127,41 @@ const PodcastDetailsEdit = ({ libraryItem, availableGenres = [], availableTags =
       >
         <div className="-mx-1 flex flex-wrap">
           <div className="w-full px-1 md:w-1/2">
-            <TextInput value={details.title || ''} onChange={handleFieldUpdate('title') as (value: string) => void} label={t('LabelTitle')} trimWhitespace />
+            <TextInput
+              value={details.title || ''}
+              onChange={handleFieldUpdate('title') as (value: string) => void}
+              customInputClass={dirtyClass('title')}
+              label={t('LabelTitle')}
+              trimWhitespace
+            />
           </div>
           <div className="mt-2 grow px-1 md:mt-0">
-            <TextInput value={details.author || ''} onChange={handleFieldUpdate('author') as (value: string) => void} label={t('LabelAuthor')} trimWhitespace />
+            <TextInput
+              value={details.author || ''}
+              onChange={handleFieldUpdate('author') as (value: string) => void}
+              customInputClass={dirtyClass('author')}
+              label={t('LabelAuthor')}
+              trimWhitespace
+            />
           </div>
         </div>
 
         <TextInput
           value={details.feedUrl || ''}
           onChange={handleFieldUpdate('feedUrl') as (value: string) => void}
+          customInputClass={dirtyClass('feedUrl')}
           label={t('LabelRSSFeedURL')}
           className="mt-2"
           trimWhitespace
         />
 
-        <SlateEditor srcContent={initialDetails.description || ''} onUpdate={handleFieldUpdate('description')} label={t('LabelDescription')} className="mt-2" />
+        <SlateEditor
+          srcContent={initialDetails.description || ''}
+          onUpdate={handleFieldUpdate('description')}
+          label={t('LabelDescription')}
+          className="mt-2"
+          dirty={dirtyFields.has('description')}
+        />
 
         <div className="-mx-1 mt-2 flex flex-wrap">
           <div className="w-full px-1 md:w-1/2">
@@ -148,6 +172,7 @@ const PodcastDetailsEdit = ({ libraryItem, availableGenres = [], availableTags =
               label={t('LabelGenres')}
               items={availableGenres}
               allowNew
+              dirty={dirtyFields.has('genres')}
             />
           </div>
           <div className="mt-2 grow px-1 md:mt-0">
@@ -158,6 +183,7 @@ const PodcastDetailsEdit = ({ libraryItem, availableGenres = [], availableTags =
               label={t('LabelTags')}
               items={availableTags}
               allowNew
+              dirty={tagsDirty}
             />
           </div>
         </div>
@@ -167,6 +193,7 @@ const PodcastDetailsEdit = ({ libraryItem, availableGenres = [], availableTags =
             <TextInput
               value={details.releaseDate || ''}
               onChange={handleFieldUpdate('releaseDate') as (value: string) => void}
+              customInputClass={dirtyClass('releaseDate')}
               label={t('LabelReleaseDate')}
               trimWhitespace
             />
@@ -175,6 +202,7 @@ const PodcastDetailsEdit = ({ libraryItem, availableGenres = [], availableTags =
             <TextInput
               value={details.itunesId || ''}
               onChange={handleFieldUpdate('itunesId') as (value: string | number) => void}
+              customInputClass={dirtyClass('itunesId')}
               label={t('LabelItunesID')}
               trimWhitespace
             />
@@ -183,6 +211,7 @@ const PodcastDetailsEdit = ({ libraryItem, availableGenres = [], availableTags =
             <TextInput
               value={details.language || ''}
               onChange={handleFieldUpdate('language') as (value: string) => void}
+              customInputClass={dirtyClass('language')}
               label={t('LabelLanguage')}
               trimWhitespace
             />
@@ -193,7 +222,7 @@ const PodcastDetailsEdit = ({ libraryItem, availableGenres = [], availableTags =
                 value={details.explicit}
                 onChange={handleFieldUpdate('explicit')}
                 label={t('LabelExplicit')}
-                labelClass="ps-2 text-base font-semibold"
+                labelClass={mergeClasses('ps-2 text-base font-semibold', dirtyClass('explicit'))}
               />
             </div>
           </div>

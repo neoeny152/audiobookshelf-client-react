@@ -25,6 +25,8 @@ export interface MultiSelectProps<T = string> {
   allowNew?: boolean
   menuDisabled?: boolean
   editingPillIndex?: number | null
+  /** Highlight the selected items as changed from their saved value. */
+  dirty?: boolean
 
   // Pill content introspection callbacks
   getEditableText?: (content: T) => string
@@ -62,6 +64,7 @@ export function MultiSelect<T = string>({
   allowNew = true,
   menuDisabled = false,
   editingPillIndex: controlledEditingPillIndex,
+  dirty = false,
   getEditableText,
   getReadOnlyPrefix,
   getFullText,
@@ -577,7 +580,11 @@ export function MultiSelect<T = string>({
           <div
             ref={inputWrapperRef}
             role="list"
-            className={mergeClasses('relative flex w-full flex-wrap items-center py-1', disabled ? 'text-disabled cursor-not-allowed' : 'cursor-text')}
+            className={mergeClasses(
+              'relative flex w-full flex-wrap items-center py-1',
+              disabled ? 'text-disabled cursor-not-allowed' : 'cursor-text',
+              dirty && !disabled && 'text-info'
+            )}
             onClick={handleInputWrapperClick}
             onMouseDown={(e) => e.preventDefault()}
           >
