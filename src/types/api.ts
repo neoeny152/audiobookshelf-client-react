@@ -1578,6 +1578,13 @@ export interface TaskProgressPayload {
   progress: number
 }
 
+/** Socket payload for `batch_quickmatch_complete`, sent only to the user who started the match */
+export interface BatchQuickMatchCompletePayload {
+  success: boolean
+  updates: number
+  unmatched: number
+}
+
 export interface TasksResponse {
   tasks: Task[]
   queuedTaskData?: {

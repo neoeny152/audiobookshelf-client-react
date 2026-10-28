@@ -1,7 +1,17 @@
 'use client'
 
 import { getTasksAction } from '@/app/actions/toolsActions'
-import { MetadataEmbedQueueUpdate, Task, TaskProgressPayload, TrackFinishedPayload, TrackProgressPayload, TrackStartedPayload } from '@/types/api'
+import { useGlobalToast } from '@/contexts/ToastContext'
+import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import {
+  BatchQuickMatchCompletePayload,
+  MetadataEmbedQueueUpdate,
+  Task,
+  TaskProgressPayload,
+  TrackFinishedPayload,
+  TrackProgressPayload,
+  TrackStartedPayload
+} from '@/types/api'
 import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useSocketEvent } from './SocketContext'
 
@@ -30,6 +40,8 @@ interface TasksProviderProps {
 }
 
 export function TasksProvider({ children }: TasksProviderProps) {
+  const t = useTypeSafeTranslations()
+  const { showToast } = useGlobalToast()
   const [tasks, setTasks] = useState<Task[]>([])
   const [queuedEmbedLIds, setQueuedEmbedLIds] = useState<string[]>([])
   const [audioFilesEncoding, setAudioFilesEncoding] = useState<Record<string, Record<string, string>>>({})
@@ -218,6 +230,19 @@ export function TasksProvider({ children }: TasksProviderProps) {
       updateTaskProgressValue(data.libraryItemId, `${Math.round(data.progress)}%`)
     },
     [updateTaskProgressValue]
+  )
+
+  // Batch quick match runs after the request returns, so the result only arrives here
+  useSocketEvent<BatchQuickMatchCompletePayload>(
+    'batch_quickmatch_complete',
+    (data) => {
+      const message =
+        data.unmatched > 0
+          ? t('ToastBatchQuickMatchCompleteUnmatched', { 0: data.updates, 1: data.unmatched })
+          : t('ToastBatchQuickMatchComplete', { 0: data.updates })
+      showToast(message, { type: data.success ? 'success' : 'info' })
+    },
+    [showToast, t]
   )
 
   const value = useMemo(

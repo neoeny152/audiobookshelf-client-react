@@ -1199,6 +1199,8 @@
   "ToastBatchDeleteFailed": "Batch delete failed",
   "ToastBatchDeleteSuccess": "Batch delete success",
   "ToastBatchDownloadSuccess": "Download started",
+  "ToastBatchQuickMatchComplete": "Batch Quick Match complete! {0} updated",
+  "ToastBatchQuickMatchCompleteUnmatched": "Batch Quick Match complete! {0} updated, {1} with no matches",
   "ToastBatchQuickMatchFailed": "Batch Quick Match failed!",
   "ToastBatchQuickMatchStarted": "Batch Quick Match of {0} books started!",
   "ToastBatchRescanStarted": "Re-scan started",
