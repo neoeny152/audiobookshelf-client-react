@@ -5,6 +5,7 @@ import type { ConfirmState } from '@/components/widgets/ConfirmDialog'
 import { useLibraryOptional } from '@/contexts/LibraryContext'
 import { useMediaContext } from '@/contexts/MediaContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { BATCH_EDIT_SOFT_LIMIT, writeBatchEditSession } from '@/lib/batchEdit'
 import { buildSelectedBooksPlayPayload, buildSelectedEpisodesPlayPayload } from '@/lib/batchSelection/selectionPlayback'
@@ -62,6 +63,7 @@ export function useAppBarBatchActions({
   const [collectionsModalOpen, setCollectionsModalOpen] = useState(false)
   const [playlistsModalOpen, setPlaylistsModalOpen] = useState(false)
   const [quickMatchModalOpen, setQuickMatchModalOpen] = useState(false)
+  const hasBatchEpisodes = useServerFeature('batchEpisodes')
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
 
   const uniqueLibraryItemIds = useMemo(() => [...new Set(selectedItems.map((item) => item.libraryItemId))], [selectedItems])
@@ -168,7 +170,10 @@ export function useAppBarBatchActions({
         runBatch(
           async () => {
             try {
-              const outcome = await deleteEpisodesSelection(selectedItems, hardDelete, (done, total) => setProgress({ done, total }))
+              const outcome = await deleteEpisodesSelection(selectedItems, hardDelete, {
+                useBatchEndpoint: hasBatchEpisodes,
+                onProgress: (done, total) => setProgress({ done, total })
+              })
               if (outcome.failed === 0) {
                 showToast(t('ToastEpisodeBatchDeleteSuccess'), { type: 'success' })
               } else if (outcome.succeeded === 0) {
@@ -189,7 +194,7 @@ export function useAppBarBatchActions({
         )
       }
     })
-  }, [finishBatchAction, runBatch, selectedItems, showToast, t])
+  }, [finishBatchAction, hasBatchEpisodes, runBatch, selectedItems, showToast, t])
 
   const handleDownload = useCallback(() => {
     if (!libraryId) return

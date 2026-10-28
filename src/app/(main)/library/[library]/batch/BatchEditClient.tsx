@@ -22,6 +22,7 @@ import PodcastDetailsEdit, { type PodcastDetailsEditRef } from '@/components/wid
 import { useLibrary } from '@/contexts/LibraryContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { allowProgrammaticNavigationWithoutTrapCleanup, useUnsavedNavigationGuard } from '@/hooks/useUnsavedNavigationGuard'
 import { clearBatchEditSession, cloneLibraryItemForBatchEdit, readBatchEditSession, saveEpisodeBatch, type BatchEditSession } from '@/lib/batchEdit'
@@ -61,6 +62,7 @@ export default function BatchEditClient({ libraryId }: BatchEditClientProps) {
   const [itemsWithChanges, setItemsWithChanges] = useState<Set<string>>(new Set())
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [hasMapFieldSelected, setHasMapFieldSelected] = useState(false)
+  const hasBatchEpisodes = useServerFeature('batchEpisodes')
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null)
 
   const originalLibraryItemsRef = useRef<LibraryItem[]>([])
@@ -226,7 +228,10 @@ export default function BatchEditClient({ libraryId }: BatchEditClientProps) {
           }
         }
 
-        const outcome = await saveEpisodeBatch(updates, (done, total) => setSaveProgress({ done, total }))
+        const outcome = await saveEpisodeBatch(updates, {
+          useBatchEndpoint: hasBatchEpisodes,
+          onProgress: (done, total) => setSaveProgress({ done, total })
+        })
         if (outcome.failed > 0) {
           // Stay on the page so the failed ones can be saved again (re-sending the saved ones is a no-op)
           const message = t('ToastEpisodeBatchUpdatePartial', { succeeded: outcome.succeeded, total: outcome.total, failed: outcome.failed })
@@ -283,7 +288,7 @@ export default function BatchEditClient({ libraryId }: BatchEditClientProps) {
       setIsProcessing(false)
       setSaveProgress(null)
     }
-  }, [episodeEntries, isEpisodeMode, isProcessing, libraryId, libraryItemCopies, router, session, showToast, t])
+  }, [episodeEntries, hasBatchEpisodes, isEpisodeMode, isProcessing, libraryId, libraryItemCopies, router, session, showToast, t])
 
   const handleReset = useCallback(() => {
     if (isEpisodeMode) {

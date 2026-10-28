@@ -1,6 +1,6 @@
 import { batchDeleteLibraryItemsAction, batchEmbedMetadataAction, batchScanLibraryItemsAction } from '@/app/actions/batchActions'
-import { batchUpdateMediaFinishedAction, deleteLibraryItemMediaEpisodeAction } from '@/app/actions/mediaActions'
-import { runEpisodeBatch, runEpisodesOneByOne, type BatchProgressCallback, type EpisodeBatchOutcome, type EpisodeRef } from '@/lib/batchSelection/episodeBatch'
+import { batchDeletePodcastEpisodesAction, batchUpdateMediaFinishedAction, deleteLibraryItemMediaEpisodeAction } from '@/app/actions/mediaActions'
+import { runEpisodeRequests, type EpisodeBatchOutcome, type EpisodeBatchRunOptions, type EpisodeRef } from '@/lib/batchSelection/episodeBatch'
 import { fetchSelectedPodcasts } from '@/lib/batchSelection/selectionEpisodes'
 import type { ActionResult } from '@/lib/actionResult'
 import { downloadLibraryItemFile, downloadLibraryItems } from '@/lib/download'
@@ -30,21 +30,19 @@ export function selectedEpisodeRefs(selectedItems: readonly SelectedMediaItem[])
   return selectedItems.flatMap((item) => (item.episodeId ? [{ libraryItemId: item.libraryItemId, episodeId: item.episodeId }] : []))
 }
 
-/** Removes the selected episodes one podcast at a time; failures are counted, not thrown. */
+/** Removes the selected episodes (see runEpisodeRequests); failures are counted, not thrown. */
 export async function deleteEpisodesSelection(
   selectedItems: readonly SelectedMediaItem[],
   hardDelete: boolean,
-  onProgress?: BatchProgressCallback
+  options: EpisodeBatchRunOptions = {}
 ): Promise<EpisodeBatchOutcome> {
-  return runEpisodeBatch(
+  return runEpisodeRequests(
     selectedEpisodeRefs(selectedItems),
-    (group, step) =>
-      runEpisodesOneByOne(
-        group,
-        ({ libraryItemId, episodeId }) => deleteLibraryItemMediaEpisodeAction(libraryItemId, episodeId, hardDelete),
-        () => step(1)
-      ),
-    onProgress
+    {
+      one: ({ libraryItemId, episodeId }) => deleteLibraryItemMediaEpisodeAction(libraryItemId, episodeId, hardDelete),
+      many: (entries) => batchDeletePodcastEpisodesAction([...entries], hardDelete)
+    },
+    options
   )
 }
 

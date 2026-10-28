@@ -167,6 +167,24 @@ export async function updatePodcastEpisodeQuietAction(libraryItemId: string, epi
   })
 }
 
+/**
+ * Batch episode update (fork server only, check the `batchEpisodes` server feature first).
+ * The response's expanded podcasts are dropped; resolves to the number of episodes that changed.
+ */
+export async function batchUpdatePodcastEpisodesAction(
+  episodes: { libraryItemId: string; episodeId: string; updates: UpdatePodcastEpisodePayload }[]
+): Promise<ActionResult<number>> {
+  return toActionResult(async () => (await api.batchUpdatePodcastEpisodes(episodes)).numEpisodesUpdated)
+}
+
+/** Batch episode removal (fork server only, check the `batchEpisodes` server feature first). */
+export async function batchDeletePodcastEpisodesAction(
+  episodes: { libraryItemId: string; episodeId: string }[],
+  hardDelete: boolean
+): Promise<ActionResult<number>> {
+  return toActionResult(async () => (await api.batchDeletePodcastEpisodes(episodes, hardDelete)).numEpisodesDeleted)
+}
+
 export async function searchPodcastEpisodeAction(libraryItemId: string, title: string) {
   return api.searchPodcastEpisode(libraryItemId, title)
 }

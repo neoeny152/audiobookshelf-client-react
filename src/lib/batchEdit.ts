@@ -1,5 +1,5 @@
-import { updatePodcastEpisodeQuietAction } from '@/app/actions/mediaActions'
-import { runEpisodeBatch, runEpisodesOneByOne, type BatchProgressCallback, type EpisodeBatchOutcome } from '@/lib/batchSelection/episodeBatch'
+import { batchUpdatePodcastEpisodesAction, updatePodcastEpisodeQuietAction } from '@/app/actions/mediaActions'
+import { runEpisodeRequests, type EpisodeBatchOutcome, type EpisodeBatchRunOptions } from '@/lib/batchSelection/episodeBatch'
 import type { SelectedMediaItem, SelectionKind } from '@/lib/selectedMediaItem'
 import type { BookLibraryItem, BookMetadata, LibraryItem, PodcastLibraryItem, PodcastMetadata, UpdatePodcastEpisodePayload } from '@/types/api'
 
@@ -83,19 +83,15 @@ export interface EpisodeBatchUpdate {
 /** Above this many selected items, batch edit asks before opening (every item gets its own form). */
 export const BATCH_EDIT_SOFT_LIMIT = 150
 
-/**
- * Save episode batch updates one podcast at a time, one request at a time. A failed update does
- * not stop the rest; the outcome counts what succeeded and failed.
- */
-export async function saveEpisodeBatch(updates: readonly EpisodeBatchUpdate[], onProgress?: BatchProgressCallback): Promise<EpisodeBatchOutcome> {
-  return runEpisodeBatch(
+/** Save episode batch updates (see runEpisodeRequests for how they are sent). */
+export async function saveEpisodeBatch(updates: readonly EpisodeBatchUpdate[], options: EpisodeBatchRunOptions = {}): Promise<EpisodeBatchOutcome> {
+  return runEpisodeRequests(
     updates,
-    (group, step) =>
-      runEpisodesOneByOne(
-        group,
-        ({ libraryItemId, episodeId, payload }) => updatePodcastEpisodeQuietAction(libraryItemId, episodeId, payload),
-        () => step(1)
-      ),
-    onProgress
+    {
+      one: ({ libraryItemId, episodeId, payload }) => updatePodcastEpisodeQuietAction(libraryItemId, episodeId, payload),
+      many: (entries) =>
+        batchUpdatePodcastEpisodesAction(entries.map(({ libraryItemId, episodeId, payload }) => ({ libraryItemId, episodeId, updates: payload })))
+    },
+    options
   )
 }

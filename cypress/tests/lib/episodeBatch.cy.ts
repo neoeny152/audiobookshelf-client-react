@@ -1,5 +1,5 @@
 import type { ActionResult } from '@/lib/actionResult'
-import { groupEpisodesByPodcast, runEpisodeBatch, runEpisodesOneByOne, type EpisodeRef } from '@/lib/batchSelection/episodeBatch'
+import { groupEpisodesByPodcast, runEpisodeBatch, runEpisodeRequests, runEpisodesOneByOne, type EpisodeRef } from '@/lib/batchSelection/episodeBatch'
 
 const refs: EpisodeRef[] = [
   { libraryItemId: 'pod_a', episodeId: 'a1' },
@@ -75,5 +75,44 @@ describe('runEpisodeBatch with one request per podcast', () => {
     expect(groups).to.deep.equal([['a1', 'a2'], ['b1', 'b2'], ['c1']])
     expect(progress).to.deep.equal([0, 2, 4, 5])
     expect(outcome).to.deep.equal({ total: 5, succeeded: 2, failed: 3, firstError: 'Forbidden' })
+  })
+})
+
+describe('runEpisodeRequests (batchEpisodes server feature)', () => {
+  function recordingRequests() {
+    const one: string[] = []
+    const many: string[][] = []
+    return {
+      one,
+      many,
+      requests: {
+        one: async (ref: EpisodeRef): Promise<ActionResult> => {
+          one.push(ref.episodeId)
+          return { ok: true, data: undefined }
+        },
+        many: async (entries: readonly EpisodeRef[]): Promise<ActionResult> => {
+          many.push(entries.map((ref) => ref.episodeId))
+          return entries.some((ref) => ref.libraryItemId === 'pod_c') ? { ok: false, error: 'Episode not found' } : { ok: true, data: undefined }
+        }
+      }
+    }
+  }
+
+  it('sends one batch request per podcast when the server advertises batchEpisodes', async () => {
+    const recorded = recordingRequests()
+    const outcome = await runEpisodeRequests(refs, recorded.requests, { useBatchEndpoint: true })
+
+    expect(recorded.one).to.deep.equal([])
+    expect(recorded.many).to.deep.equal([['a1', 'a2'], ['b1', 'b2'], ['c1']])
+    expect(outcome).to.deep.equal({ total: 5, succeeded: 4, failed: 1, firstError: 'Episode not found' })
+  })
+
+  it('falls back to one request per episode on a stock server', async () => {
+    const recorded = recordingRequests()
+    const outcome = await runEpisodeRequests(refs, recorded.requests)
+
+    expect(recorded.many).to.deep.equal([])
+    expect(recorded.one).to.deep.equal(['a1', 'a2', 'b1', 'b2', 'c1'])
+    expect(outcome).to.deep.equal({ total: 5, succeeded: 5, failed: 0, firstError: '' })
   })
 })

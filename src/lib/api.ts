@@ -1285,6 +1285,34 @@ export async function deleteLibraryItemMediaEpisode(libraryItemId: string, episo
 }
 
 /**
+ * Update many episodes in one request (fork server, `batchEpisodes` in /status serverFeatures).
+ * All-or-nothing validation: one unknown episode fails the whole request. `numEpisodesUpdated`
+ * counts only episodes that actually changed.
+ */
+export async function batchUpdatePodcastEpisodes(
+  episodes: { libraryItemId: string; episodeId: string; updates: UpdatePodcastEpisodePayload }[]
+): Promise<{ success: boolean; numEpisodesUpdated: number }> {
+  return apiRequest<{ success: boolean; numEpisodesUpdated: number }>('/api/podcasts/batch/episodes/update', {
+    method: 'POST',
+    body: JSON.stringify({ episodes })
+  })
+}
+
+/**
+ * Remove many episodes in one request (fork server, `batchEpisodes` in /status serverFeatures).
+ * @param hardDelete - If true, also deletes the audio files from the file system
+ */
+export async function batchDeletePodcastEpisodes(
+  episodes: { libraryItemId: string; episodeId: string }[],
+  hardDelete = false
+): Promise<{ success: boolean; numEpisodesDeleted: number }> {
+  return apiRequest<{ success: boolean; numEpisodesDeleted: number }>('/api/podcasts/batch/episodes/delete', {
+    method: 'POST',
+    body: JSON.stringify({ episodes, hard: hardDelete })
+  })
+}
+
+/**
  * Fetch a single podcast episode with full details.
  */
 export async function getPodcastEpisode(libraryItemId: string, episodeId: string): Promise<PodcastEpisode> {

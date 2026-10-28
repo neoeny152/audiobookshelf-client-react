@@ -64,6 +64,20 @@ export async function runEpisodesOneByOne<T>(
 }
 
 /**
+ * Runs a podcast's entries as one request (the fork server's batch episode endpoints). The server
+ * validates the whole request first, so it either applies to every entry or to none.
+ */
+export async function runEpisodesInOneRequest<T>(
+  group: readonly T[],
+  request: (group: readonly T[]) => Promise<ActionResult<unknown>>,
+  step: (count: number) => void
+): Promise<EpisodeGroupOutcome> {
+  const result = await request(group)
+  step(group.length)
+  return result.ok ? { succeeded: group.length, failed: 0, firstError: '' } : { succeeded: 0, failed: group.length, firstError: result.error }
+}
+
+/**
  * Runs a batch over episodes one podcast at a time (podcasts never run concurrently), collecting
  * failures instead of stopping at the first one. `runGroup` handles one podcast's entries and calls
  * `step(n)` as entries finish, so progress can be reported per episode or per podcast.
@@ -104,4 +118,34 @@ export async function runEpisodeBatch<T extends Pick<EpisodeRef, 'libraryItemId'
   }
 
   return outcome
+}
+
+export interface EpisodeBatchRequests<T> {
+  /** One entry per request: works on every server. */
+  one: (entry: T) => Promise<ActionResult<unknown>>
+  /** All of one podcast's entries in a request: needs the `batchEpisodes` server feature. */
+  many: (entries: readonly T[]) => Promise<ActionResult<unknown>>
+}
+
+export interface EpisodeBatchRunOptions {
+  /** The server advertises `batchEpisodes`: send one request per podcast instead of one per episode. */
+  useBatchEndpoint?: boolean
+  onProgress?: BatchProgressCallback
+}
+
+/**
+ * Runs an episode batch one podcast at a time with the request style the server supports: one
+ * batch request per podcast when it advertises `batchEpisodes`, otherwise one request per episode
+ * (stock servers). A failure does not stop the rest; the outcome counts what succeeded and failed.
+ */
+export function runEpisodeRequests<T extends Pick<EpisodeRef, 'libraryItemId'>>(
+  entries: readonly T[],
+  requests: EpisodeBatchRequests<T>,
+  { useBatchEndpoint = false, onProgress }: EpisodeBatchRunOptions = {}
+): Promise<EpisodeBatchOutcome> {
+  return runEpisodeBatch(
+    entries,
+    (group, step) => (useBatchEndpoint ? runEpisodesInOneRequest(group, requests.many, step) : runEpisodesOneByOne(group, requests.one, () => step(1))),
+    onProgress
+  )
 }
