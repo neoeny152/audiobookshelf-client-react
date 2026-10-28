@@ -1,5 +1,7 @@
 import { normalizeChapterStartSec, type EditableChapter } from '@/lib/chapters/chapterEditorUtils'
+import type { StatusActionResult } from '@/lib/actionResult'
 import type { SnapChapterConfidence, SnapChapterPause, SnapChapterReason, SnapChaptersPayload, SnapChaptersResponse } from '@/types/api'
+import type { TranslationKey } from '@/types/translations'
 
 /** The advanced settings the panel exposes; the server echoes back what it used. */
 export interface SnapAdvancedOptions {
@@ -184,7 +186,34 @@ export function buildSnapRows(session: SnapSession): SnapRow[] {
 
 /** Every row that would move is pre-checked, except low-confidence ones and ones rounded to just before their pause. */
 export function getDefaultSnapChecked(rows: SnapRow[]): Set<number> {
-  return new Set(
-    rows.filter((row) => row.changed && !row.beforePause && (row.confidence === 'high' || row.confidence === 'medium')).map((row) => row.index)
-  )
+  return new Set(rows.filter((row) => row.changed && !row.beforePause && (row.confidence === 'high' || row.confidence === 'medium')).map((row) => row.index))
+}
+
+export interface SnapErrorToast {
+  key: TranslationKey
+  values?: Record<string, string>
+  type: 'error' | 'warning'
+}
+
+/**
+ * Toast for a failed snap request. 409 (a snap is already running for this book) and 429 (the server's snap slots are
+ * full) are worth retrying, so they are warnings; status 0 means the server could not be reached.
+ */
+export function getSnapErrorToast(result: Extract<StatusActionResult<unknown>, { ok: false }>): SnapErrorToast {
+  switch (result.status) {
+    case 400:
+      return result.error
+        ? { key: 'ToastSnapChaptersInvalidWithError', values: { error: result.error }, type: 'error' }
+        : { key: 'ToastSnapChaptersFailed', type: 'error' }
+    case 403:
+      return { key: 'ToastSnapChaptersForbidden', type: 'error' }
+    case 409:
+      return { key: 'ToastSnapChaptersAlreadyRunning', type: 'warning' }
+    case 429:
+      return { key: 'ToastSnapChaptersBusy', type: 'warning' }
+    default:
+      return result.error
+        ? { key: 'ToastSnapChaptersFailedWithError', values: { error: result.error }, type: 'error' }
+        : { key: 'ToastSnapChaptersFailed', type: 'error' }
+  }
 }

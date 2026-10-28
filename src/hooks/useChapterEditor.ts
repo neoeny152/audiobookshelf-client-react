@@ -40,6 +40,7 @@ import { SHOW_CHAPTER_MATCH_DEBUG } from '@/lib/chapters/chapterMatching'
 import {
   buildSnapPayload,
   buildSnapRetryPayload,
+  getSnapErrorToast,
   getSnapRetryIndexes,
   mergeSnapRetry,
   type SnapAdvancedOptions,
@@ -401,22 +402,8 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
 
   const showSnapError = useCallback(
     (result: Extract<SnapChaptersActionResult, { ok: false }>) => {
-      switch (result.status) {
-        case 400:
-          showToast(result.error ? t('ToastSnapChaptersInvalidWithError', { error: result.error }) : t('ToastSnapChaptersFailed'), { type: 'error' })
-          return
-        case 403:
-          showToast(t('ToastSnapChaptersForbidden'), { type: 'error' })
-          return
-        case 409:
-          showToast(t('ToastSnapChaptersAlreadyRunning'), { type: 'warning' })
-          return
-        case 429:
-          showToast(t('ToastSnapChaptersBusy'), { type: 'warning' })
-          return
-        default:
-          showToast(result.error ? t('ToastSnapChaptersFailedWithError', { error: result.error }) : t('ToastSnapChaptersFailed'), { type: 'error' })
-      }
+      const toast = getSnapErrorToast(result)
+      showToast(toast.values ? t(toast.key, toast.values) : t(toast.key), { type: toast.type })
     },
     [showToast, t]
   )

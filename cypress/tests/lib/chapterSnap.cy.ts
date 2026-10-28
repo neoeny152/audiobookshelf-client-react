@@ -5,6 +5,7 @@ import {
   buildSnapRows,
   clampSnapOption,
   getDefaultSnapChecked,
+  getSnapErrorToast,
   mergeSnapRetry,
   SNAP_DEFAULT_OPTIONS,
   snapStartToWholeSecond,
@@ -299,5 +300,34 @@ describe('snap rows and retry', () => {
     expect(merged.chapters[2].delta).to.equal(3.75)
     expect(merged.chapters[3].reason).to.equal('inside-pause')
     expect(buildSnapRetryPayload(merged, SNAP_DEFAULT_OPTIONS)).to.equal(null)
+  })
+})
+
+describe('getSnapErrorToast', () => {
+  it('explains each server status', () => {
+    expect(getSnapErrorToast({ ok: false, status: 409, error: 'A chapter snap is already running for this item' })).to.deep.equal({
+      key: 'ToastSnapChaptersAlreadyRunning',
+      type: 'warning'
+    })
+    expect(getSnapErrorToast({ ok: false, status: 429, error: 'Too many chapter snaps running' })).to.deep.equal({
+      key: 'ToastSnapChaptersBusy',
+      type: 'warning'
+    })
+    expect(getSnapErrorToast({ ok: false, status: 403, error: 'Forbidden' })).to.deep.equal({ key: 'ToastSnapChaptersForbidden', type: 'error' })
+    expect(getSnapErrorToast({ ok: false, status: 400, error: 'Invalid request body' })).to.deep.equal({
+      key: 'ToastSnapChaptersInvalidWithError',
+      values: { error: 'Invalid request body' },
+      type: 'error'
+    })
+    expect(getSnapErrorToast({ ok: false, status: 500, error: 'Silence detection failed' })).to.deep.equal({
+      key: 'ToastSnapChaptersFailedWithError',
+      values: { error: 'Silence detection failed' },
+      type: 'error'
+    })
+  })
+
+  it('falls back to a plain failure without a server message or when the server was unreachable', () => {
+    expect(getSnapErrorToast({ ok: false, status: 400, error: '' })).to.deep.equal({ key: 'ToastSnapChaptersFailed', type: 'error' })
+    expect(getSnapErrorToast({ ok: false, status: 0, error: '' })).to.deep.equal({ key: 'ToastSnapChaptersFailed', type: 'error' })
   })
 })
