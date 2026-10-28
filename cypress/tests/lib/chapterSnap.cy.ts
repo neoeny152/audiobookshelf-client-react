@@ -192,16 +192,25 @@ describe('applySnapTitles', () => {
     expect(chapters[1].title).to.equal('Chapter 2')
   })
 
-  it('skips rows that are gone or were retitled since the snap, and no-ops rows that already have the title', () => {
+  it('skips rows that are gone or were retitled since the snap', () => {
     const chapters = rows([0, 100, 200])
     chapters[2] = { ...chapters[2], title: 'Edited' }
     const result = applySnapTitles(chapters, [
       { clientKey: 'ch-9', fromTitle: 'Chapter 10', toTitle: 'Chapter 9' },
-      { clientKey: 'ch-2', fromTitle: 'Chapter 3', toTitle: 'Chapter 4' },
-      { clientKey: 'ch-1', fromTitle: 'Chapter 2', toTitle: 'Chapter 2' }
+      { clientKey: 'ch-2', fromTitle: 'Chapter 3', toTitle: 'Chapter 4' }
     ])
     expect(result.applied).to.deep.equal([])
     expect(result.skipped).to.equal(2)
+    expect(result.chapters).to.equal(chapters)
+  })
+
+  it('counts a row that already has the title as applied without changing anything', () => {
+    // the title was typed in the editor after the snap, then Use heard title was clicked: the offer must go away
+    const chapters = rows([0, 100, 200])
+    chapters[1] = { ...chapters[1], title: 'Chapter 3' }
+    const result = applySnapTitles(chapters, [{ clientKey: 'ch-1', fromTitle: 'Chapter 2', toTitle: 'Chapter 3' }])
+    expect(result.applied).to.deep.equal(['ch-1'])
+    expect(result.skipped).to.equal(0)
     expect(result.chapters).to.equal(chapters)
   })
 })
@@ -426,6 +435,9 @@ describe('snap speech check', () => {
     // stock servers and older fork servers send no heard
     expect(getSnapHeardTitle({ title: 'Black Ice - Part 02', speech: heardSpeech(undefined) })).to.equal(null)
     expect(getSnapHeardTitle({ title: 'Black Ice - Part 02', speech: null })).to.equal(null)
+    // a flagged start may have heard the neighbouring chapter ("End of chapter three. ... Chapter four.")
+    expect(getSnapHeardTitle({ title: 'Chapter 4', speech: { ...speech({ early: true }), heard: 'Chapter 3' } })).to.equal(null)
+    expect(getSnapHeardTitle({ title: 'Chapter 4', speech: { ...speech({ late: true }), heard: 'Chapter 5' } })).to.equal(null)
   })
 
   it('puts applied titles into the session rows and the retry payload', () => {

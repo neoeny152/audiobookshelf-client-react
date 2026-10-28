@@ -128,11 +128,12 @@ function comparableTitle(title: string): string {
 /**
  * The heading the speech check heard at the start of this row, when it is worth offering as the title: the server
  * reported one (fork servers only), the row's title differs from it, and the title's own heading was not heard (so
- * "Chapter Twelve" or "Chapter 3: The Rain" are not offered "Chapter 12" or "Chapter 3").
+ * "Chapter Twelve" or "Chapter 3: The Rain" are not offered "Chapter 12" or "Chapter 3"). Not at a start flagged EARLY or
+ * LATE: the clip there may hold the neighbouring chapter ("End of chapter three. ... Chapter four." hears "Chapter 3").
  */
 export function getSnapHeardTitle(row: Pick<SnapRow, 'title' | 'speech'>): string | null {
   const heard = row.speech?.heard
-  if (!heard || row.speech?.heading) return null
+  if (!heard || row.speech?.heading || row.speech?.early || row.speech?.late) return null
   return comparableTitle(heard) === comparableTitle(row.title) ? null : heard
 }
 
