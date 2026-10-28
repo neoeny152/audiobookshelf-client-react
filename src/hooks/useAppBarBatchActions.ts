@@ -64,6 +64,7 @@ export function useAppBarBatchActions({
   const [playlistsModalOpen, setPlaylistsModalOpen] = useState(false)
   const [quickMatchModalOpen, setQuickMatchModalOpen] = useState(false)
   const hasBatchEpisodes = useServerFeature('batchEpisodes')
+  const hasLibraryDownloadPost = useServerFeature('libraryDownloadPost')
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
 
   const uniqueLibraryItemIds = useMemo(() => [...new Set(selectedItems.map((item) => item.libraryItemId))], [selectedItems])
@@ -212,7 +213,7 @@ export function useAppBarBatchActions({
     const startLibraryItemsDownload = () => {
       runBatch(
         async () => {
-          downloadLibraryItemsSelection(libraryId, uniqueLibraryItemIds)
+          downloadLibraryItemsSelection(libraryId, uniqueLibraryItemIds, hasLibraryDownloadPost)
         },
         {
           logLabel: 'Failed to batch download library items',
@@ -236,7 +237,7 @@ export function useAppBarBatchActions({
     }
 
     startLibraryItemsDownload()
-  }, [finishBatchAction, libraryId, runBatch, selectedItems, selectionKind, t, uniqueLibraryItemIds])
+  }, [finishBatchAction, hasLibraryDownloadPost, libraryId, runBatch, selectedItems, selectionKind, t, uniqueLibraryItemIds])
 
   const handleRescan = useCallback(() => {
     openSimpleConfirm({

@@ -56,8 +56,8 @@ export async function downloadEpisodesSelection(selectedItems: readonly Selected
   }
 }
 
-export function downloadLibraryItemsSelection(libraryId: string, uniqueLibraryItemIds: string[]) {
-  downloadLibraryItems(libraryId, uniqueLibraryItemIds)
+export function downloadLibraryItemsSelection(libraryId: string, uniqueLibraryItemIds: string[], usePost = false) {
+  downloadLibraryItems(libraryId, uniqueLibraryItemIds, { usePost })
 }
 
 export async function rescanLibraryItemsSelection(uniqueLibraryItemIds: string[]) {

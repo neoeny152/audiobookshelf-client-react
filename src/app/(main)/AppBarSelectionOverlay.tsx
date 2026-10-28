@@ -11,8 +11,10 @@ import { useBookshelfSelectionOptional } from '@/contexts/BookshelfSelectionCont
 import { useUser } from '@/contexts/UserContext'
 import { type AppBarBatchActionId, useAppBarBatchActions } from '@/hooks/useAppBarBatchActions'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { areAllSelectedItemsFinished } from '@/lib/batchSelection/selectionProgress'
+import { canDownloadLibraryItemCount } from '@/lib/download'
 import { getSelectionCountMessageKey, type SelectedMediaItem, type SelectionKind } from '@/lib/selectedMediaItem'
 import type { MediaProgress } from '@/types/api'
 import { useMemo } from 'react'
@@ -33,7 +35,8 @@ function useLibraryItemAdminMenuItems(
   selectedCount: number,
   userIsAdminOrUp: boolean,
   userCanDownload: boolean,
-  allPlayable: boolean
+  allPlayable: boolean,
+  hasLibraryDownloadPost: boolean
 ): ContextMenuDropdownItem[] {
   const t = useTypeSafeTranslations()
 
@@ -48,12 +51,12 @@ function useLibraryItemAdminMenuItems(
 
     items.push({ text: t('ButtonReScan'), action: 'rescan' })
 
-    if (userCanDownload && selectedCount <= 40) {
+    if (userCanDownload && canDownloadLibraryItemCount(selectedCount, hasLibraryDownloadPost)) {
       items.push({ text: t('LabelDownload'), action: 'download' })
     }
 
     return items
-  }, [allPlayable, selectionKind, selectedCount, t, userCanDownload, userIsAdminOrUp])
+  }, [allPlayable, hasLibraryDownloadPost, selectionKind, selectedCount, t, userCanDownload, userIsAdminOrUp])
 }
 
 function useEpisodeBatchMenuItems(userCanDownload: boolean): ContextMenuDropdownItem[] {
@@ -74,6 +77,7 @@ export default function AppBarSelectionOverlay({ libraryId }: { libraryId?: stri
   const selectionKind = selection?.selectionKind ?? null
   const clearSelection = selection?.clearSelection
   const isMobile = useMediaQuery('max-md')
+  const hasLibraryDownloadPost = useServerFeature('libraryDownloadPost')
 
   const { allPlayable, allFinished } = useSelectionBatchState(selectedItems, user.mediaProgress)
 
@@ -89,7 +93,14 @@ export default function AppBarSelectionOverlay({ libraryId }: { libraryId?: stri
     onBatchAction(action)
   }
 
-  const libraryItemAdminMenuItems = useLibraryItemAdminMenuItems(selectionKind ?? 'book', selectedItems.length, userIsAdminOrUp, userCanDownload, allPlayable)
+  const libraryItemAdminMenuItems = useLibraryItemAdminMenuItems(
+    selectionKind ?? 'book',
+    selectedItems.length,
+    userIsAdminOrUp,
+    userCanDownload,
+    allPlayable,
+    hasLibraryDownloadPost
+  )
   const episodeBatchMenuItems = useEpisodeBatchMenuItems(userCanDownload)
 
   const showAddToCollection = selectionKind === 'book' && userCanUpdate

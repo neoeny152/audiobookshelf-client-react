@@ -207,6 +207,8 @@ type ProxyBackendResponseOptions = {
 }
 
 type ProxyBackendStreamingOptions = ProxyBackendResponseOptions & {
+  /** Upstream method, headers and body (default: GET). Use a buffered body so a 401 can be retried. */
+  init?: RequestInit
   emptyBodyError?: string
   defaultContentType?: string
   /** Omit header when false. When omitted, uses upstream Content-Disposition or `attachment`. */
@@ -230,7 +232,7 @@ export async function proxyBackendStreamingResponse(
   options: ProxyBackendStreamingOptions
 ): Promise<NextResponse> {
   try {
-    const result = await fetchBackendWithCookieRefresh(backendUrl, cookieStore)
+    const result = await fetchBackendWithCookieRefresh(backendUrl, cookieStore, options.init)
     if (!result.ok) {
       return respondProxyFailure(request, result)
     }
@@ -275,7 +277,7 @@ export async function proxyBackendStreamingDownload(
   request: NextRequest,
   cookieStore: CookieStore,
   backendUrl: string,
-  options: ProxyBackendResponseOptions
+  options: ProxyBackendResponseOptions & Pick<ProxyBackendStreamingOptions, 'init'>
 ): Promise<NextResponse> {
   return proxyBackendStreamingResponse(request, cookieStore, backendUrl, {
     ...options,
