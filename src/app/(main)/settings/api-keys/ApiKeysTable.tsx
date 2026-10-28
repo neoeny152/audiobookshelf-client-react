@@ -4,6 +4,7 @@ import IconBtn from '@/components/ui/IconBtn'
 import SimpleDataTable, { DataTableColumn } from '@/components/ui/SimpleDataTable'
 import Tooltip from '@/components/ui/Tooltip'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
+import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { formatJsDate, formatJsDatetime } from '@/lib/datefns'
@@ -20,6 +21,7 @@ interface ApiKeysTableProps {
 export default function ApiKeysTable({ apiKeys, onEditClick }: ApiKeysTableProps) {
   const t = useTypeSafeTranslations()
   const { serverSettings } = useUser()
+  const { showToast } = useGlobalToast()
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [deletingApiKeyId, setDeletingApiKeyId] = useState<string | null>(null)
   const deletingApiKeyRef = useRef<ApiKey | null>(null)
@@ -39,14 +41,18 @@ export default function ApiKeysTable({ apiKeys, onEditClick }: ApiKeysTableProps
     setDeletingApiKeyId(apiKeyToDelete.id)
 
     try {
-      await deleteApiKey(apiKeyToDelete.id)
+      const result = await deleteApiKey(apiKeyToDelete.id)
+      if (!result.ok) {
+        showToast(result.error || t('ToastFailedToDelete'), { type: 'error' })
+      }
     } catch (error) {
       console.error('Failed to delete API key:', error)
+      showToast(t('ToastFailedToDelete'), { type: 'error' })
     } finally {
       setDeletingApiKeyId(null)
       deletingApiKeyRef.current = null
     }
-  }, [])
+  }, [showToast, t])
 
   const getExpiresAtDisplay = (expiresAt: string | null) => {
     if (!expiresAt) return t('LabelExpiresNever')

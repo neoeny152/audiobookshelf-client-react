@@ -1237,6 +1237,7 @@
   "ToastEpisodeDownloadQueueClearSuccess": "Episode fetch queue cleared",
   "ToastEpisodeUpdateSuccess": "{0} episodes updated",
   "ToastErrorCannotShare": "Cannot share natively on this device",
+  "ToastFailedToCreate": "Failed to create",
   "ToastFailedToDelete": "Failed to delete",
   "ToastFailedToDownloadEpisodes": "Failed to fetch episodes",
   "ToastFailedToLoadData": "Failed to load data",

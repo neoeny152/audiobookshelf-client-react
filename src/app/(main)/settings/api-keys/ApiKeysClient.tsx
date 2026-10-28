@@ -1,5 +1,6 @@
 'use client'
 
+import { useGlobalToast } from '@/contexts/ToastContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { ApiKey, User } from '@/types/api'
 import { useCallback, useState } from 'react'
@@ -17,6 +18,7 @@ interface ApiKeysClientProps {
 
 export default function ApiKeysClient({ apiKeys, users }: ApiKeysClientProps) {
   const t = useTypeSafeTranslations()
+  const { showToast } = useGlobalToast()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingApiKey, setEditingApiKey] = useState<ApiKey | null>(null)
   const [newApiKey, setNewApiKey] = useState<{ name: string; value: string } | null>(null)
@@ -45,18 +47,18 @@ export default function ApiKeysClient({ apiKeys, users }: ApiKeysClientProps) {
         userId: formData.userId
       }
 
-      if (editingApiKey) {
-        await updateApiKey(editingApiKey.id, payload)
-      } else {
-        const result = await createApiKey(payload)
-        if (result.apiKey.apiKey) {
-          setNewApiKey({ name: result.apiKey.name, value: result.apiKey.apiKey })
-        }
+      const result = editingApiKey ? await updateApiKey(editingApiKey.id, payload) : await createApiKey(payload)
+      if (!result.ok) {
+        showToast(result.error || (editingApiKey ? t('ToastFailedToUpdate') : t('ToastFailedToCreate')), { type: 'error' })
+        return
+      }
+      if (!editingApiKey && result.data.apiKey.apiKey) {
+        setNewApiKey({ name: result.data.apiKey.name, value: result.data.apiKey.apiKey })
       }
 
       handleCloseModal()
     },
-    [editingApiKey, handleCloseModal]
+    [editingApiKey, handleCloseModal, showToast, t]
   )
 
   const handleCloseNewApiKeyModal = useCallback(() => {
