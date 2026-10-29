@@ -173,6 +173,7 @@ const CONFIDENCE_DOT_CLASS: Record<SnapChapterConfidence, string> = {
 const SPEECH_STATUS_CLASS: Record<SnapSpeechStatus, string> = {
   heading: 'text-success',
   'no-heading': 'text-warning',
+  'not-expected': 'text-foreground-muted',
   late: 'text-warning',
   early: 'text-warning'
 }
@@ -180,6 +181,7 @@ const SPEECH_STATUS_CLASS: Record<SnapSpeechStatus, string> = {
 const SPEECH_STATUS_ICON: Record<SnapSpeechStatus, string> = {
   heading: 'record_voice_over',
   'no-heading': 'voice_over_off',
+  'not-expected': 'voice_over_off',
   late: 'history',
   early: 'update'
 }
@@ -190,6 +192,8 @@ function speechStatusLabel(status: SnapSpeechStatus, t: TypeSafeTranslations): s
       return t('LabelSnapSpeechHeading')
     case 'no-heading':
       return t('LabelSnapSpeechNoHeading')
+    case 'not-expected':
+      return t('LabelSnapSpeechNotExpected')
     case 'late':
       return t('LabelSnapSpeechLate')
     case 'early':
@@ -203,6 +207,8 @@ function speechStatusMessage(status: SnapSpeechStatus, t: TypeSafeTranslations):
       return t('MessageSnapSpeechHeading')
     case 'no-heading':
       return t('MessageSnapSpeechNoHeading')
+    case 'not-expected':
+      return t('MessageSnapSpeechNotExpected')
     case 'late':
       return t('MessageSnapSpeechLate')
     case 'early':

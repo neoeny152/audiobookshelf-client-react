@@ -673,6 +673,11 @@ export interface SnapChapterSpeech {
    * Missing from servers that predate it.
    */
   heard?: string | null
+  /**
+   * False for front and back matter (Dedication, Epigraph, Opening Credits, ...) that narrators often do not read out,
+   * so a heading not heard there is no reason to look at the start. Missing from servers that predate it (expected).
+   */
+  expected?: boolean
 }
 
 export interface SnapChapterProposal {

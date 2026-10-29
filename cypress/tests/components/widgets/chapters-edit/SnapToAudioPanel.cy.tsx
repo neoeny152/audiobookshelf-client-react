@@ -413,6 +413,27 @@ describe('<SnapToAudioPanel /> speech check', () => {
     cy.get('[cy-id="snap-summary"]').should('have.text', '3 would move · 1 heading heard · 2 flagged')
   })
 
+  it('shows front matter the narrator did not read out as neutral, and flags other unheard headings', () => {
+    const session = makeSession([
+      proposal({ index: 0, reason: 'first-chapter', confidence: 'high' }),
+      proposal({ index: 1, proposedStart: 96.75, reason: 'heading-lookback', confidence: 'high', pause: pause(95, 97), speech: heardSpeech({ expected: false }) }),
+      proposal({ index: 2, proposedStart: 205, reason: 'nearest-longest-pause', confidence: 'high', pause: pause(204, 205.25), speech: heardSpeech({}) }),
+      proposal({ index: 3, reason: 'inside-pause', confidence: 'high', pause: pause(299, 301) })
+    ])
+    session.options = { ...session.options, verify: true }
+    session.response.options = { ...session.response.options, verify: true }
+    mountPanel({ speechCheckAvailable: true, onSnap: cy.stub().resolves(session) })
+    cy.contains('button', 'Snap to audio').click()
+    cy.get('[cy-id="snap-row"]').eq(0).should('not.have.attr', 'data-flag')
+    cy.get('[cy-id="snap-row"]').eq(0).should('not.have.class', 'bg-warning/10').and('have.attr', 'data-speech', 'not-expected')
+    cy.get('[cy-id="snap-row"]').eq(0).find('[cy-id="snap-speech-icon"]').should('have.attr', 'aria-label', 'Heading not read out').and('have.class', 'text-foreground-muted')
+    cy.get('[cy-id="snap-row"]').eq(0).find('input[type="checkbox"]').should('be.checked')
+    // a server without `expected` (or a chapter it expects) still flags an unheard heading
+    cy.get('[cy-id="snap-row"]').eq(1).should('have.attr', 'data-speech', 'no-heading').and('have.attr', 'data-flag', 'no-heading')
+    cy.get('[cy-id="snap-row"]').eq(1).find('[cy-id="snap-speech-icon"]').should('have.class', 'text-warning')
+    cy.get('[cy-id="snap-summary"]').should('contain.text', '1 flagged')
+  })
+
   it('leaves late and early rows unchecked, even at medium confidence', () => {
     mountPanel({ speechCheckAvailable: true, onSnap: cy.stub().resolves(verifiedSession()) })
     cy.contains('button', 'Snap to audio').click()

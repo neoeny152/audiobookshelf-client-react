@@ -386,7 +386,7 @@ describe('snap rows and retry', () => {
 
 describe('snap speech check', () => {
   const snapshot = [0, 100, 200, 300].map((start, i) => ({ clientKey: `ch-${i}`, start, title: `Chapter ${i + 1}` }))
-  const speech = (partial: Partial<{ heading: boolean; late: boolean; early: boolean }>) => ({
+  const speech = (partial: Partial<{ heading: boolean; late: boolean; early: boolean; expected: boolean }>) => ({
     before: 'and that was the end of it',
     after: 'chapter two the long road',
     heading: false,
@@ -421,8 +421,16 @@ describe('snap speech check', () => {
       heading: false,
       late: true,
       early: false,
-      heard: null
+      heard: null,
+      expected: true
     })
+  })
+
+  it('reads expected from fork servers; anything but false (older servers) expects the heading', () => {
+    expect(toSnapSpeech({ before: '', after: '', heading: false, late: false, early: false, expected: false })?.expected).to.equal(false)
+    expect(toSnapSpeech({ before: '', after: '', heading: false, late: false, early: false, expected: true })?.expected).to.equal(true)
+    expect(toSnapSpeech({ before: '', after: '', heading: false, late: false, early: false })?.expected).to.equal(true)
+    expect(toSnapSpeech({ before: '', after: '', heading: false, late: false, early: false, expected: 'no' })?.expected).to.equal(true)
   })
 
   it('reads the heard heading from fork servers and ignores anything else', () => {
@@ -473,6 +481,10 @@ describe('snap speech check', () => {
     expect(getSnapSpeechStatus(speech({}))).to.equal('no-heading')
     expect(getSnapSpeechStatus(speech({ late: true }))).to.equal('late')
     expect(getSnapSpeechStatus(speech({ early: true }))).to.equal('early')
+    // front matter (Dedication, Epigraph, credits) the narrator did not read out
+    expect(getSnapSpeechStatus(speech({ expected: false }))).to.equal('not-expected')
+    expect(getSnapSpeechStatus(speech({ expected: false, heading: true }))).to.equal('heading')
+    expect(getSnapSpeechStatus(speech({ expected: true }))).to.equal('no-heading')
     expect(isSnapSpeechFlagged(speech({ late: true }))).to.equal(true)
     expect(isSnapSpeechFlagged(speech({ heading: true }))).to.equal(false)
     expect(isSnapSpeechFlagged(null)).to.equal(false)
@@ -677,6 +689,9 @@ describe('snap list summary', () => {
     expect(getSnapAttention({ changed: true, confidence: 'low', speech: speech({ late: true }) })).to.equal('late')
     expect(getSnapAttention({ changed: false, confidence: 'high', speech: speech({ early: true }) })).to.equal('early')
     expect(getSnapAttention({ changed: false, confidence: 'high', speech: speech({}) })).to.equal('no-heading')
+    // front matter not read out is not a reason to look, but an unsure move still is
+    expect(getSnapAttention({ changed: false, confidence: 'high', speech: speech({ expected: false }) })).to.equal(null)
+    expect(getSnapAttention({ changed: true, confidence: 'low', speech: speech({ expected: false }) })).to.equal('low-confidence')
     expect(getSnapAttention({ changed: true, confidence: 'low', speech: null })).to.equal('low-confidence')
     expect(getSnapAttention({ changed: true, confidence: 'none', speech: null })).to.equal('low-confidence')
     // an unchanged row with no pause nearby is fine

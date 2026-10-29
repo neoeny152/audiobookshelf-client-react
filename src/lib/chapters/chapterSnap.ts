@@ -77,8 +77,11 @@ export interface SnapRow {
   speech: SnapChapterSpeech | null
 }
 
-/** Speech check verdict for one row, worst first: the heading sits on the wrong side of the start, then heard or not. */
-export type SnapSpeechStatus = 'late' | 'early' | 'heading' | 'no-heading'
+/**
+ * Speech check verdict for one row, worst first: the heading sits on the wrong side of the start, then heard or not.
+ * 'not-expected': not heard, but the server says the title is front or back matter that is often not read out.
+ */
+export type SnapSpeechStatus = 'late' | 'early' | 'heading' | 'no-heading' | 'not-expected'
 
 function round3(value: number): number {
   return Math.round(value * 1000) / 1000
@@ -115,7 +118,9 @@ export function toSnapSpeech(value: unknown): SnapChapterSpeech | null {
     heading: speech.heading === true,
     late: speech.late === true,
     early: speech.early === true,
-    heard: toHeardTitle(speech.heard)
+    heard: toHeardTitle(speech.heard),
+    // only an explicit false counts: servers that predate it expect every heading
+    expected: speech.expected !== false
   }
 }
 
@@ -176,7 +181,8 @@ export function getSnapSpeechStatus(speech: SnapChapterSpeech | null): SnapSpeec
   if (!speech) return null
   if (speech.late) return 'late'
   if (speech.early) return 'early'
-  return speech.heading ? 'heading' : 'no-heading'
+  if (speech.heading) return 'heading'
+  return speech.expected === false ? 'not-expected' : 'no-heading'
 }
 
 /** The speech check heard the heading on the wrong side of the proposed start. */
