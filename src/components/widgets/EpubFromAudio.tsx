@@ -32,6 +32,8 @@ export interface EpubFromAudioActions {
   start: (libraryItemId: string) => Promise<StartEpubJobActionResult>
   get: (libraryItemId: string, jobId: string) => Promise<StatusActionResult<EpubJob>>
   cancel: (libraryItemId: string, jobId: string) => Promise<StatusActionResult<EpubJob>>
+  /** `GET /api/items/:id/epub`: the item's current or latest job (newer servers, `chapterbotEpubCurrent`). */
+  getCurrent?: (libraryItemId: string) => Promise<StatusActionResult<EpubJob>>
 }
 
 export interface EpubFromAudioProps {
@@ -42,10 +44,21 @@ export interface EpubFromAudioProps {
   onConfirmClose: () => void
   actions: EpubFromAudioActions
   notify: (message: string, type: EpubToastType) => void
-  /** The latest job the server pushed (`chapterbot_epub_done` / `_failed`), if any. */
+  /** The latest job the server pushed (`chapterbot_epub_updated` / `_done` / `_failed`), if any. */
   jobEvent?: EpubJob | null
   /** A job finished with an EPUB in the book folder; the host refreshes the item so it shows. */
   onFinished?: (job: EpubJob) => void
+  /**
+   * The server returns the item's job without its id (`chapterbotEpubCurrent`), so anyone who opens the book sees
+   * the progress. Without it, only a job started in this browser (remembered in localStorage) is shown.
+   */
+  currentJobAvailable?: boolean
+  /** The viewer may cancel (and start) jobs. Others only see the progress. */
+  canUpdate?: boolean
+  /** The book already has an EPUB made from its audio. */
+  readyEbook?: { fileName: string } | null
+  /** Opens the e-reader on `readyEbook`. Without it the chip has no Read button. */
+  onReadEbook?: () => void
   pollIntervalMs?: number
 }
 
@@ -57,8 +70,9 @@ function statusMessage(job: EpubJob, t: TypeSafeTranslations): string {
 }
 
 /**
- * "Make EPUB from audio": the confirm dialog, then the job's progress with a Cancel button until the server reports
- * it done, failed or cancelled. Follows the job by polling GET and by the server's socket events (`jobEvent`).
+ * "Make EPUB from audio": the confirm dialog, then the job's progress until the server reports it done, failed or
+ * cancelled, and an "EPUB ready" chip once the book has one. Follows the job by polling and by the server's socket
+ * events (`jobEvent`). The progress shows for every viewer of the book; only `canUpdate` users get Cancel.
  */
 export default function EpubFromAudio({
   libraryItemId,
@@ -69,18 +83,26 @@ export default function EpubFromAudio({
   notify,
   jobEvent = null,
   onFinished,
+  currentJobAvailable = false,
+  canUpdate = true,
+  readyEbook = null,
+  onReadEbook,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS
 }: EpubFromAudioProps) {
   const t = useTypeSafeTranslations()
   const [job, setJob] = useState<EpubJob | null>(null)
+  /** A job that finished while this page was open (its file may not be in the item yet). */
+  const [finishedJob, setFinishedJob] = useState<EpubJob | null>(null)
   const [isStarting, setIsStarting] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const jobIdRef = useRef<string | null>(null)
+  /** The last job reported as ended: the socket can deliver the end twice (to the starter, and to everyone). */
+  const endedJobIdRef = useRef<string | null>(null)
 
   // Latest callbacks, so the polling and socket effects do not restart when the host re-renders
-  const latest = useRef({ actions, notify, onFinished, t })
+  const latest = useRef({ actions, notify, onFinished, t, currentJobAvailable })
   useEffect(() => {
-    latest.current = { actions, notify, onFinished, t }
+    latest.current = { actions, notify, onFinished, t, currentJobAvailable }
   })
 
   const follow = useCallback(
@@ -93,48 +115,93 @@ export default function EpubFromAudio({
     [libraryItemId]
   )
 
-  /** Apply a status for the followed job. A finished job is reported once and then dropped. */
-  const applyJob = useCallback(
-    (next: EpubJob) => {
-      if (next.libraryItemId !== libraryItemId || next.jobId !== jobIdRef.current) return
-      if (isEpubJobActive(next)) {
-        // A poll sent before the cancel can answer after it; the server never takes a cancel back
-        setJob((prev) => (prev?.jobId === next.jobId && prev.cancelRequested && !next.cancelRequested ? { ...next, cancelRequested: true } : next))
-        return
-      }
+  /** Report a finished job once (toast, refresh) and drop it. */
+  const finish = useCallback(
+    (next: EpubJob, announce: boolean) => {
       follow(null)
+      if (endedJobIdRef.current === next.jobId) return
+      endedJobIdRef.current = next.jobId
       const { notify: show, onFinished: finished, t: tr } = latest.current
       if (next.status === 'done') {
-        show(next.fileName ? tr('ToastEpubFromAudioDone', { fileName: next.fileName }) : tr('ToastEpubFromAudioDoneNoName'), 'success')
+        setFinishedJob(next)
+        if (announce) show(next.fileName ? tr('ToastEpubFromAudioDone', { fileName: next.fileName }) : tr('ToastEpubFromAudioDoneNoName'), 'success')
         finished?.(next)
+      } else if (!announce) {
+        return
       } else if (next.status === 'cancelled') {
         show(tr('ToastEpubFromAudioCancelled'), 'info')
       } else {
         show(next.error ? tr('ToastEpubFromAudioFailedWithError', { error: next.error }) : tr('ToastEpubFromAudioFailed'), 'error')
       }
     },
-    [follow, libraryItemId]
+    [follow]
   )
 
-  // A job started earlier in this browser (the server keeps one per item, in memory)
-  useEffect(() => {
-    const jobId = recallEpubJob(libraryItemId)
-    if (!jobId) return
-    let active = true
-    void callStatusAction(() => latest.current.actions.get(libraryItemId, jobId)).then((result) => {
-      if (!active) return
-      if (result.ok && isEpubJobActive(result.data)) {
-        jobIdRef.current = result.data.jobId
-        setJob(result.data)
-      } else if (result.ok || result.status === 404) {
-        // Finished while away (the file is already in the folder) or forgotten by a server restart
-        forgetEpubJob(libraryItemId)
+  /**
+   * Apply a status for this item. The followed job is updated (and reported once when it ends). With no job followed,
+   * an active one is picked up (started by someone else, another device or the auto pipeline) and a finished one only
+   * refreshes the item, without a toast. A different job while one is followed is ignored.
+   */
+  const applyJob = useCallback(
+    (next: EpubJob) => {
+      if (next.libraryItemId !== libraryItemId) return
+      const followed = jobIdRef.current
+      if (followed && next.jobId !== followed) return
+      if (isEpubJobActive(next)) {
+        if (!followed) {
+          follow(next)
+          return
+        }
+        // A poll sent before the cancel can answer after it; the server never takes a cancel back
+        setJob((prev) => (prev?.jobId === next.jobId && prev.cancelRequested && !next.cancelRequested ? { ...next, cancelRequested: true } : next))
+        return
       }
+      finish(next, !!followed)
+    },
+    [finish, follow, libraryItemId]
+  )
+
+  // Pick up the item's job: from the server when it can say (any viewer, any device), else one started in this browser
+  useEffect(() => {
+    let active = true
+    const fromStorage = () => {
+      const jobId = recallEpubJob(libraryItemId)
+      if (!jobId) return
+      void callStatusAction(() => latest.current.actions.get(libraryItemId, jobId)).then((result) => {
+        if (!active) return
+        if (result.ok && isEpubJobActive(result.data)) {
+          if (!jobIdRef.current) follow(result.data)
+        } else if (result.ok || result.status === 404) {
+          // Finished while away (the file is already in the folder) or forgotten by a server restart
+          forgetEpubJob(libraryItemId)
+        }
+      })
+    }
+    const getCurrent = latest.current.actions.getCurrent
+    if (!currentJobAvailable || !getCurrent) {
+      fromStorage()
+      return () => {
+        active = false
+      }
+    }
+    void callStatusAction(() => getCurrent(libraryItemId)).then((result) => {
+      if (!active) return
+      if (result.ok && result.data.libraryItemId === libraryItemId) {
+        if (isEpubJobActive(result.data)) {
+          if (!jobIdRef.current || jobIdRef.current === result.data.jobId) follow(result.data)
+        } else if (!jobIdRef.current) {
+          // The latest job already ended; the file (if any) is in the item
+          forgetEpubJob(libraryItemId)
+        }
+        return
+      }
+      // No job on the server, or an error: an id remembered here is the last resort
+      fromStorage()
     })
     return () => {
       active = false
     }
-  }, [libraryItemId])
+  }, [currentJobAvailable, follow, libraryItemId])
 
   const jobId = job?.jobId ?? null
   const polling = !!job && isEpubJobActive(job)
@@ -144,11 +211,20 @@ export default function EpubFromAudio({
     const timer = setInterval(() => {
       if (inFlight) return
       inFlight = true
-      void callStatusAction(() => latest.current.actions.get(libraryItemId, jobId))
+      const { actions: current, currentJobAvailable: byItem } = latest.current
+      const request = byItem && current.getCurrent ? () => current.getCurrent!(libraryItemId) : () => current.get(libraryItemId, jobId)
+      void callStatusAction(request)
         .then((result) => {
+          if (jobIdRef.current !== jobId) return
           if (result.ok) {
-            applyJob(result.data)
-          } else if (result.status === 404 && jobIdRef.current === jobId) {
+            if (result.data.jobId === jobId) {
+              applyJob(result.data)
+            } else {
+              // The server moved on to a newer job for this book: follow that one
+              follow(null)
+              applyJob(result.data)
+            }
+          } else if (result.status === 404) {
             follow(null)
             latest.current.notify(latest.current.t('ToastEpubFromAudioLost'), 'warning')
           }
@@ -176,6 +252,7 @@ export default function EpubFromAudio({
         notify(toast.values ? t(toast.key, toast.values) : t(toast.key), toast.type)
         return
       }
+      setFinishedJob(null)
       follow(result.data.job)
       notify(result.data.alreadyRunning ? t('ToastEpubFromAudioAlreadyRunning') : t('ToastEpubFromAudioStarted'), 'info')
       // A job can finish between the 409 and the lookup
@@ -202,6 +279,8 @@ export default function EpubFromAudio({
   }, [applyJob, isCancelling, job, libraryItemId, notify, t])
 
   const showProgress = !!job && isEpubJobActive(job)
+  const readyName = readyEbook?.fileName ?? finishedJob?.fileName ?? null
+  const showReady = !showProgress && (!!readyEbook || !!finishedJob)
 
   return (
     <>
@@ -217,21 +296,47 @@ export default function EpubFromAudio({
                 </span>
               )}
             </p>
-            <Btn size="small" loading={isCancelling} disabled={!canCancelEpubJob(job)} onClick={() => void handleCancel()}>
-              {t('ButtonCancel')}
-            </Btn>
+            {canUpdate && (
+              <Btn size="small" loading={isCancelling} disabled={!canCancelEpubJob(job)} onClick={() => void handleCancel()}>
+                {t('ButtonCancel')}
+              </Btn>
+            )}
           </div>
         </div>
       )}
 
-      <ConfirmDialog
-        isOpen={confirmOpen}
-        title={t('ButtonMakeEpubFromAudio')}
-        message={t('MessageConfirmEpubFromAudio', { title: bookTitle })}
-        yesButtonText={t('ButtonStartEpubFromAudio')}
-        onClose={onConfirmClose}
-        onConfirm={() => void handleStart()}
-      />
+      {showReady && (
+        <div
+          className="border-success/60 bg-success/10 mt-4 inline-flex max-w-md flex-wrap items-center gap-2 rounded-md border px-3 py-1.5 text-sm"
+          cy-id="epub-from-audio-ready"
+        >
+          <span className="material-symbols text-success text-lg" aria-hidden>
+            auto_stories
+          </span>
+          <span className="font-semibold">{t('LabelEpubFromAudioReady')}</span>
+          {readyName && (
+            <span className="text-foreground-muted min-w-0 truncate" title={readyName}>
+              {readyName}
+            </span>
+          )}
+          {onReadEbook && readyEbook && (
+            <Btn size="small" onClick={onReadEbook}>
+              {t('ButtonRead')}
+            </Btn>
+          )}
+        </div>
+      )}
+
+      {canUpdate && (
+        <ConfirmDialog
+          isOpen={confirmOpen}
+          title={t('ButtonMakeEpubFromAudio')}
+          message={t('MessageConfirmEpubFromAudio', { title: bookTitle })}
+          yesButtonText={t('ButtonStartEpubFromAudio')}
+          onClose={onConfirmClose}
+          onConfirm={() => void handleStart()}
+        />
+      )}
     </>
   )
 }

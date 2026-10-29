@@ -42,7 +42,12 @@ function Harness({ pushEvent, ...props }: HarnessProps) {
   )
 }
 
-function mountEpub({ actions = {}, pushEvent }: { actions?: Partial<EpubFromAudioActions>; pushEvent?: EpubJob } = {}) {
+type MountOptions = {
+  actions?: Partial<EpubFromAudioActions>
+  pushEvent?: EpubJob
+} & Partial<Pick<EpubFromAudioProps, 'currentJobAvailable' | 'canUpdate' | 'readyEbook' | 'onReadEbook'>>
+
+function mountEpub({ actions = {}, pushEvent, ...rest }: MountOptions = {}) {
   const fullActions: EpubFromAudioActions = {
     start:
       actions.start ??
@@ -61,7 +66,8 @@ function mountEpub({ actions = {}, pushEvent }: { actions?: Partial<EpubFromAudi
       cy
         .stub()
         .as('cancel')
-        .resolves({ ok: true, data: job({ status: 'cancelled' }) })
+        .resolves({ ok: true, data: job({ status: 'cancelled' }) }),
+    ...(actions.getCurrent ? { getCurrent: actions.getCurrent } : {})
   }
   cy.mount(
     <Harness
@@ -72,6 +78,7 @@ function mountEpub({ actions = {}, pushEvent }: { actions?: Partial<EpubFromAudi
       onFinished={cy.stub().as('onFinished')}
       pollIntervalMs={50}
       pushEvent={pushEvent}
+      {...rest}
     />
   )
 }
@@ -225,5 +232,81 @@ describe('<EpubFromAudio />', () => {
     cy.get('@get').should('have.been.called')
     cy.get('[cy-id="epub-from-audio-progress"]').should('not.exist')
     cy.then(() => expect(recallEpubJob(ITEM_ID)).to.equal(null))
+  })
+
+  describe('current job from the server (chapterbotEpubCurrent)', () => {
+    it('shows the job on a device that never started it (no localStorage)', () => {
+      const getCurrent = cy
+        .stub()
+        .as('getCurrent')
+        .resolves({ ok: true, data: job({ jobId: 'job-9', status: 'running', progress: 0.42, chaptersDone: 5, origin: 'pipeline' }) })
+      mountEpub({ actions: { getCurrent }, currentJobAvailable: true })
+      cy.get('@getCurrent').should('have.been.calledOnceWith', ITEM_ID)
+      cy.get('[cy-id="epub-from-audio-progress"]').should('contain.text', '42%')
+      cy.get('[cy-id="epub-from-audio-chapters"]').should('contain.text', '5 of 12 chapters')
+      cy.get('@get').should('not.have.been.called')
+    })
+
+    it('shows the progress without a Cancel button to viewers who cannot update', () => {
+      mountEpub({
+        actions: { getCurrent: cy.stub().resolves({ ok: true, data: job({ status: 'running', progress: 0.1 }) }) },
+        currentJobAvailable: true,
+        canUpdate: false
+      })
+      cy.get('[cy-id="epub-from-audio-progress"]').should('contain.text', '10%')
+      cy.get('[cy-id="epub-from-audio-progress"]').find('button').should('not.exist')
+    })
+
+    it('polls the current job and reports when it is done', () => {
+      const getCurrent = cy.stub().as('getCurrent')
+      getCurrent.onCall(0).resolves({ ok: true, data: job({ status: 'running', progress: 0.5 }) })
+      getCurrent.resolves({ ok: true, data: job({ status: 'done', progress: 1, fileName: 'The Long Road (from audio).epub' }) })
+      mountEpub({ actions: { getCurrent }, currentJobAvailable: true })
+      cy.get('@notify').should('have.been.calledWith', 'EPUB created: The Long Road (from audio).epub', 'success')
+      cy.get('@onFinished').should('have.been.calledOnce')
+      cy.get('[cy-id="epub-from-audio-progress"]').should('not.exist')
+      cy.get('[cy-id="epub-from-audio-ready"]').should('contain.text', 'EPUB ready').and('contain.text', 'The Long Road (from audio).epub')
+      cy.get('@get').should('not.have.been.called')
+    })
+
+    it('falls back to the job remembered in this browser when the server has none', () => {
+      rememberEpubJob(ITEM_ID, 'job-3')
+      mountEpub({
+        actions: {
+          getCurrent: cy.stub().as('getCurrent').resolves({ ok: false, status: 404, error: 'No EPUB job' }),
+          get: cy
+            .stub()
+            .as('get')
+            .resolves({ ok: true, data: job({ jobId: 'job-3', status: 'running', progress: 0.3 }) })
+        },
+        currentJobAvailable: true
+      })
+      cy.get('@getCurrent').should('have.been.called')
+      cy.get('@get').should('have.been.calledWith', ITEM_ID, 'job-3')
+      cy.get('[cy-id="epub-from-audio-progress"]').should('contain.text', '30%')
+    })
+
+    it('shows nothing when the latest job already ended', () => {
+      mountEpub({
+        actions: { getCurrent: cy.stub().as('getCurrent').resolves({ ok: true, data: job({ status: 'failed', error: 'x' }) }) },
+        currentJobAvailable: true
+      })
+      cy.get('@getCurrent').should('have.been.called')
+      cy.get('[cy-id="epub-from-audio-progress"]').should('not.exist')
+      cy.get('@notify').should('not.have.been.called')
+    })
+  })
+
+  it('picks up a job someone else started from a progress broadcast', () => {
+    mountEpub({ pushEvent: job({ jobId: 'job-5', status: 'running', progress: 0.7 }), canUpdate: false })
+    cy.get('[cy-id="epub-from-audio-progress"]').should('not.exist')
+    cy.get('[cy-id="push-event"]').click()
+    cy.get('[cy-id="epub-from-audio-progress"]').should('contain.text', '70%')
+  })
+
+  it('shows "EPUB ready" with a Read button when the book has an EPUB from audio', () => {
+    mountEpub({ readyEbook: { fileName: 'The Long Road (from audio).epub' }, onReadEbook: cy.stub().as('read') })
+    cy.get('[cy-id="epub-from-audio-ready"]').should('contain.text', 'EPUB ready').contains('button', 'Read').click()
+    cy.get('@read').should('have.been.calledOnce')
   })
 })

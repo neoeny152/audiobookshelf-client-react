@@ -1,6 +1,6 @@
 'use client'
 
-import { cancelEpubJobAction, getEpubJobAction, startEpubJobAction } from '@/app/actions/epubActions'
+import { cancelEpubJobAction, getCurrentEpubJobAction, getEpubJobAction, startEpubJobAction } from '@/app/actions/epubActions'
 import AddToCollectionModal from '@/components/modals/AddToCollectionModal'
 import AddToPlaylistModal from '@/components/modals/AddToPlaylistModal'
 import PodcastCheckNewEpisodesModal from '@/components/modals/PodcastCheckNewEpisodesModal'
@@ -16,6 +16,8 @@ import ConfirmDialog from '@/components/widgets/ConfirmDialog'
 import EpubFromAudio, { type EpubFromAudioActions } from '@/components/widgets/EpubFromAudio'
 import type { MediaCardMoreMenuSubitem } from '@/components/widgets/media-card/MediaCardMoreMenu'
 import { useMediaCardActions } from '@/components/widgets/media-card/useMediaCardActions'
+import { useEreader } from '@/contexts/EreaderContext'
+import { useLibrary } from '@/contexts/LibraryContext'
 import { useMediaContext } from '@/contexts/MediaContext'
 import { useSocketEvent } from '@/contexts/SocketContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
@@ -23,7 +25,7 @@ import { useUser } from '@/contexts/UserContext'
 import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { withBasePath } from '@/lib/basePath'
-import { canMakeEpubFromAudio, toEpubJob } from '@/lib/epubFromAudio'
+import { canMakeEpubFromAudio, findEpubFromAudioFile, toEpubJob } from '@/lib/epubFromAudio'
 import { getEbookFormat } from '@/lib/ereader/ereaderEbook'
 import { PlayerState, type BookLibraryItem, type EpubJob, type PodcastLibraryItem, type RssFeed } from '@/types/api'
 import { useRouter } from 'next/navigation'
@@ -34,7 +36,8 @@ const EPUB_FROM_AUDIO_ACTION = 'makeEpubFromAudio'
 const epubFromAudioActions: EpubFromAudioActions = {
   start: startEpubJobAction,
   get: getEpubJobAction,
-  cancel: cancelEpubJobAction
+  cancel: cancelEpubJobAction,
+  getCurrent: getCurrentEpubJobAction
 }
 
 interface LibraryItemActionButtonsProps {
@@ -73,9 +76,16 @@ export default function LibraryItemActionButtons({
   const router = useRouter()
   const { showToast } = useGlobalToast()
 
-  // EPUB from audio: only when the server advertises it (never on a stock server)
+  // EPUB from audio: only when the server advertises it (never on a stock server). Starting needs canUpdate; the
+  // progress shows for every viewer when the server can name the item's job (`chapterbotEpubCurrent`).
   const epubFromAudioAvailable = useServerFeature('chapterbotEpub')
-  const showEpubFromAudio = epubFromAudioAvailable && userCanUpdate && canMakeEpubFromAudio(libraryItem)
+  const epubCurrentAvailable = useServerFeature('chapterbotEpubCurrent')
+  const canMakeEpub = canMakeEpubFromAudio(libraryItem)
+  const showEpubFromAudio = epubFromAudioAvailable && userCanUpdate && canMakeEpub
+  const epubFromAudioFile = useMemo(() => (libraryItem.mediaType === 'book' ? findEpubFromAudioFile(libraryItem) : null), [libraryItem])
+  const showEpubWidget = showEpubFromAudio || (canMakeEpub && epubCurrentAvailable) || !!epubFromAudioFile
+  const { openEreader } = useEreader()
+  const { library } = useLibrary()
   const [epubConfirmOpen, setEpubConfirmOpen] = useState(false)
   const [epubJobEvent, setEpubJobEvent] = useState<EpubJob | null>(null)
   const extraToolSubitems = useMemo<MediaCardMoreMenuSubitem[] | undefined>(
@@ -88,9 +98,23 @@ export default function LibraryItemActionButtons({
   }, [])
   useSocketEvent<unknown>('chapterbot_epub_done', handleEpubJobEvent)
   useSocketEvent<unknown>('chapterbot_epub_failed', handleEpubJobEvent)
+  useSocketEvent<unknown>('chapterbot_epub_updated', handleEpubJobEvent)
   const notifyEpub = useCallback((message: string, type: 'success' | 'error' | 'warning' | 'info') => showToast(message, { type }), [showToast])
   // The server rescans the item (item_updated); refresh as well so the new ebook shows even if that event is missed
   const handleEpubFinished = useCallback(() => router.refresh(), [router])
+  const epubReady = useMemo(() => (epubFromAudioFile ? { fileName: epubFromAudioFile.metadata.filename } : null), [epubFromAudioFile])
+  const handleReadEpubFromAudio = useCallback(() => {
+    if (!epubFromAudioFile) return
+    openEreader({
+      libraryItemId: libraryItem.id,
+      title: libraryItem.media.metadata.title ?? epubFromAudioFile.metadata.filename,
+      ebookFormat: 'epub',
+      epubsAllowScriptedContent: !!library.settings?.epubsAllowScriptedContent,
+      fileId: epubFromAudioFile.ino,
+      // Progress belongs to the primary ebook; a supplementary EPUB is read without it (as in the ebook files table)
+      keepProgress: libraryItem.mediaType === 'book' && libraryItem.media.ebookFile?.ino === epubFromAudioFile.ino
+    })
+  }, [epubFromAudioFile, library.settings?.epubsAllowScriptedContent, libraryItem, openEreader])
 
   const mediaProgress = libraryItem.media?.id ? getMediaItemProgress(libraryItem.media.id) : undefined
   const isRead = mediaProgress?.isFinished ?? false
@@ -281,16 +305,20 @@ export default function LibraryItemActionButtons({
         )}
       </div>
 
-      {showEpubFromAudio && (
+      {showEpubWidget && (
         <EpubFromAudio
           libraryItemId={libraryItem.id}
           bookTitle={libraryItem.media.metadata.title ?? ''}
-          confirmOpen={epubConfirmOpen}
+          confirmOpen={epubConfirmOpen && showEpubFromAudio}
           onConfirmClose={() => setEpubConfirmOpen(false)}
           actions={epubFromAudioActions}
           notify={notifyEpub}
           jobEvent={epubJobEvent}
           onFinished={handleEpubFinished}
+          currentJobAvailable={epubCurrentAvailable}
+          canUpdate={showEpubFromAudio}
+          readyEbook={epubReady}
+          onReadEbook={handleReadEpubFromAudio}
         />
       )}
 

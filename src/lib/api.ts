@@ -574,6 +574,14 @@ export async function getEpubJob(libraryItemId: string, jobId: string): Promise<
   return apiRequest<EpubJob>(`/api/items/${libraryItemId}/epub/${encodeURIComponent(jobId)}`)
 }
 
+/**
+ * The item's current or latest EPUB job, without knowing its id (only when /status lists `chapterbotEpubCurrent`).
+ * Read-only, so any user who can see the item may call it. Throws ApiError 404 when the item has no job.
+ */
+export async function getCurrentEpubJob(libraryItemId: string): Promise<EpubJob> {
+  return apiRequest<EpubJob>(`/api/items/${libraryItemId}/epub`)
+}
+
 /** Cancel a queued or running EPUB job. A running job stops at its next segment, so it may report `cancelRequested` first. */
 export async function cancelEpubJob(libraryItemId: string, jobId: string): Promise<EpubJob> {
   return apiRequest<EpubJob>(`/api/items/${libraryItemId}/epub/${encodeURIComponent(jobId)}`, { method: 'DELETE' })

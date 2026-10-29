@@ -741,6 +741,8 @@ export interface EpubJob {
   fileName: string | null
   createdAt: number
   finishedAt: number | null
+  /** `pipeline` when the auto pipeline started it (newer servers only). */
+  origin?: string | null
 }
 
 export interface OrderedTrackFileData {

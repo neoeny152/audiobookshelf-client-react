@@ -41,3 +41,8 @@ export async function getEpubJobAction(libraryItemId: string, jobId: string): Pr
 export async function cancelEpubJobAction(libraryItemId: string, jobId: string): Promise<StatusActionResult<EpubJob>> {
   return toStatusActionResult(() => api.cancelEpubJob(libraryItemId, jobId))
 }
+
+/** The item's current or latest job (newer servers, `chapterbotEpubCurrent`); 404 when it has none. */
+export async function getCurrentEpubJobAction(libraryItemId: string): Promise<StatusActionResult<EpubJob>> {
+  return toStatusActionResult(() => api.getCurrentEpubJob(libraryItemId))
+}

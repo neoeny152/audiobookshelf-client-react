@@ -1,9 +1,11 @@
 import {
   canCancelEpubJob,
   canMakeEpubFromAudio,
+  findEpubFromAudioFile,
   forgetEpubJob,
   getEpubJobPercent,
   getEpubRequestErrorToast,
+  isEpubFromAudioFileName,
   isEpubJobActive,
   parseEpubConflictJobId,
   recallEpubJob,
@@ -119,5 +121,38 @@ describe('remembered EPUB jobs', () => {
     expect(recallEpubJob('li_test')).to.equal('job-9')
     forgetEpubJob('li_test')
     expect(recallEpubJob('li_test')).to.equal(null)
+  })
+})
+
+describe('findEpubFromAudioFile', () => {
+  const file = (ino: string, filename: string, addedAt = 1) =>
+    ({ ino, addedAt, updatedAt: addedAt, fileType: 'ebook', isSupplementary: true, metadata: { filename, ext: '.epub' } }) as unknown as NonNullable<
+      LibraryItem['libraryFiles']
+    >[number]
+
+  it('finds the newest "(from audio)" EPUB, including " (2)" copies', () => {
+    const item = { libraryFiles: [file('1', 'Book.epub', 5), file('2', 'Book (from audio).epub', 2), file('3', 'Book (from audio) (2).epub', 3)] }
+    expect(findEpubFromAudioFile(item)?.ino).to.equal('3')
+  })
+
+  it('prefers the file a finished job named, and is null without one', () => {
+    const item = { libraryFiles: [file('2', 'Book (from audio).epub', 2), file('3', 'Book (from audio) (2).epub', 3)] }
+    expect(findEpubFromAudioFile(item, 'Book (from audio).epub')?.ino).to.equal('2')
+    expect(findEpubFromAudioFile({ libraryFiles: [file('1', 'Book.epub')] })).to.equal(null)
+    expect(findEpubFromAudioFile({})).to.equal(null)
+  })
+
+  it('recognises the names the server writes', () => {
+    expect(isEpubFromAudioFileName('Dungeon Crawler Carl (from audio).epub')).to.equal(true)
+    expect(isEpubFromAudioFileName('Dungeon Crawler Carl (from audio) (12).epub')).to.equal(true)
+    expect(isEpubFromAudioFileName('Dungeon Crawler Carl.epub')).to.equal(false)
+    expect(isEpubFromAudioFileName(null)).to.equal(false)
+  })
+})
+
+describe('toEpubJob origin', () => {
+  it('keeps the origin when the server sends one', () => {
+    expect(toEpubJob({ ...job(), origin: 'pipeline' })?.origin).to.equal('pipeline')
+    expect(toEpubJob(job())).to.not.have.property('origin')
   })
 })

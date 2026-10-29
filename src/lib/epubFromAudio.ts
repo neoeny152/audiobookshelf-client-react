@@ -1,5 +1,5 @@
 import type { StatusActionResult } from '@/lib/actionResult'
-import { isBookMediaWithTracks, type EpubJob, type EpubJobStatus, type LibraryItem } from '@/types/api'
+import { isBookMediaWithTracks, type EpubJob, type EpubJobStatus, type LibraryFile, type LibraryItem } from '@/types/api'
 import type { TranslationKey } from '@/types/translations'
 
 /** EPUB from audio (chapterbot, `POST /api/items/:id/epub`). The server follows the job; the client only shows it. */
@@ -44,7 +44,8 @@ export function toEpubJob(value: unknown): EpubJob | null {
     error: typeof job.error === 'string' ? job.error : null,
     fileName: typeof job.fileName === 'string' ? job.fileName : null,
     createdAt: typeof job.createdAt === 'number' ? job.createdAt : 0,
-    finishedAt: typeof job.finishedAt === 'number' ? job.finishedAt : null
+    finishedAt: typeof job.finishedAt === 'number' ? job.finishedAt : null,
+    ...(typeof job.origin === 'string' ? { origin: job.origin } : {})
   }
 }
 
@@ -59,6 +60,28 @@ export function parseEpubConflictJobId(body: string): string | null {
     // Plain-text body
   }
   return null
+}
+
+/** The server names its EPUBs "<title> (from audio).epub", with " (2)", " (3)" ... when that name is taken. */
+const FROM_AUDIO_EPUB = /\(from audio\)(?: \(\d+\))?\.epub$/i
+
+export function isEpubFromAudioFileName(fileName: string | null | undefined): boolean {
+  return !!fileName && FROM_AUDIO_EPUB.test(fileName)
+}
+
+/**
+ * The newest EPUB made from the book's audio, among the item's files, or null. With `fileName`, that file (the one a
+ * finished job reported) wins when it is there.
+ */
+export function findEpubFromAudioFile(libraryItem: Pick<LibraryItem, 'libraryFiles'>, fileName?: string | null): LibraryFile | null {
+  const files = (libraryItem.libraryFiles ?? []).filter((file) => file.fileType === 'ebook' || /\.epub$/i.test(file.metadata?.filename ?? ''))
+  if (fileName) {
+    const named = files.find((file) => file.metadata?.filename === fileName)
+    if (named) return named
+  }
+  const fromAudio = files.filter((file) => isEpubFromAudioFileName(file.metadata?.filename))
+  if (!fromAudio.length) return null
+  return fromAudio.reduce((newest, file) => ((file.addedAt ?? 0) > (newest.addedAt ?? 0) ? file : newest))
 }
 
 /** Only books with audio and a folder of their own can get an EPUB (the server checks the same). */
@@ -82,8 +105,9 @@ export function getEpubRequestErrorToast(result: Extract<StatusActionResult<unkn
 }
 
 /*
- * The job id is remembered per item in this browser so the progress comes back after leaving the page. The server
- * keeps jobs in memory only; a 404 on the next look means it is gone and the id is forgotten.
+ * The job id is remembered per item in this browser so the progress comes back after leaving the page. Newer servers
+ * (`chapterbotEpubCurrent`) return the item's job without an id, for any viewer; this is the fallback for older ones,
+ * which keep jobs in memory only, so a 404 on the next look means it is gone and the id is forgotten.
  */
 
 export function rememberEpubJob(libraryItemId: string, jobId: string): void {
