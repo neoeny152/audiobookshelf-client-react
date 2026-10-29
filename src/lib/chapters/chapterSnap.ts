@@ -207,6 +207,22 @@ function isSpeechWarning(warning: string): boolean {
 
 const SPEECH_LIMIT_WARNING = /^speech check limited to/i
 
+/** The speech check could not run at all: chapterbot is busy or failed (`chapterbotSpeech.js` createVerifier). */
+const SPEECH_STOPPED_WARNING = /^speech check (skipped|failed)/i
+/** The speech check can never run for this book: a resend would fail the same way. */
+const SPEECH_UNAVAILABLE_WARNING = /^speech check skipped: (the audio files are outside|no audio files)/i
+
+/**
+ * Why sending (more) speech batches for this response would be wasted: 'unavailable' when the audio can never reach
+ * chapterbot (path map, no audio files), 'stopped' when chapterbot was busy or failed this time, else null.
+ */
+export function getSnapSpeechBlock(response: SnapChaptersResponse): 'unavailable' | 'stopped' | null {
+  const warnings = (response.warnings ?? []).filter((warning): warning is string => typeof warning === 'string')
+  if (warnings.some((warning) => SPEECH_UNAVAILABLE_WARNING.test(warning))) return 'unavailable'
+  if (warnings.some((warning) => SPEECH_STOPPED_WARNING.test(warning))) return 'stopped'
+  return null
+}
+
 /**
  * Starts the server checks per snap request (`chapterbotSpeech.js` MAX_VERIFY_STARTS). The panel checks a whole book in
  * batches of this size; a server with a lower limit just leaves some unchecked, which the next batch picks up.
@@ -257,10 +273,20 @@ export function buildSnapSpeechPayload(session: SnapSession, indexes: number[]):
  */
 export type SnapSpeechBatchResult = { ok: true; response: SnapChaptersResponse } | { ok: false; busy: boolean }
 
+/** Server minimum gap between chapter starts (`chapterSnap.js` MIN_GAP), kept where the original gap allows it. */
+const SNAP_MIN_GAP = 1
+
+/** `chapterSnap.js` orderOk: whether `later` may follow `earlier`, given their original starts. */
+function snapOrderOk(earlier: number, later: number, originalEarlier: number, originalLater: number): boolean {
+  if (originalLater - originalEarlier < 2 * SNAP_MIN_GAP) return later > earlier
+  return later >= earlier + SNAP_MIN_GAP - 1e-6
+}
+
 /**
  * Fold one speech batch into the session's result. A batched chapter takes the batch's proposal (its speech verdict was
  * heard at that start), keeping the original start. The batch bounds each chapter by the original neighbours, so a
- * proposal that differs from the session's could cross a neighbour that moved: that chapter keeps the session's
+ * proposal that differs from the session's could break the server's order rule (strictly increasing, a minimum gap)
+ * against a neighbour that moved, or undo an order conflict the full snap resolved: that chapter keeps the session's
  * proposal and stays unchecked. Speech warnings come from the latest batch only (they describe what is still unchecked).
  */
 export function mergeSnapSpeechBatch(
@@ -277,9 +303,11 @@ export function mergeSnapSpeechBatch(
     if (!prev || !next || SPEECH_SKIP_REASONS.has(next.reason) || !toSnapSpeech(next.speech)) continue
     const moved = Math.abs(next.proposedStart - prev.proposedStart) >= 0.001
     if (moved) {
+      if (prev.reason === 'order-conflict') continue
       const before = chapters[i - 1]
       const after = chapters[i + 1]
-      if ((before && next.proposedStart <= before.proposedStart) || (after && next.proposedStart >= after.proposedStart)) continue
+      if (before && !snapOrderOk(before.proposedStart, next.proposedStart, before.originalStart, prev.originalStart)) continue
+      if (after && !snapOrderOk(next.proposedStart, after.proposedStart, prev.originalStart, after.originalStart)) continue
     }
     const delta = round3(next.proposedStart - prev.originalStart)
     chapters[i] = { ...next, title: prev.title, originalStart: prev.originalStart, delta, changed: delta !== 0 }

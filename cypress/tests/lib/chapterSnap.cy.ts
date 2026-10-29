@@ -12,6 +12,7 @@ import {
   getSnapErrorToast,
   getSnapAttention,
   getSnapHeardTitle,
+  getSnapSpeechBlock,
   getSnapSpeechPendingIndexes,
   getSnapSpeechProgress,
   getSnapSpeechStatus,
@@ -592,7 +593,7 @@ describe('snap speech batches', () => {
 
   it('takes a different batch proposal with the original start, unless it would cross a neighbour', () => {
     const prev = first()
-    prev.chapters[2] = { ...prev.chapters[2], proposedStart: 296.5 }
+    prev.chapters[2] = { ...prev.chapters[2], proposedStart: 295.5 }
     const batch = batchOf(
       { proposedStart: 296.8, reason: 'nearest-longest-pause', confidence: 'medium', speech: heard },
       { proposedStart: 401, reason: 'inside-pause', confidence: 'high', speech: heard }
@@ -602,11 +603,51 @@ describe('snap speech batches', () => {
     expect(merged.chapters[3]).to.include({ proposedStart: 296.8, originalStart: 300, delta: -3.2, changed: true })
     expect(merged.chapters[4]).to.include({ proposedStart: 401, originalStart: 400, delta: 1, changed: true, reason: 'inside-pause' })
 
-    // 296.4 would start before chapter 2's proposal (296.5)
-    const crossing = mergeSnapSpeechBatch(prev, batchOf({ proposedStart: 296.4, speech: heard }, { proposedStart: 401, speech: heard }), [3, 4])
+    // 295.4 would start before chapter 2's proposal (295.5)
+    const crossing = mergeSnapSpeechBatch(prev, batchOf({ proposedStart: 295.4, speech: heard }, { proposedStart: 401, speech: heard }), [3, 4])
     expect(crossing.checked).to.deep.equal([4])
     expect(crossing.response.chapters[3].speech).to.equal(null)
     expect(crossing.response.chapters[3].proposedStart).to.equal(297)
+  })
+
+  it("keeps the server's minimum gap to a moved neighbour", () => {
+    const prev = first()
+    prev.chapters[2] = { ...prev.chapters[2], proposedStart: 295.5 }
+    // 296.2 is after 295.5 but under the 1 s gap the server keeps (the original gap is 100 s)
+    const tooClose = mergeSnapSpeechBatch(prev, batchOf({ proposedStart: 296.2, speech: heard }, { proposedStart: 401, speech: heard }), [3, 4])
+    expect(tooClose.checked).to.deep.equal([4])
+    expect(tooClose.response.chapters[3].proposedStart).to.equal(297)
+    // same towards the next chapter
+    prev.chapters[4] = { ...prev.chapters[4], proposedStart: 303 }
+    const beforeNext = mergeSnapSpeechBatch(prev, batchOf({ proposedStart: 302.5, speech: heard }, { proposedStart: 303, speech: heard }), [3])
+    expect(beforeNext.checked).to.deep.equal([])
+  })
+
+  it('keeps an order conflict the full snap resolved', () => {
+    const prev = first()
+    prev.chapters[3] = { ...prev.chapters[3], proposedStart: 300, delta: 0, changed: false, reason: 'order-conflict', confidence: 'none' }
+    const moved = mergeSnapSpeechBatch(prev, batchOf({ proposedStart: 298, speech: heard }, { proposedStart: 402, speech: heard }), [3, 4])
+    expect(moved.checked).to.deep.equal([4])
+    expect(moved.response.chapters[3]).to.include({ proposedStart: 300, reason: 'order-conflict' })
+    // the same start with a verdict is fine
+    const same = mergeSnapSpeechBatch(prev, batchOf({ proposedStart: 300, reason: 'order-conflict', speech: heard }, { proposedStart: 402, speech: heard }), [3])
+    expect(same.checked).to.deep.equal([3])
+  })
+
+  it('tells when more speech batches would be wasted', () => {
+    const r = first()
+    r.warnings = ['Speech check limited to 15 chapters per request: 2 not checked. Resend with "indexes" set to the rest to check them.']
+    expect(getSnapSpeechBlock(r)).to.equal(null)
+    r.warnings = ['Speech check time limit reached: 2 chapters not checked. Resend with "indexes" set to them to check them.']
+    expect(getSnapSpeechBlock(r)).to.equal(null)
+    r.warnings = ['Speech check skipped: chapterbot is busy, 2 chapters not checked, try again later']
+    expect(getSnapSpeechBlock(r)).to.equal('stopped')
+    r.warnings = ['Speech check failed: 2 chapters not checked']
+    expect(getSnapSpeechBlock(r)).to.equal('stopped')
+    r.warnings = ['Speech check skipped: the audio files are outside the configured chapterbot path map']
+    expect(getSnapSpeechBlock(r)).to.equal('unavailable')
+    r.warnings = ['Speech check skipped: no audio files']
+    expect(getSnapSpeechBlock(r)).to.equal('unavailable')
   })
 
   it('leaves unchecked chapters alone and keeps the latest speech warning', () => {
