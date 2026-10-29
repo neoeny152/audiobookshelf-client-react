@@ -235,6 +235,9 @@ export function usePlaybackSession(options: UsePlaybackSessionOptions = {}): Use
     if (syncIntervalRef.current) {
       clearInterval(syncIntervalRef.current)
       syncIntervalRef.current = null
+      // Count the listening time since the last tick, so a sync on pause reports it (#5492)
+      listeningTimeSinceSync.current += Math.max(0, (Date.now() - lastTickRef.current) / 1000)
+      lastTickRef.current = Date.now()
     }
   }, [])
 

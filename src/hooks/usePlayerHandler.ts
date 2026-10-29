@@ -8,6 +8,7 @@ import { CastPlayer } from '@/lib/player/CastPlayer'
 import { getCastRemotePlayerHandles } from '@/lib/player/chromecastConstants'
 import { LocalAudioPlayer } from '@/lib/player/LocalAudioPlayer'
 import { PLAYER_PROGRESS_POLL_MS, resetPlayerProgress, setPlayerProgress } from '@/lib/player/playerProgressStore'
+import { createDebouncedTrigger, shouldSyncAfterSeek, shouldSyncOnStateChange, type DebouncedTrigger } from '@/lib/player/progressSyncTriggers'
 import { computeTranscodePercentReady } from '@/lib/player/streamProgressUtils'
 import type { Chapter, LibraryItem, PlaybackSession, PlayMethod, StreamProgressPayload } from '@/types/api'
 import { isBookMedia, PlayerState } from '@/types/api'
@@ -280,6 +281,17 @@ export function usePlayerHandler(options: UsePlayerHandlerOptions = {}): UsePlay
   const syncProgressRef = useRef(syncProgress)
   syncProgressRef.current = syncProgress
 
+  // A seek while paused is not picked up by the sync interval; sync it after a short debounce (#5492)
+  const pausedSeekSyncRef = useRef<DebouncedTrigger | null>(null)
+  if (!pausedSeekSyncRef.current) {
+    pausedSeekSyncRef.current = createDebouncedTrigger(() => {
+      const player = playerRef.current
+      if (!player || !shouldSyncAfterSeek(playerStateRef.current)) return
+      void syncProgressRef.current(player.getCurrentTime())
+    })
+  }
+  useEffect(() => () => pausedSeekSyncRef.current?.cancel(), [])
+
   const handleStreamProgress = useCallback(
     (data: StreamProgressPayload) => {
       if (playerKindRef.current !== 'local' || !isHlsTranscodeRef.current) return
@@ -368,10 +380,15 @@ export function usePlayerHandler(options: UsePlayerHandlerOptions = {}): UsePlay
 
   const setupPlayerListeners = useCallback(
     (player: PlayerBackend) => {
+      let previousState: PlayerState | null = null
       player.on('stateChange', (state) => {
+        const lastState = previousState
+        previousState = state
         setPlayerState(state)
 
         if (state === PlayerState.PLAYING) {
+          // A pending paused-seek sync is covered by the sync interval from here on
+          pausedSeekSyncRef.current?.cancel()
           // Start sync interval when playing
           startSyncInterval(() => playerRef.current?.getCurrentTime() ?? 0)
           // Apply playback rate and volume from refs to avoid stale closures
@@ -379,6 +396,11 @@ export function usePlayerHandler(options: UsePlayerHandlerOptions = {}): UsePlay
           player.setVolume(volumeRef.current)
         } else {
           stopSyncInterval()
+          // Pausing would otherwise lose up to one sync interval plus any seek (#5492)
+          if (shouldSyncOnStateChange(lastState, state)) {
+            pausedSeekSyncRef.current?.cancel()
+            void syncProgressRef.current(player.getCurrentTime(), { force: true })
+          }
         }
 
         // Update current time on state changes
@@ -545,6 +567,9 @@ export function usePlayerHandler(options: UsePlayerHandlerOptions = {}): UsePlay
       const isPlaying = playerStateRef.current === PlayerState.PLAYING
       void Promise.resolve(playerRef.current.seek(time, isPlaying))
       setPlaybackTime(playerRef.current.getCurrentTime())
+      if (shouldSyncAfterSeek(playerStateRef.current)) {
+        pausedSeekSyncRef.current?.schedule()
+      }
     },
     [setPlaybackTime]
   )
@@ -598,6 +623,7 @@ export function usePlayerHandler(options: UsePlayerHandlerOptions = {}): UsePlay
 
   const stopPlaybackImmediately = useCallback(() => {
     stopSyncInterval()
+    pausedSeekSyncRef.current?.cancel()
 
     if (playerRef.current) {
       playerRef.current.destroy()
