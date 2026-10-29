@@ -113,6 +113,27 @@ describe('foliate-view read-along', () => {
     })
   })
 
+  it('works when attached after the book opened (server features read late)', () => {
+    const time = fakeTime()
+    time.set(1.2)
+
+    // like FoliateView's syncReadAlong: attach to the displayed view, replaying its last relocate
+    const late = new ReadAlongController({ timeSource: time })
+    late.setMap(parseReadAlong(fixture))
+    late.setPlayback(true, 40)
+    openReader(new ReadAlongController({ timeSource: fakeTime() }))
+    currentContents()
+    cy.get('foliate-view').then(($view) => {
+      const view = $view[0] as FoliateViewElement & { lastLocation?: FoliateRelocateDetail | null }
+      late.attach(view)
+      if (view.lastLocation) late.onRelocate(view.lastLocation)
+    })
+    cy.wrap(late).invoke('getStatus').should('equal', 'ready')
+    currentContents().then(({ doc }) => {
+      expect(doc.getElementById('s1')!.classList.contains(READ_ALONG_ACTIVE_CLASS)).to.equal(true)
+    })
+  })
+
   it('stays off for an EPUB build the data was not made for', () => {
     const time = fakeTime()
     const controller = new ReadAlongController({ timeSource: time })

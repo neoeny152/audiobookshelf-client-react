@@ -10,7 +10,7 @@ import { NextRequest } from 'next/server'
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string; fileId: string }> }) {
   const { id, fileId } = await params
   const cookieStore = await cookies()
-  const backendUrl = `${getServerBaseUrl()}/api/items/${id}/ebook/${fileId}/readalong`
+  const backendUrl = `${getServerBaseUrl()}/api/items/${encodeURIComponent(id)}/ebook/${encodeURIComponent(fileId)}/readalong`
 
   return proxyBackendBufferedResponse(request, cookieStore, backendUrl, {
     logLabel: 'EbookReadAlongProxy',

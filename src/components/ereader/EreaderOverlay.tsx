@@ -312,7 +312,7 @@ export default function EreaderOverlay({
             onClose={handleCloseRequest}
             onError={handleError}
             onLoading={setIsLoading}
-            readAlong={readAlongCandidate ? readAlong : null}
+            readAlong={hasReadAlongFeature && readAlongCandidate ? readAlong : null}
           />
           {isLoading && (
             <div className="absolute inset-0 z-50 flex items-center justify-center">

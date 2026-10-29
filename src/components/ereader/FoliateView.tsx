@@ -108,6 +108,8 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
   const onComicPageChangeRef = useRef(onComicPageChange)
   const keepProgressRef = useRef(keepProgress)
   const readAlongRef = useRef(readAlong)
+  /** Attaches the current readAlong prop to the open view (set while a book is open) */
+  const syncReadAlongRef = useRef<(() => void) | null>(null)
 
   readAlongRef.current = readAlong
   const currentComicPageIndexRef = useRef(-1)
@@ -293,6 +295,18 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
     const zoomCtrl = zoomCtrlRef.current
     let loadingDelayTimer: ReturnType<typeof setTimeout> | undefined
     let attachedReadAlong: ReadAlongController | null = null
+    let openedView: FoliateViewElement | null = null
+    // The controller can arrive after the book opened (server features read late): attach it then.
+    const syncReadAlong = () => {
+      const next = readAlongRef.current ?? null
+      if (cancelled || !openedView || next === attachedReadAlong) return
+      attachedReadAlong?.detach()
+      attachedReadAlong = next
+      if (!attachedReadAlong) return
+      attachedReadAlong.attach(openedView)
+      const location = (openedView as FoliateViewElement & { lastLocation?: FoliateRelocateDetail | null }).lastLocation
+      if (location) attachedReadAlong.onRelocate(location)
+    }
 
     const setLoading = (loading: boolean) => {
       onLoadingRef.current?.(loading)
@@ -416,8 +430,9 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
           await view.open(file)
         }
 
-        attachedReadAlong = readAlongRef.current ?? null
-        attachedReadAlong?.attach(view)
+        openedView = view
+        syncReadAlongRef.current = syncReadAlong
+        syncReadAlong()
         view.addEventListener('relocate', onRelocate)
         removeRelocateListener = () => view.removeEventListener('relocate', onRelocate)
 
@@ -462,6 +477,8 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
       clearLoading()
       removeRelocateListener?.()
       removeLoadListener?.()
+      if (syncReadAlongRef.current === syncReadAlong) syncReadAlongRef.current = null
+      openedView = null
       attachedReadAlong?.detach()
       attachedReadAlong = null
       removeDocumentKeydownListener?.()
@@ -501,6 +518,10 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
     scheduleProgressSave,
     title
   ])
+
+  useEffect(() => {
+    syncReadAlongRef.current?.()
+  }, [readAlong])
 
   return <div ref={containerRef} className="h-full w-full" />
 })

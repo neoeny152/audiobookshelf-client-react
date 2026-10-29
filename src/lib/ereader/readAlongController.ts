@@ -5,6 +5,11 @@ import { durationMatches, findSentence, matchesBook, sentenceFraction, wordIndex
 export const READ_ALONG_ACTIVE_CLASS = 'abs-ra-active'
 /** More than this share of a section's sentence ids missing from its DOM turns read-along off for the session. */
 const MISSING_IDS_LIMIT = 0.5
+/**
+ * In scrolled mode foliate reports a scroll it made itself a second time, from its debounced (250 ms) container
+ * 'scroll' listener, after the navigation promise settled. A 'scroll' relocate this soon after our own move is ours.
+ */
+const OWN_SCROLL_SETTLE_MS = 500
 
 /**
  * - none: no map
@@ -46,6 +51,8 @@ export interface ReadAlongControllerOptions {
   onFollowChange?: (following: boolean) => void
   onSentenceTap?: (start: number) => void
   onStatusChange?: (status: ReadAlongStatus) => void
+  /** Clock in ms (tests). Defaults to performance.now. */
+  now?: () => number
 }
 
 const playerTimeSource: ReadAlongTimeSource = {
@@ -85,6 +92,8 @@ export class ReadAlongController {
   /** Last sentence whose spoken position was on screen: a page run-off from it turns the page instead of jumping */
   private lastVisibleIndex = -1
   private programmatic = 0
+  /** When the last programmatic move settled (see OWN_SCROLL_SETTLE_MS) */
+  private programmaticSettledAt = -Infinity
   private rendererReason: string | null = null
   private unsubscribeTime: (() => void) | null = null
   private readonly onRendererRelocate = (event: Event) => {
@@ -123,6 +132,7 @@ export class ReadAlongController {
     this.visibleRange = null
     this.lastVisibleIndex = -1
     this.programmatic = 0
+    this.programmaticSettledAt = -Infinity
     this.updateStatus()
   }
 
@@ -186,6 +196,7 @@ export class ReadAlongController {
   // ---- foliate events ----
 
   onDocLoad(doc: Document, index: number): void {
+    this.forgetUnloadedDocs(doc)
     this.docs.set(index, doc)
     if (!this.docListeners.has(doc)) {
       const listener = (event: MouseEvent) => this.onDocClick(doc, event)
@@ -204,7 +215,13 @@ export class ReadAlongController {
     const isFirst = !this.visibleRange
     this.visibleRange = detail.range ?? null
     // Our own moves, the initial display and re-layouts (resize, style change) are not the user navigating.
-    if (this.programmatic > 0 || isFirst || reason === 'anchor') return
+    if (this.programmatic > 0 || reason === 'anchor') return
+    if (reason === 'scroll' && this.now() - this.programmaticSettledAt < OWN_SCROLL_SETTLE_MS) return
+    if (isFirst) {
+      // Opened while paused, no time tick comes: bring the spoken sentence into view now.
+      this.tick()
+      return
+    }
     if (!this.isActive() || this.activeIndex < 0) return
     // The user moved: follow pauses unless they landed where the narration is (which also resumes it).
     const visible = this.isPointVisible(this.activeIndex, this.timeSource.getTime())
@@ -224,6 +241,25 @@ export class ReadAlongController {
   }
 
   // ---- internals ----
+
+  private now(): number {
+    return this.options.now?.() ?? performance.now()
+  }
+
+  /** foliate keeps one section loaded: drop the documents it unloaded (and their click listeners). */
+  private forgetUnloadedDocs(loaded: Document): void {
+    const live = new Set<Document>([loaded])
+    for (const { doc } of this.view?.renderer.getContents?.() ?? []) if (doc) live.add(doc)
+    for (const [index, doc] of this.docs) {
+      if (!doc.defaultView || !live.has(doc)) this.docs.delete(index)
+    }
+    for (const [doc, listener] of this.docListeners) {
+      if (!doc.defaultView || !live.has(doc)) {
+        doc.removeEventListener('click', listener)
+        this.docListeners.delete(doc)
+      }
+    }
+  }
 
   private tick(): void {
     this.onTime(this.timeSource.getTime())
@@ -403,6 +439,7 @@ export class ReadAlongController {
       .catch((error) => console.warn('[ReadAlong] navigation failed', error))
       .finally(() => {
         this.programmatic = Math.max(0, this.programmatic - 1)
+        this.programmaticSettledAt = this.now()
       })
   }
 

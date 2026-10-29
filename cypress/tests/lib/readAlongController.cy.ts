@@ -105,8 +105,10 @@ describe('ReadAlongController', () => {
     const taps: number[] = []
     const statuses: ReadAlongStatus[] = []
     const fake = fakeView({ 1: ch1, 2: ch2 }, options.metadata)
+    const clock = { ms: 0 }
     const controller = new ReadAlongController({
       timeSource: time,
+      now: () => clock.ms,
       onFollowChange: (value) => follow.push(value),
       onSentenceTap: (start) => taps.push(start),
       onStatusChange: (status) => statuses.push(status)
@@ -116,7 +118,7 @@ describe('ReadAlongController', () => {
     // foliate's initial display
     controller.onRelocate({ range: pageRange(ch1, 'p1'), reason: 'navigation' })
     controller.setPlayback(options.streaming ?? true, options.duration ?? 40)
-    return { controller, time, follow, taps, statuses, ...fake }
+    return { controller, time, follow, taps, statuses, clock, ...fake }
   }
 
   it('highlights one sentence at a time, moving with the time', () => {
@@ -249,6 +251,53 @@ describe('ReadAlongController', () => {
     // resize / style change
     controller.onRelocate({ range: pageRange(ch1, 'p1'), reason: 'anchor' })
     expect(follow).to.deep.equal([])
+  })
+
+  it("ignores foliate's late scroll report of its own move in scrolled mode", async () => {
+    const { controller, time, follow, calls, clock } = setup()
+    time.set(6)
+    time.set(9.2) // next() scrolls; foliate reports it right away (reason null)...
+    expect(calls).to.deep.equal(['next'])
+    controller.onRelocate({ range: pageRange(ch1, 'p2') })
+    await flush()
+    // ...and again from its debounced container 'scroll' listener 250 ms later, after next() settled
+    clock.ms += 250
+    controller.onRelocate({ range: pageRange(ch1, 'p1'), reason: 'scroll' })
+    expect(follow).to.deep.equal([])
+    // a real user scroll later still pauses follow
+    clock.ms += 2000
+    controller.onRelocate({ range: pageRange(ch1, 'p1'), reason: 'scroll' })
+    expect(follow).to.deep.equal([false])
+  })
+
+  it('brings the spoken sentence into view when the book opens while paused', () => {
+    const time = fakeTime()
+    const fake = fakeView({ 1: ch1, 2: ch2 })
+    const controller = new ReadAlongController({ timeSource: time })
+    time.set(13.5) // paused in s6, on p2: no more ticks come
+    controller.setMap(map)
+    controller.attach(fake.view)
+    controller.setPlayback(true, 40)
+    expect(active(ch1)).to.deep.equal(['s6'])
+    expect(fake.calls).to.deep.equal([])
+    // foliate's initial display shows p1 (the saved reading position)
+    controller.onRelocate({ range: pageRange(ch1, 'p1'), reason: 'navigation' })
+    expect(fake.calls).to.deep.equal(['scrollToAnchor'])
+    controller.detach()
+  })
+
+  it('forgets section documents foliate unloaded, removing their click listener', () => {
+    const { controller, state, taps } = setup()
+    const removeListener = cy.spy(ch1, 'removeEventListener')
+    state.current = 2
+    Array.from(document.querySelectorAll('iframe')).find((iframe) => iframe.contentDocument === ch1)?.remove()
+    controller.onDocLoad(ch2, 2)
+    expect(removeListener).to.have.been.calledWith('click')
+    // the new section still has its listener
+    controller.setPlayback(true, 40)
+    const MouseEventCtor = ch2.defaultView!.MouseEvent
+    ch2.getElementById('s7')!.dispatchEvent(new MouseEventCtor('click', { bubbles: true, cancelable: true }))
+    expect(taps).to.have.length(1)
   })
 
   it('takes the relocate reason from the renderer event when foliate-view drops it', () => {
