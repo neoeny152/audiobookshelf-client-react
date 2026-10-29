@@ -125,6 +125,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     handleSetChaptersFromTracks,
     handleSnapToAudio,
     handleSnapRetry,
+    handleSnapSpeechBatch,
     handleApplySnap,
     handleApplySnapTitles,
     setConfirmState,
@@ -138,6 +139,11 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     resetEditorChapters,
     discardFocusedChapterFields
   } = editor
+
+  /** The Audible lookup the "Snap these to the audio" hint was dismissed for (a new lookup brings it back). */
+  const [snapHintDismissedFor, setSnapHintDismissedFor] = useState<typeof lookupResult>(null)
+  const showSnapLookupHint = !!lookupResult && snapHintDismissedFor !== lookupResult
+  const dismissSnapLookupHint = useCallback(() => setSnapHintDismissedFor(lookupResult), [lookupResult])
 
   const updateFooterShadow = useCallback(() => {
     const container = scrollContainerRef.current
@@ -244,10 +250,13 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
                 disabled={isPending}
                 onSnap={handleSnapToAudio}
                 onRetry={handleSnapRetry}
+                onCheckSpeech={handleSnapSpeechBatch}
                 onApply={handleApplySnap}
                 onApplyTitles={handleApplySnapTitles}
                 preview={preview}
                 speechCheckAvailable={speechCheckAvailable}
+                showLookupHint={showSnapLookupHint}
+                onLookupHintDismiss={dismissSnapLookupHint}
               />
             </div>
           </div>
