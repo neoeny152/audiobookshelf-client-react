@@ -580,8 +580,8 @@ export default function SnapToAudioPanel({
   return (
     <div className="w-full min-w-0" cy-id="snap-to-audio-panel" aria-busy={busy || undefined}>
       {showLookupHint && !session && !isRunning && (
-        <div className="border-primary/40 bg-primary/10 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2 text-sm" cy-id="snap-lookup-hint">
-          <span className="material-symbols text-primary text-lg" aria-hidden="true">
+        <div className="border-info/40 bg-info/10 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2 text-sm" cy-id="snap-lookup-hint">
+          <span className="material-symbols text-info text-lg" aria-hidden="true">
             graphic_eq
           </span>
           <p className="min-w-0 flex-1">{speechCheckAvailable ? t('MessageSnapLookupHintSpeech') : t('MessageSnapLookupHint')}</p>
@@ -729,15 +729,14 @@ export default function SnapToAudioPanel({
 
           {visibleRows.length > 0 && (
             <div className="border-border max-h-72 overflow-auto border-t">
-              <table className="w-full min-w-[32rem] table-fixed text-sm" cy-id="snap-table">
+              <table className="w-full min-w-[24rem] table-fixed text-sm sm:min-w-[32rem]" cy-id="snap-table">
                 <colgroup>
                   <col className="w-9" />
-                  <col className="w-5" />
                   <col />
-                  <col className="w-[11.5rem]" />
+                  <col className="w-[5.5rem] sm:w-[11.5rem]" />
                   <col className="w-16" />
                   {showSpeech && <col className="w-10" />}
-                  <col className="w-16" />
+                  <col className="w-[4.75rem]" />
                 </colgroup>
                 <thead className="bg-bg sticky top-0 z-1">
                   <tr className="border-border text-foreground-muted border-b text-xs">
@@ -750,9 +749,6 @@ export default function SnapToAudioPanel({
                         disabled={selectableRows.length === 0}
                         onChange={toggleAllSelectable}
                       />
-                    </th>
-                    <th className="p-0">
-                      <span className="sr-only">{t('LabelSnapConfidence')}</span>
                     </th>
                     <th className="px-1 py-1 text-start font-normal">{t('LabelTitle')}</th>
                     <th className="px-1 py-1 text-start font-normal">{t('LabelStart')}</th>
@@ -808,18 +804,18 @@ export default function SnapToAudioPanel({
                               onChange={(value) => toggleRow(row.index, value)}
                             />
                           </td>
-                          <td className="p-0 text-center" cy-id="snap-confidence">
-                            <Tooltip lazy text={confidenceText} position="right">
-                              <span
-                                role="img"
-                                aria-label={confidenceText}
-                                data-confidence={row.confidence}
-                                className={mergeClasses('inline-block size-2 rounded-full align-middle', CONFIDENCE_DOT_CLASS[row.confidence])}
-                              />
-                            </Tooltip>
-                          </td>
                           <td className="px-1" cy-id="snap-row-title-cell">
-                            <div className="flex min-w-0 items-center gap-1">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="flex shrink-0" cy-id="snap-confidence">
+                                <Tooltip lazy text={confidenceText} position="right">
+                                  <span
+                                    role="img"
+                                    aria-label={confidenceText}
+                                    data-confidence={row.confidence}
+                                    className={mergeClasses('inline-block size-2 rounded-full', CONFIDENCE_DOT_CLASS[row.confidence])}
+                                  />
+                                </Tooltip>
+                              </span>
                               <span className="truncate" title={row.title} cy-id="snap-row-title">
                                 {row.title}
                               </span>
@@ -840,8 +836,8 @@ export default function SnapToAudioPanel({
                           <td className="px-1 font-mono text-xs tabular-nums" cy-id="snap-row-start">
                             {row.changed ? (
                               <>
-                                <span className="text-foreground-muted">{formatSnapClock(row.originalStart)}</span>
-                                <span className="text-foreground-muted px-1" aria-hidden="true">
+                                <span className="text-foreground-muted max-sm:sr-only">{formatSnapClock(row.originalStart)}</span>
+                                <span className="text-foreground-muted px-1 max-sm:hidden" aria-hidden="true">
                                   {'→'}
                                 </span>
                                 <span className="sr-only"> {t('LabelSnapTo')} </span>
@@ -902,7 +898,7 @@ export default function SnapToAudioPanel({
                         {isExpanded && (
                           <tr cy-id="snap-row-details" className={mergeClasses('border-border border-b last:border-b-0', flag && 'bg-warning/10')}>
                             <td />
-                            <td colSpan={showSpeech ? 6 : 5} className="px-1 pb-2">
+                            <td colSpan={showSpeech ? 5 : 4} className="px-1 pb-2">
                               <div id={detailsId} className="flex flex-col gap-1.5 text-xs">
                                 <p className="break-words whitespace-normal">
                                   <span className="font-semibold">{row.title}</span>
