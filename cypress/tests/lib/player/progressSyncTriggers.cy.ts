@@ -1,18 +1,22 @@
-import { createDebouncedTrigger, PAUSED_SEEK_SYNC_DELAY_MS, shouldSyncAfterSeek, shouldSyncOnStateChange } from '@/lib/player/progressSyncTriggers'
+import {
+  createDebouncedTrigger,
+  createProgressSyncController,
+  PAUSED_SEEK_SYNC_DELAY_MS,
+  shouldSyncAfterSeek,
+  shouldSyncOnStateChange
+} from '@/lib/player/progressSyncTriggers'
 import { PlayerState } from '@/types/api'
 
 describe('progressSyncTriggers (#5492)', () => {
   describe('shouldSyncOnStateChange', () => {
     it('syncs when playback pauses', () => {
-      expect(shouldSyncOnStateChange(PlayerState.PLAYING, PlayerState.PAUSED)).to.equal(true)
+      expect(shouldSyncOnStateChange(true, PlayerState.PAUSED)).to.equal(true)
     })
 
     it('does not sync for other transitions', () => {
-      expect(shouldSyncOnStateChange(null, PlayerState.PAUSED)).to.equal(false)
-      expect(shouldSyncOnStateChange(PlayerState.PAUSED, PlayerState.PAUSED)).to.equal(false)
-      expect(shouldSyncOnStateChange(PlayerState.LOADING, PlayerState.PAUSED)).to.equal(false)
-      expect(shouldSyncOnStateChange(PlayerState.PAUSED, PlayerState.PLAYING)).to.equal(false)
-      expect(shouldSyncOnStateChange(PlayerState.PLAYING, PlayerState.LOADING)).to.equal(false)
+      expect(shouldSyncOnStateChange(false, PlayerState.PAUSED)).to.equal(false)
+      expect(shouldSyncOnStateChange(true, PlayerState.PLAYING)).to.equal(false)
+      expect(shouldSyncOnStateChange(true, PlayerState.LOADING)).to.equal(false)
     })
   })
 
@@ -75,6 +79,102 @@ describe('progressSyncTriggers (#5492)', () => {
       cy.tick(1000).then(() => {
         expect(callback.callCount).to.equal(1)
       })
+    })
+  })
+
+  describe('createProgressSyncController', () => {
+    const setup = (initialState: PlayerState = PlayerState.PAUSED) => {
+      const env = { state: initialState, time: 100 as number | null }
+      const sync = cy.stub().resolves()
+      const controller = createProgressSyncController({
+        getState: () => env.state,
+        getCurrentTime: () => env.time,
+        sync
+      })
+      return { env, sync, controller }
+    }
+
+    it('forces a sync when playback pauses', () => {
+      const { env, sync, controller } = setup(PlayerState.PLAYING)
+      controller.onStateChange(PlayerState.PLAYING)
+      env.state = PlayerState.PAUSED
+      env.time = 142
+      controller.onStateChange(PlayerState.PAUSED)
+      expect(sync.callCount).to.equal(1)
+      expect(sync.firstCall.args).to.deep.equal([142, { force: true }])
+    })
+
+    it('syncs a pause that follows buffering (PLAYING -> LOADING -> PAUSED)', () => {
+      const { sync, controller } = setup()
+      controller.onStateChange(PlayerState.PLAYING)
+      controller.onStateChange(PlayerState.LOADING)
+      controller.onStateChange(PlayerState.PAUSED)
+      expect(sync.callCount).to.equal(1)
+    })
+
+    it('does not sync a load that lands paused', () => {
+      const { sync, controller } = setup()
+      controller.onStateChange(PlayerState.LOADING)
+      controller.onStateChange(PlayerState.LOADED)
+      controller.onStateChange(PlayerState.PAUSED)
+      expect(sync.callCount).to.equal(0)
+    })
+
+    it('syncs a user seek while paused after the debounce', () => {
+      const { env, sync, controller } = setup()
+      cy.clock().then(() => {
+        env.time = 70
+        controller.onSeek()
+      })
+      cy.tick(PAUSED_SEEK_SYNC_DELAY_MS).then(() => {
+        expect(sync.callCount).to.equal(1)
+        expect(sync.firstCall.args[0]).to.equal(70)
+      })
+    })
+
+    it('does not echo a seek that mirrors another device (user_item_progress_updated)', () => {
+      const { sync, controller } = setup()
+      cy.clock().then(() => controller.onSeek({ sync: false }))
+      cy.tick(PAUSED_SEEK_SYNC_DELAY_MS * 5).then(() => {
+        expect(sync.callCount).to.equal(0)
+      })
+    })
+
+    it('a remote seek supersedes a pending local paused seek', () => {
+      const { sync, controller } = setup()
+      cy.clock().then(() => {
+        controller.onSeek()
+        controller.onSeek({ sync: false })
+      })
+      cy.tick(PAUSED_SEEK_SYNC_DELAY_MS * 5).then(() => {
+        expect(sync.callCount).to.equal(0)
+      })
+    })
+
+    it('sends a pending paused seek before the session closes', () => {
+      const { env, sync, controller } = setup()
+      cy.clock()
+        .then(() => {
+          env.time = 55
+          controller.onSeek()
+          return controller.flushBeforeClose()
+        })
+        .then(() => {
+          expect(sync.callCount).to.equal(1)
+          expect(sync.firstCall.args[0]).to.equal(55)
+        })
+      cy.tick(PAUSED_SEEK_SYNC_DELAY_MS * 2).then(() => {
+        expect(sync.callCount).to.equal(1)
+      })
+    })
+
+    it('flushBeforeClose sends nothing without a pending seek', () => {
+      const { sync, controller } = setup()
+      cy.wrap(null)
+        .then(() => controller.flushBeforeClose())
+        .then(() => {
+          expect(sync.callCount).to.equal(0)
+        })
     })
   })
 })

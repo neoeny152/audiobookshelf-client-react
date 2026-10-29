@@ -282,7 +282,8 @@ export function MediaProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      playerControls.seek(progress.currentTime)
+      // Mirror only: syncing it back would echo the other device's position through this session
+      playerControls.seek(progress.currentTime, { sync: false })
     },
     [playerControls, showToast, t]
   )
