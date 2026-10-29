@@ -92,11 +92,35 @@ describe('createServerFeatureStore', () => {
     expect(store.currentDelayMs()).to.equal(30_000)
     clock.advance(30_000)
     await store.refresh()
-    expect(store.currentDelayMs()).to.equal(30_000)
+    // retries used up: back to the TTL
+    expect(store.currentDelayMs()).to.equal(60_000)
     clock.advance(30_000)
     await store.refresh()
+    expect(calls.count).to.equal(4)
+    clock.advance(30_000)
+    await store.refresh()
+    expect(calls.count).to.equal(5)
     expect(store.getFeatures()).to.deep.equal(FULL)
     expect(store.currentDelayMs()).to.equal(60_000)
+  })
+
+  it('polls a server without the optional features no faster than the TTL once the retries are used up', async () => {
+    const clock = fakeClock()
+    const { fetchFeatures, calls } = queuedFetcher([BASE])
+    const store = createServerFeatureStore({ fetchFeatures, ttlMs: 60_000, retryDelaysMs: [5_000, 15_000, 30_000], ...clock })
+    const unsubscribe = store.subscribe(() => {}, true)
+    await flush()
+    const waits: number[] = []
+    for (let i = 0; i < 6; i++) {
+      const [wait] = clock.pending()
+      waits.push(wait)
+      clock.advance(wait)
+      await flush()
+    }
+    expect(waits).to.deep.equal([5_000, 15_000, 30_000, 60_000, 60_000, 60_000])
+    expect(calls.count).to.equal(7)
+    expect(store.getFeatures()).to.deep.equal(BASE)
+    unsubscribe()
   })
 
   it('refreshes on a timer only while a live subscriber is attached, and notifies on change', async () => {

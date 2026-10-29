@@ -7,7 +7,9 @@ import { hasServerFeature, OPTIONAL_SERVER_FEATURES, type ServerFeature } from '
  * - One request at a time is shared by every caller.
  * - A failed read keeps the last good list (a flaky `/status` never hides a feature that was there).
  * - A list without the optional (chapterbot) features, or a failed read, is re-checked sooner (`retryDelaysMs`) than
- *   a complete one (`ttlMs`): the server may simply not have known its sidecar's health yet.
+ *   a complete one (`ttlMs`): the server may simply not have known its sidecar's health yet. Once those retries are
+ *   used up it is re-checked every `ttlMs`, so a server without the sidecar (stock, or this fork unconfigured) is not
+ *   polled faster than a complete one.
  * - While a component watches an optional feature, the list is re-read on a timer, so a feature that shows up (or
  *   goes away) while e.g. the chapter editor is open re-renders it without a remount.
  */
@@ -19,7 +21,7 @@ export interface ServerFeatureStoreOptions {
   fetchFeatures: ServerFeaturesFetcher
   /** Re-check a complete list after this long. */
   ttlMs?: number
-  /** Re-check after a failed read, or a list without the optional features: one delay per consecutive miss, the last repeats until ttlMs. */
+  /** Re-check after a failed read, or a list without the optional features: one delay per consecutive miss, then ttlMs. */
   retryDelaysMs?: readonly number[]
   now?: () => number
   setTimer?: (fn: () => void, ms: number) => unknown
@@ -65,8 +67,8 @@ export function createServerFeatureStore({
 
   const currentDelayMs = () => {
     if (misses === 0) return ttlMs
-    if (!retryDelaysMs.length) return ttlMs
-    return Math.min(ttlMs, retryDelaysMs[Math.min(misses - 1, retryDelaysMs.length - 1)])
+    if (misses > retryDelaysMs.length) return ttlMs
+    return Math.min(ttlMs, retryDelaysMs[misses - 1])
   }
 
   const isFresh = () => fetchedAt > 0 && now() - fetchedAt < currentDelayMs()
