@@ -87,6 +87,11 @@ export interface SnapToAudioPanelProps {
   onLookupHintDismiss?: () => void
   /** Wait before resending a batch the server turned away as busy (tests shorten it). */
   busyRetryDelayMs?: number
+  /**
+   * A snap result to show without running one, e.g. the auto pipeline's stored proposal. Shown when it first arrives
+   * (or changes identity); the user's own snaps replace it as usual.
+   */
+  initialSession?: SnapSession | null
 }
 
 type OptionKey = keyof SnapAdvancedOptions
@@ -254,7 +259,8 @@ export default function SnapToAudioPanel({
   speechCheckAvailable = false,
   showLookupHint = false,
   onLookupHintDismiss,
-  busyRetryDelayMs = SNAP_BUSY_RETRY_DELAY_MS
+  busyRetryDelayMs = SNAP_BUSY_RETRY_DELAY_MS,
+  initialSession = null
 }: SnapToAudioPanelProps) {
   const t = useTypeSafeTranslations()
   const settingsId = useId()
@@ -359,6 +365,10 @@ export default function SnapToAudioPanel({
     },
     [updateSession]
   )
+
+  useEffect(() => {
+    if (initialSession) showSession(initialSession)
+  }, [initialSession, showSession])
 
   /**
    * Fold a batch into the shown session. The user's ticks stay: a row the verdict flags (late/early) is unticked, and a

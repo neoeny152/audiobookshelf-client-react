@@ -10,7 +10,9 @@ import ChaptersModalTable from '@/components/widgets/chapters-edit/ChaptersModal
 import FindChaptersPanel from '@/components/widgets/chapters-edit/FindChaptersPanel'
 import { ShiftTimesFields } from '@/components/widgets/chapters-edit/ShiftTimesPanel'
 import SnapToAudioPanel from '@/components/widgets/chapters-edit/SnapToAudioPanel'
-import { useChapterEditor } from '@/hooks/useChapterEditor'
+import { usePipelineProposalItemId } from '@/contexts/PipelineProposalContext'
+import { useChapterEditor, type PipelineProposalReview } from '@/hooks/useChapterEditor'
+import { getPipelineWhyLabel } from '@/lib/autoPipeline'
 import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { useUnsavedChangesLeave } from '@/hooks/useUnsavedChangesLeave'
@@ -76,14 +78,62 @@ function LookupComparison({
   )
 }
 
+/** What the auto pipeline proposes and why it did not apply it on its own. */
+function PipelineProposalBanner({ review, disabled, onReject }: { review: PipelineProposalReview; disabled: boolean; onReject: () => void }) {
+  const t = useTypeSafeTranslations()
+  if (review.status === 'resolved') return null
+  if (review.status === 'loading') {
+    return (
+      <p className="text-foreground-muted text-sm" role="status" cy-id="pipeline-proposal-banner">
+        {t('MessageAutoPipelineProposalLoading')}
+      </p>
+    )
+  }
+  if (review.status === 'error') return null
+  const shown = review.failing.slice(0, 6)
+  const describe = (codes: string[]) =>
+    codes
+      .map((code) => {
+        const label = getPipelineWhyLabel(code)
+        return label ? (label.values ? t(label.key, label.values) : t(label.key)) : code
+      })
+      .join(', ')
+  return (
+    <div className="border-warning/60 bg-warning/10 rounded-md border px-3 py-2 text-sm" cy-id="pipeline-proposal-banner">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold">{t('MessageAutoPipelineProposal')}</p>
+        <Btn size="small" disabled={disabled} onClick={onReject}>
+          {t('ButtonAutoPipelineKeepChapters')}
+        </Btn>
+      </div>
+      {shown.length > 0 && (
+        <ul className="text-foreground-muted mt-1 list-disc ps-5">
+          {shown.map((entry) => (
+            <li key={entry.index}>{t('MessageAutoPipelineFailingChapter', { number: entry.index + 1, why: describe(entry.why) })}</li>
+          ))}
+          {review.failing.length > shown.length && <li>{t('MessageAutoPipelineFailingMore', { count: review.failing.length - shown.length })}</li>}
+        </ul>
+      )}
+      {review.blockers.length > 0 && (
+        <p className="text-foreground-muted mt-1" cy-id="pipeline-proposal-blockers">
+          {t('MessageAutoPipelineProposalBlockers', { reasons: describe(review.blockers) })}
+        </p>
+      )}
+      <p className="text-foreground-muted mt-1">{t('MessageAutoPipelineProposalSave')}</p>
+    </div>
+  )
+}
+
 function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, onItemUpdated }: ChaptersEditContentProps) {
   const t = useTypeSafeTranslations()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [footerShadow, setFooterShadow] = useState(false)
+  const proposalItemId = usePipelineProposalItemId()
 
   const editor = useChapterEditor({
     initialLibraryItem: libraryItem,
-    onItemUpdated
+    onItemUpdated,
+    pipelineProposal: proposalItemId === libraryItem.id
   })
   const speechCheckAvailable = useServerFeature('chapterbotVerify')
 
@@ -112,6 +162,8 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     titleResetKey,
     isPending,
     preview,
+    proposalReview,
+    handleRejectProposal,
     handleShiftAmountChange,
     handleApplyShift,
     handleLookupResult,
@@ -225,6 +277,11 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
         {/* Below md (incl. phone landscape) the tools and table scroll together here; from md up only the table scrolls. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" inert={isPending || undefined}>
           <div className="bg-bg border-border shrink-0 border-b px-4 py-3">
+            {proposalReview && (
+              <div className="mb-3">
+                <PipelineProposalBanner review={proposalReview} disabled={isPending} onReject={handleRejectProposal} />
+              </div>
+            )}
             <div className="flex w-full flex-wrap items-end justify-between gap-x-2 gap-y-3">
               <div className="w-full min-w-0 md:w-auto">
                 <FindChaptersPanel metadata={media.metadata} onResult={handleLookupResult} requestProceed={requestConfirmIfDirty} />
@@ -257,6 +314,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
                 speechCheckAvailable={speechCheckAvailable}
                 showLookupHint={showSnapLookupHint}
                 onLookupHintDismiss={dismissSnapLookupHint}
+                initialSession={proposalReview?.session ?? null}
               />
             </div>
           </div>

@@ -8,11 +8,13 @@
  *   EPUB has none). Always listed by servers that have it: serving stored data does not need the sidecar.
  * - chapterbotEpubCurrent: `GET /api/items/:id/epub` returns the item's current or latest job (404 when none), for any
  *   user who can see the item, and the server broadcasts `chapterbot_epub_updated`. Listed together with chapterbotEpub.
+ * - autoPipeline: hands-off processing of new books (`library.settings.autoPipeline`, `/api/libraries/:id/pipeline`,
+ *   `/api/items/:id/pipeline[...]`, socket `pipeline_item_updated`). Only listed when the server's env gate is on.
  *
  * The chapterbot features are only listed while the sidecar is reachable, so they can come and go. A stock server
  * sends no `serverFeatures` at all, which means none of them.
  */
-export type ServerFeature = 'batchEpisodes' | 'libraryDownloadPost' | 'chapterbotVerify' | 'chapterbotEpub' | 'readAlong' | 'chapterbotEpubCurrent'
+export type ServerFeature = 'batchEpisodes' | 'libraryDownloadPost' | 'chapterbotVerify' | 'chapterbotEpub' | 'readAlong' | 'chapterbotEpubCurrent' | 'autoPipeline'
 
 /** Features that come and go with the server's sidecar health (see serverFeatureStore). */
 export const OPTIONAL_SERVER_FEATURES: readonly ServerFeature[] = Object.freeze(['chapterbotVerify', 'chapterbotEpub', 'chapterbotEpubCurrent'])

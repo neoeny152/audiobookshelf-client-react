@@ -201,6 +201,24 @@ export interface LibrarySettings {
   markAsFinishedPercentComplete?: number | null
   podcastSearchRegion?: string
   epubsAllowScriptedContent?: boolean
+  /** Fork only (`autoPipeline` server feature): hands-off processing of new books. Stock servers never send it. */
+  autoPipeline?: AutoPipelineSettings
+}
+
+export type AutoPipelineMode = 'off' | 'dryRun' | 'on'
+
+/** Per-library automatic processing settings (`library.settings.autoPipeline`, book libraries only). */
+export interface AutoPipelineSettings {
+  mode: AutoPipelineMode
+  autoMatch: boolean
+  /** Integer percent, 50..100 */
+  autoMatchMinConfidence: number
+  /** null = the library's provider */
+  autoMatchProvider: string | null
+  autoChapters: boolean
+  autoEpub: boolean
+  /** 1..120: wait this long after the last file change before processing a new book */
+  settleMinutes: number
 }
 
 export interface Library {
@@ -743,6 +761,82 @@ export interface EpubJob {
   finishedAt: number | null
   /** `pipeline` when the auto pipeline started it (newer servers only). */
   origin?: string | null
+}
+
+export type PipelineItemStatus = 'queued' | 'waiting' | 'matching' | 'chapters' | 'epub' | 'done' | 'needs-review' | 'failed' | 'skipped'
+
+export interface PipelineMatchCandidate {
+  asin?: string | null
+  title?: string | null
+  author?: string | null
+  narrator?: string | null
+  confidence?: number | null
+}
+
+/** One book's auto pipeline state (`GET /api/items/:id/pipeline`, socket `pipeline_item_updated`). */
+export interface PipelineItemState {
+  libraryItemId: string
+  libraryId: string
+  title: string | null
+  status: PipelineItemStatus
+  step: string | null
+  /** Short text for the UI */
+  reason: string | null
+  dryRun: boolean
+  queuedAt: number | null
+  updatedAt: number | null
+  attempts: number
+  notBefore: number | null
+  match: {
+    result: string | null
+    confidence: number | null
+    asin: string | null
+    candidates: PipelineMatchCandidate[]
+    would?: string | null
+  } | null
+  chapters: {
+    result: string | null
+    source: string | null
+    diffSec: number | null
+    applied: boolean
+    needsReview: { index: number; why: string }[]
+    backup: string | null
+    /** Number of chapters applied or proposed */
+    count?: number | null
+    would?: string | null
+  } | null
+  epub: { result: string | null; jobId: string | null; fileName: string | null; would?: string | null } | null
+  /** Dry run: what the pipeline would have done */
+  would?: string | null
+}
+
+export interface LibraryPipelineResponse {
+  mode: AutoPipelineMode
+  /** The server's env gate is on */
+  gate: boolean
+  /** `current`: the state of the book being processed, when it is in this library */
+  worker: { busy: boolean; current: PipelineItemState | null }
+  counts: Partial<Record<PipelineItemStatus, number>>
+  items: PipelineItemState[]
+}
+
+/** `GET /api/items/:id/pipeline/proposal` */
+export interface PipelineProposal {
+  source: Record<string, unknown> | string | null
+  diffSec: number | null
+  snap: SnapChaptersResponse
+  /** Why each chapter failed the apply policy: codes such as `late`, `early`, `heading-not-heard`, `confidence-low` */
+  failing: { index: number; why: string[] | string }[]
+  /** Reasons that hold the whole list back, e.g. `snap-incomplete`, `source-near`, `user-edited` */
+  blockers?: string[]
+  /** The chapters to apply; falls back to `snap.proposedChapters` */
+  proposedChapters?: Chapter[]
+}
+
+export interface PipelineBackup {
+  name: string
+  createdAt?: number | null
+  reason?: string | null
 }
 
 export interface OrderedTrackFileData {

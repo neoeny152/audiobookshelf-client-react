@@ -56,8 +56,13 @@ import {
   Library,
   LibraryFilterData,
   LibraryItem,
+  LibraryPipelineResponse,
   LibraryStatsResponse,
   ListeningStats,
+  PipelineBackup,
+  PipelineItemState,
+  PipelineProposal,
+  PipelineItemStatus,
   M4bEncodeOptions,
   MediaItemShare,
   MetadataObject,
@@ -585,6 +590,59 @@ export async function getCurrentEpubJob(libraryItemId: string): Promise<EpubJob>
 /** Cancel a queued or running EPUB job. A running job stops at its next segment, so it may report `cancelRequested` first. */
 export async function cancelEpubJob(libraryItemId: string, jobId: string): Promise<EpubJob> {
   return apiRequest<EpubJob>(`/api/items/${libraryItemId}/epub/${encodeURIComponent(jobId)}`, { method: 'DELETE' })
+}
+
+// Auto pipeline (fork only, /status `autoPipeline`)
+
+export async function getLibraryPipeline(libraryId: string, status?: PipelineItemStatus): Promise<LibraryPipelineResponse> {
+  const query = status ? `?${new URLSearchParams({ status }).toString()}` : ''
+  return apiRequest<LibraryPipelineResponse>(`/api/libraries/${libraryId}/pipeline${query}`)
+}
+
+/** Admin only. Queues the library's books: `unprocessed` skips books the pipeline already handled. */
+export async function runLibraryPipeline(libraryId: string, scope: 'unprocessed' | 'all'): Promise<{ queued: number }> {
+  return apiRequest<{ queued: number }>(`/api/libraries/${libraryId}/pipeline/run`, { method: 'POST', body: JSON.stringify({ scope }) })
+}
+
+/** Throws ApiError 404 when the pipeline never saw the item. */
+export async function getItemPipeline(libraryItemId: string): Promise<PipelineItemState> {
+  return apiRequest<PipelineItemState>(`/api/items/${libraryItemId}/pipeline`)
+}
+
+export async function runItemPipeline(libraryItemId: string, body: { steps?: ('match' | 'chapters' | 'epub')[]; force?: boolean } = {}): Promise<PipelineItemState> {
+  return apiRequest<PipelineItemState>(`/api/items/${libraryItemId}/pipeline/run`, { method: 'POST', body: JSON.stringify(body) })
+}
+
+/** Takes the item off the queue, or dismisses its result. A running EPUB job keeps running. */
+export async function dismissItemPipeline(libraryItemId: string): Promise<void> {
+  await apiRequest(`/api/items/${libraryItemId}/pipeline`, { method: 'DELETE' })
+}
+
+export async function getPipelineProposal(libraryItemId: string): Promise<PipelineProposal> {
+  return apiRequest<PipelineProposal>(`/api/items/${libraryItemId}/pipeline/proposal`)
+}
+
+/** Backs up and applies the chapters (edited ones when given), then continues the pipeline to the EPUB step. */
+export async function approvePipelineProposal(libraryItemId: string, chapters?: Chapter[]): Promise<PipelineItemState> {
+  return apiRequest<PipelineItemState>(`/api/items/${libraryItemId}/pipeline/proposal/approve`, {
+    method: 'POST',
+    body: JSON.stringify(chapters ? { chapters } : {})
+  })
+}
+
+export async function rejectPipelineProposal(libraryItemId: string, continuePipeline: boolean): Promise<PipelineItemState> {
+  return apiRequest<PipelineItemState>(`/api/items/${libraryItemId}/pipeline/proposal/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ continue: continuePipeline })
+  })
+}
+
+export async function getPipelineBackups(libraryItemId: string): Promise<PipelineBackup[] | { backups: PipelineBackup[] }> {
+  return apiRequest<PipelineBackup[] | { backups: PipelineBackup[] }>(`/api/items/${libraryItemId}/pipeline/backups`)
+}
+
+export async function restorePipelineBackup(libraryItemId: string, name: string): Promise<unknown> {
+  return apiRequest(`/api/items/${libraryItemId}/pipeline/backups/${encodeURIComponent(name)}/restore`, { method: 'POST' })
 }
 
 /**

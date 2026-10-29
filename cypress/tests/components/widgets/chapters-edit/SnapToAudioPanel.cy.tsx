@@ -870,3 +870,12 @@ describe('<SnapToAudioPanel /> heard titles', () => {
     cy.contains('button', /Use heard title/).should('not.exist')
   })
 })
+
+describe('<SnapToAudioPanel /> initial session', () => {
+  it('shows a stored snap (the auto pipeline proposal) without running one', () => {
+    mountPanel({ initialSession: completeSession })
+    cy.get('[cy-id="snap-row"]').should('have.length.at.least', 2)
+    cy.get('[cy-id="snap-row"]').first().should('contain.text', 'Chapter 2').and('contain.text', '0:01:36.7')
+    cy.get('@onSnap').should('not.have.been.called')
+  })
+})

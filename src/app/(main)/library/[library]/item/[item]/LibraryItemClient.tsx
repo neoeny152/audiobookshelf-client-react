@@ -12,24 +12,32 @@ import AuthorLinks from '@/components/widgets/AuthorLinks'
 import ExpandableHtml from '@/components/widgets/ExpandableHtml'
 import LibraryFilesTable from '@/components/widgets/LibraryFilesTable'
 import LoadingSpinner from '@/components/widgets/LoadingSpinner'
+import PipelineStatusChip from '@/components/widgets/pipeline/PipelineStatusChip'
 import { useLibrary } from '@/contexts/LibraryContext'
+import { PipelineProposalContext } from '@/contexts/PipelineProposalContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
 import { useCoverAccentColor } from '@/hooks/useCoverAccentColor'
 import { useItemPageSocket } from '@/hooks/useItemPageSocket'
+import { useItemPipelineState } from '@/hooks/useItemPipelineState'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
+import { getProcessingHref, getPipelineTab } from '@/lib/autoPipeline'
 import { getLibraryItemCoverUrl } from '@/lib/coverUtils'
 import { secondsToTimestamp } from '@/lib/datefns'
 import { mergeLibraryItemUpdate } from '@/lib/libraryItemUpdatedUtils'
 import { computeProgress } from '@/lib/mediaProgress'
 import { BookLibraryItem, BookMetadata, PodcastEpisode, PodcastLibraryItem, PodcastMetadata } from '@/types/api'
 import Link from 'next/link'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import LibraryItemActionButtons from './LibraryItemActionButtons'
 import LibraryItemCover from './LibraryItemCover'
 import LibraryItemDetails from './LibraryItemDetails'
 import LibraryItemProgressPanel from './LibraryItemProgressPanel'
 import { useLibraryItemPagePlay } from './useLibraryItemPagePlay'
+
+const EDIT_SECTIONS: readonly MetadataEditSection[] = ['details', 'cover', 'chapters', 'match']
 
 interface LibraryItemClientProps {
   libraryItem: BookLibraryItem | PodcastLibraryItem
@@ -43,6 +51,8 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
 
   const [libraryItem, setLibraryItem] = useState(initialLibraryItem)
   const [metadataEditSection, setMetadataEditSection] = useState<MetadataEditSection | null>(null)
+  /** Set while the chapter editor reviews the auto pipeline's proposal for this item. */
+  const [proposalItemId, setProposalItemId] = useState<string | null>(null)
   const [isClearQueueDialogOpen, setIsClearQueueDialogOpen] = useState(false)
   const [podcastEpisodesInOrder, setPodcastEpisodesInOrder] = useState<PodcastEpisode[]>([])
   const handlePodcastEpisodesInOrderChange = useCallback((episodes: PodcastEpisode[]) => {
@@ -58,6 +68,10 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
   useEffect(() => {
     setLibraryItem(initialLibraryItem)
   }, [initialLibraryItem])
+
+  // Auto pipeline status (fork only): for users who can act on it from the Processing page
+  const autoPipelineAvailable = useServerFeature('autoPipeline')
+  const pipelineState = useItemPipelineState(libraryItem.id, autoPipelineAvailable && userCanUpdate && libraryItem.mediaType === 'book')
 
   const isPodcast = libraryItem.mediaType === 'podcast'
   const isBookWithAudio = libraryItem.mediaType === 'book' && ((libraryItem as BookLibraryItem).media.tracks?.length ?? 0) > 0
@@ -80,7 +94,25 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
 
   const handleCloseMetadataEdit = () => {
     setMetadataEditSection(null)
+    setProposalItemId(null)
   }
+
+  // Deep links from the Processing page: `?edit=chapters&proposal=pipeline` (review) and `?edit=match`
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const editParam = searchParams.get('edit')
+  const proposalParam = searchParams.get('proposal')
+  useEffect(() => {
+    if (!editParam) return
+    const section = EDIT_SECTIONS.find((s) => s === editParam)
+    if (section && userCanUpdate) {
+      setMetadataEditSection(section)
+      setProposalItemId(section === 'chapters' && proposalParam === 'pipeline' ? initialLibraryItem.id : null)
+    }
+    // Drop the query so a reload or Back does not open the editor again
+    router.replace(pathname, { scroll: false })
+  }, [editParam, initialLibraryItem.id, pathname, proposalParam, router, userCanUpdate])
 
   const handleItemUpdated = (updatedItem: BookLibraryItem | PodcastLibraryItem) => {
     setLibraryItem((prev) => mergeLibraryItemUpdate(prev, updatedItem) as BookLibraryItem | PodcastLibraryItem)
@@ -181,6 +213,14 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
                     </span>
                   </div>
                 )}
+
+                {pipelineState && (
+                  <PipelineStatusChip
+                    state={pipelineState}
+                    href={getProcessingHref(library.id, getPipelineTab(pipelineState.status))}
+                    className="mt-1"
+                  />
+                )}
               </div>
 
               <LibraryItemDetails libraryItem={libraryItem} />
@@ -273,12 +313,14 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
           </div>
         </div>
 
-        <LibraryItemMetadataEditModal
-          isOpen={metadataEditSection !== null}
-          initialSection={metadataEditSection ?? 'details'}
-          libraryItem={libraryItem}
-          onClose={handleCloseMetadataEdit}
-        />
+        <PipelineProposalContext.Provider value={proposalItemId}>
+          <LibraryItemMetadataEditModal
+            isOpen={metadataEditSection !== null}
+            initialSection={metadataEditSection ?? 'details'}
+            libraryItem={libraryItem}
+            onClose={handleCloseMetadataEdit}
+          />
+        </PipelineProposalContext.Provider>
         <ConfirmDialog
           isOpen={isClearQueueDialogOpen}
           message={t('MessageConfirmClearEpisodeFetchQueue')}

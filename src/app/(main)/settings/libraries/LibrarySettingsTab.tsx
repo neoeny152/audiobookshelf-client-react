@@ -2,10 +2,12 @@
 
 import Dropdown, { DropdownItem } from '@/components/ui/Dropdown'
 import TextInput from '@/components/ui/TextInput'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { podcastSearchRegionOptions } from '@/lib/podcastSearchRegions'
 import { LibrarySettings } from '@/types/api'
 import SettingsToggleSwitch from '../SettingsToggleSwitch'
+import AutoPipelineSettingsSection from './AutoPipelineSettingsSection'
 
 type MarkAsFinishedMode = 'time-remaining' | 'percent-complete'
 
@@ -13,10 +15,18 @@ interface LibrarySettingsTabProps {
   settings: LibrarySettings
   mediaType: 'book' | 'podcast'
   onSettingsChange: (updater: (prev: LibrarySettings) => LibrarySettings) => void
+  /** The library's metadata provider (auto pipeline matching defaults to it). */
+  provider?: string
+  /** Provider choices from the Details tab (the auto pipeline offers the Audible ones). */
+  providerItems?: DropdownItem[]
 }
 
-export default function LibrarySettingsTab({ settings, mediaType, onSettingsChange }: LibrarySettingsTabProps) {
+export default function LibrarySettingsTab({ settings, mediaType, onSettingsChange, provider = '', providerItems = [] }: LibrarySettingsTabProps) {
   const t = useTypeSafeTranslations()
+  // Fork only: hidden on servers that do not advertise it (stock, or the env gate off)
+  const autoPipelineFeature = useServerFeature('autoPipeline')
+  const chapterbotEpubFeature = useServerFeature('chapterbotEpub')
+  const chapterbotVerifyFeature = useServerFeature('chapterbotVerify')
 
   const handleSettingChanged = <K extends keyof LibrarySettings>(key: K, value: LibrarySettings[K]) => {
     onSettingsChange((prev) => ({ ...prev, [key]: value }))
@@ -164,6 +174,16 @@ export default function LibrarySettingsTab({ settings, mediaType, onSettingsChan
           )}
         </div>
       </div>
+
+      {isBookLibrary && (
+        <AutoPipelineSettingsSection
+          value={settings.autoPipeline}
+          libraryProvider={provider}
+          audibleProviders={providerItems}
+          features={{ autoPipeline: autoPipelineFeature, chapterbotEpub: chapterbotEpubFeature, chapterbotVerify: chapterbotVerifyFeature }}
+          onChange={(autoPipeline) => onSettingsChange((prev) => ({ ...prev, autoPipeline }))}
+        />
+      )}
     </div>
   )
 }

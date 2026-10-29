@@ -4,6 +4,7 @@ import VersionFooter from '@/components/app/VersionFooter'
 import { useLibraryOptional } from '@/contexts/LibraryContext'
 import { useUser } from '@/contexts/UserContext'
 import { isLibraryIssuesPage } from '@/hooks/useLibraryRouteGuard'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { mergeClasses } from '@/lib/merge-classes'
 import { Library } from '@/types/api'
@@ -31,7 +32,12 @@ export default function SideRailContent({
 }: SideRailContentProps) {
   const pathname = usePathname()
   const t = useTypeSafeTranslations()
-  const { userIsAdminOrUp, userCanUpload } = useUser()
+  const { userIsAdminOrUp, userCanUpload, userCanUpdate } = useUser()
+  // Auto pipeline (fork only): the Processing page, for users who can act on what it shows
+  const autoPipelineAvailable = useServerFeature('autoPipeline')
+  const showProcessing = autoPipelineAvailable && userCanUpdate && mediaType === 'book'
+  const processingHref = `/library/${libraryId}/processing`
+  const onProcessingPage = pathname === processingHref
   // Optional: AppBar mounts this drawer on settings/account (no LibraryProvider)
   const { filterData } = useLibraryOptional()
   const numIssues = filterData?.numIssues ?? 0
@@ -225,6 +231,27 @@ export default function SideRailContent({
             >
               <span className="font-mono text-xs leading-none">{numIssues}</span>
             </div>
+          </Link>
+        )}
+
+        {showProcessing && (
+          <Link
+            href={processingHref}
+            onClick={onItemClick ?? undefined}
+            cy-id="side-rail-processing"
+            className={mergeClasses(
+              'text-foreground hover:bg-nav-item-hover relative w-full cursor-pointer border-b transition-colors',
+              itemLayoutClass,
+              onProcessingPage && (isDrawer ? 'bg-nav-item-hover' : 'bg-nav-item-selected')
+            )}
+          >
+            <span className={mergeClasses('shrink-0', isDrawer ? 'me-3 flex items-center [&_.material-symbols]:text-xl' : '')}>
+              <span className="material-symbols text-2xl">auto_mode</span>
+            </span>
+            <span className={itemLabelClass} title={t('ButtonProcessing')}>
+              {t('ButtonProcessing')}
+            </span>
+            {!isDrawer && onProcessingPage && <div className="absolute inset-s-0 top-0 h-full w-0.5 bg-yellow-400"></div>}
           </Link>
         )}
       </nav>

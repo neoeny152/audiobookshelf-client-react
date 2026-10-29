@@ -2,12 +2,14 @@
 
 import { snapChaptersAction, updateChaptersAction, type SnapChaptersActionResult } from '@/app/actions/chapterActions'
 import { getExpandedLibraryItemAction } from '@/app/actions/mediaActions'
+import { approvePipelineProposalAction, getPipelineProposalAction, rejectPipelineProposalAction } from '@/app/actions/pipelineActions'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
 import { useChapterPreviewAudio } from '@/hooks/useChapterPreviewAudio'
 import { useItemPageSocket } from '@/hooks/useItemPageSocket'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { callStatusAction } from '@/lib/actionResult'
+import { buildPipelineProposalSession, getPipelineProposalChapters, normalizePipelineFailing } from '@/lib/autoPipeline'
 import {
   applyChapterTitleDrafts,
   applySnapProposals,
@@ -58,6 +60,19 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type 
 interface UseChapterEditorOptions {
   initialLibraryItem: BookLibraryItem
   onItemUpdated?: (item: BookLibraryItem) => void
+  /**
+   * Review the auto pipeline's proposal (fork only): load it into the editor as unsaved changes, show its stored snap
+   * in the snap panel, and save through `proposal/approve` so the pipeline continues.
+   */
+  pipelineProposal?: boolean
+}
+
+/** The auto pipeline proposal under review. `resolved`: approved or kept, saves go back to the normal route. */
+export interface PipelineProposalReview {
+  status: 'loading' | 'ready' | 'error' | 'resolved'
+  session: SnapSession | null
+  failing: { index: number; why: string[] }[]
+  blockers: string[]
 }
 
 function selectedChapterIds(chapters: EditableChapter[], selectedKeys: Set<string>): Set<number> | null {
@@ -71,7 +86,7 @@ function selectedChapterIds(chapters: EditableChapter[], selectedKeys: Set<strin
   return ids
 }
 
-export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapterEditorOptions) {
+export function useChapterEditor({ initialLibraryItem, onItemUpdated, pipelineProposal = false }: UseChapterEditorOptions) {
   const [libraryItem, setLibraryItem] = useState(initialLibraryItem)
 
   const t = useTypeSafeTranslations()
@@ -249,6 +264,60 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
     onItemUpdated: handleSocketItemUpdated
   })
 
+  const [proposalReview, setProposalReview] = useState<PipelineProposalReview | null>(() =>
+    pipelineProposal ? { status: 'loading', session: null, failing: [], blockers: [] } : null
+  )
+  const proposalReviewRef = useRef(proposalReview)
+  proposalReviewRef.current = proposalReview
+  const replaceChapterListRef = useRef(replaceChapterList)
+  replaceChapterListRef.current = replaceChapterList
+  const mediaDurationRef = useRef(mediaDuration)
+  mediaDurationRef.current = mediaDuration
+
+  // Load the pipeline's proposal once per item: its chapters become unsaved edits, its snap the panel's session
+  useEffect(() => {
+    if (!pipelineProposal) return
+    let active = true
+    void callStatusAction(() => getPipelineProposalAction(libraryItem.id)).then((result) => {
+      if (!active) return
+      if (!result.ok) {
+        setProposalReview({ status: 'error', session: null, failing: [], blockers: [] })
+        showToast(result.error ? t('ToastAutoPipelineProposalFailedWithError', { error: result.error }) : t('ToastAutoPipelineProposalFailed'), {
+          type: 'error'
+        })
+        return
+      }
+      const chapters = getPipelineProposalChapters(result.data)
+      const rows = chapters.length ? replaceChapterListRef.current(initChapters(chapters, mediaDurationRef.current)) : []
+      setProposalReview({
+        status: 'ready',
+        session: rows.length ? buildPipelineProposalSession(result.data, rows) : null,
+        failing: normalizePipelineFailing(result.data.failing),
+        blockers: Array.isArray(result.data.blockers) ? result.data.blockers.filter((b): b is string => typeof b === 'string') : []
+      })
+    })
+    return () => {
+      active = false
+    }
+  }, [libraryItem.id, pipelineProposal, showToast, t])
+
+  /** Keep the current chapters; the pipeline goes on to the EPUB step (when it is enabled for the library). */
+  const handleRejectProposal = useCallback(() => {
+    if (proposalReviewRef.current?.status !== 'ready') return
+    startTransition(async () => {
+      const result = await callStatusAction(() => rejectPipelineProposalAction(libraryItem.id, true))
+      if (!result.ok) {
+        showToast(result.error ? t('ToastAutoPipelineActionFailedWithError', { error: result.error }) : t('ToastAutoPipelineActionFailed'), {
+          type: 'error'
+        })
+        return
+      }
+      setProposalReview((prev) => (prev ? { ...prev, status: 'resolved', session: null } : prev))
+      loadSavedChapters(savedChapters, mediaDuration)
+      showToast(t('ToastAutoPipelineRejected'), { type: 'success' })
+    })
+  }, [libraryItem.id, loadSavedChapters, mediaDuration, savedChapters, showToast, t])
+
   const isSavingRef = useRef(false)
 
   const handleSave = useCallback(
@@ -279,8 +348,24 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
       const successToast = payload.length === 0 ? t('ToastChaptersRemoved') : t('ToastChaptersUpdated')
 
       isSavingRef.current = true
+      const approving = proposalReviewRef.current?.status === 'ready'
       startTransition(async () => {
         try {
+          if (approving) {
+            // Backs up and applies on the server, then the pipeline continues (EPUB step)
+            const result = await callStatusAction(() => approvePipelineProposalAction(libraryItem.id, payload))
+            if (!result.ok) {
+              showToast(
+                result.error ? t('ToastAutoPipelineActionFailedWithError', { error: result.error }) : t('ToastAutoPipelineActionFailed'),
+                { type: 'error' }
+              )
+              return
+            }
+            setProposalReview((prev) => (prev ? { ...prev, status: 'resolved', session: null } : prev))
+            await refreshAfterChapterUpdate(t('ToastAutoPipelineApproved'))
+            onSaved?.()
+            return
+          }
           const data = await updateChaptersAction(libraryItem.id, payload)
           if (data.updated) {
             await refreshAfterChapterUpdate(successToast)
@@ -612,6 +697,8 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
     titleResetKey,
     isPending,
     preview,
+    proposalReview,
+    handleRejectProposal,
     handleShiftAmountChange,
     handleApplyShift,
     handleLookupResult,
