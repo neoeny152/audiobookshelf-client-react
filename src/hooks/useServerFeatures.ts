@@ -1,48 +1,17 @@
 'use client'
 
 import { getServerFeaturesAction } from '@/app/actions/serverFeatureActions'
-import { hasServerFeature, type ServerFeature } from '@/lib/serverFeatures'
-import { useEffect, useState } from 'react'
+import { createServerFeatureStore, useServerFeatureFrom } from '@/lib/serverFeatureStore'
+import { type ServerFeature } from '@/lib/serverFeatures'
 
-/** Optional features can appear or go away while the app is open (chapterbot health), so re-check after this long. */
-const FEATURES_TTL_MS = 60_000
-const NO_FEATURES: readonly string[] = Object.freeze([])
-
-let cached: { features: readonly string[]; fetchedAt: number } | null = null
-let inflight: Promise<readonly string[]> | null = null
-
-function loadServerFeatures(): Promise<readonly string[]> {
-  if (cached && Date.now() - cached.fetchedAt < FEATURES_TTL_MS) return Promise.resolve(cached.features)
-  if (!inflight) {
-    inflight = getServerFeaturesAction()
-      .catch(() => NO_FEATURES)
-      .then((features) => {
-        cached = { features: Object.freeze([...features]), fetchedAt: Date.now() }
-        return cached.features
-      })
-      .finally(() => {
-        inflight = null
-      })
-  }
-  return inflight
-}
+/** One store for the whole app: every caller shares the same `/status` read (see serverFeatureStore). */
+const serverFeatureStore = createServerFeatureStore({ fetchFeatures: () => getServerFeaturesAction() })
 
 /**
- * Whether the server advertises an optional feature. False until `/status` has been read (and whenever it cannot be),
- * so UI behind a feature stays hidden on a stock server. One request is shared by every caller for a minute.
+ * Whether the server advertises a feature. False until `/status` has been read, so UI behind a feature stays hidden
+ * on a stock server. A failed read keeps the last good list; the optional (chapterbot) features are re-checked while
+ * shown, sooner while missing, so a feature that appears later shows up without reopening the page or modal.
  */
 export function useServerFeature(feature: ServerFeature): boolean {
-  const [features, setFeatures] = useState<readonly string[]>(NO_FEATURES)
-
-  useEffect(() => {
-    let active = true
-    void loadServerFeatures().then((next) => {
-      if (active) setFeatures(next)
-    })
-    return () => {
-      active = false
-    }
-  }, [])
-
-  return hasServerFeature(features, feature)
+  return useServerFeatureFrom(serverFeatureStore, feature)
 }

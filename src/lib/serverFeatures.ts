@@ -10,6 +10,9 @@
  */
 export type ServerFeature = 'batchEpisodes' | 'libraryDownloadPost' | 'chapterbotVerify' | 'chapterbotEpub'
 
+/** Features that come and go with the server's sidecar health (see serverFeatureStore). */
+export const OPTIONAL_SERVER_FEATURES: readonly ServerFeature[] = Object.freeze(['chapterbotVerify', 'chapterbotEpub'])
+
 /** The feature names from a `/status` payload. Anything that is not an array of strings counts as no features. */
 export function parseServerFeatures(value: unknown): string[] {
   if (!Array.isArray(value)) return []
