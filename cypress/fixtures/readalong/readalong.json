@@ -1,0 +1,25 @@
+{
+  "kind": "abs-readalong",
+  "version": 1,
+  "identifier": "urn:uuid:5b1c0f2e-7d1a-5b8e-9a43-2f6c1d0e9b77",
+  "modified": "2026-10-28T12:34:56Z",
+  "epubFile": "book.epub",
+  "timeline": "book",
+  "audioDuration": 40,
+  "model": "small.en",
+  "sections": [
+    { "href": "OEBPS/ch001.xhtml", "title": "Chapter 1" },
+    { "href": "OEBPS/ch002.xhtml", "title": "Chapter 2" }
+  ],
+  "sentences": [
+    { "id": "s1", "sec": 0, "start": 1.0, "end": 3.0 },
+    { "id": "s2", "sec": 0, "start": 3.1, "end": 5.0 },
+    { "id": "s3", "sec": 0, "start": 5.1, "end": 7.0 },
+    { "id": "s4", "sec": 0, "start": 9.0, "end": 11.0 },
+    { "id": "s5", "sec": 0, "start": 11.1, "end": 13.0 },
+    { "id": "s6", "sec": 0, "start": 13.1, "end": 15.0 },
+    { "id": "s7", "sec": 1, "start": 20.0, "end": 22.0 },
+    { "id": "s8", "sec": 1, "start": 22.1, "end": 24.0, "w": [[22.1, 22.4], [22.4, 22.8], [22.8, 23.3], [23.3, 23.5], [23.5, 24.0]] },
+    { "id": "s9", "sec": 1, "start": 24.1, "end": 26.0 }
+  ]
+}

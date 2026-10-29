@@ -181,7 +181,8 @@ export function useMediaCardActions({
       libraryItemId: libraryItem.id,
       title,
       ebookFormat,
-      epubsAllowScriptedContent: !!library.settings?.epubsAllowScriptedContent
+      epubsAllowScriptedContent: !!library.settings?.epubsAllowScriptedContent,
+      ebookFileIno: media.ebookFile?.ino
     })
   }, [library.settings?.epubsAllowScriptedContent, libraryItem.id, media, openEreader, title])
 

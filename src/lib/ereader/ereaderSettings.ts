@@ -12,6 +12,10 @@ export interface EreaderSettings {
   lineSpacing: number
   textStroke: number
   spread: EreaderSpread
+  /** Highlight and follow the narration in an EPUB that has read-along data */
+  readAlong: boolean
+  /** Tapping a sentence seeks the audio there (read-along) */
+  readAlongTapToSeek: boolean
 }
 
 export const DEFAULT_EREADER_SETTINGS: EreaderSettings = {
@@ -20,7 +24,9 @@ export const DEFAULT_EREADER_SETTINGS: EreaderSettings = {
   fontScale: 100,
   lineSpacing: 115,
   textStroke: 0,
-  spread: 'auto'
+  spread: 'auto',
+  readAlong: true,
+  readAlongTapToSeek: true
 }
 
 const STORAGE_KEY = 'ereaderSettings'
@@ -61,6 +67,13 @@ export function getThemeColors(theme: EreaderTheme): { background: string; color
     default:
       return { background: 'rgb(35, 35, 35)', color: '#ffffff' }
   }
+}
+
+/** Background of the read-along sentence highlight (text colour stays the theme's, so contrast is unchanged). */
+export const READ_ALONG_HIGHLIGHT: Record<EreaderTheme, string> = {
+  dark: 'rgba(255, 213, 79, 0.28)',
+  light: 'rgba(255, 200, 0, 0.35)',
+  sepia: 'rgba(160, 110, 40, 0.22)'
 }
 
 export const EREADER_THEME_SHELL_CLASS: Record<EreaderTheme, string> = {
@@ -124,6 +137,12 @@ a, a:link, a:visited {
 [align="justify"] { text-align: justify; }
 pre {
   white-space: pre-wrap !important;
+}
+.abs-ra-active {
+  background-color: ${READ_ALONG_HIGHLIGHT[settings.theme] ?? READ_ALONG_HIGHLIGHT.dark} !important;
+  border-radius: 0.2em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 aside[epub|type~="endnote"],
 aside[epub|type~="footnote"],

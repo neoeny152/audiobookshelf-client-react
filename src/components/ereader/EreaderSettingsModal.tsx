@@ -4,6 +4,7 @@ import Modal from '@/components/modals/Modal'
 import ModalOuterContent from '@/components/modals/ModalOuterContent'
 import RangeInput from '@/components/ui/RangeInput'
 import ToggleButtonGroup from '@/components/ui/ToggleButtonGroup'
+import ToggleSwitch from '@/components/ui/ToggleSwitch'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import type { EreaderFont, EreaderSettings, EreaderSpread, EreaderTheme } from '@/lib/ereader/ereaderSettings'
 import { supportsReflowableSettings } from '@/lib/ereader/ereaderSettings'
@@ -15,9 +16,14 @@ interface EreaderSettingsModalProps {
   settings: EreaderSettings
   onChange: (patch: Partial<EreaderSettings>) => void
   onClose: () => void
+  /**
+   * Read-along data for the open EPUB. Omitted when there is none (the toggles stay hidden). `available: false` with a
+   * `reason` shows the reason and disabled toggles (data for another build of the EPUB, or changed audio).
+   */
+  readAlong?: { available: boolean; reason?: string }
 }
 
-export default function EreaderSettingsModal({ isOpen, ebookFormat, settings, onChange, onClose }: EreaderSettingsModalProps) {
+export default function EreaderSettingsModal({ isOpen, ebookFormat, settings, onChange, onClose, readAlong }: EreaderSettingsModalProps) {
   const t = useTypeSafeTranslations()
   const showReflowableSettings = supportsReflowableSettings(ebookFormat)
 
@@ -72,6 +78,28 @@ export default function EreaderSettingsModal({ isOpen, ebookFormat, settings, on
               <ToggleButtonGroup items={spreadItems} value={settings.spread} onChange={(value) => onChange({ spread: value as EreaderSpread })} />
             </SettingRow>
           </>
+        )}
+
+        {readAlong && (
+          <div cy-id="ereader-read-along-settings" className="border-border mt-4 border-t pt-4">
+            <ToggleSwitch
+              label={t('LabelReadAlong')}
+              value={readAlong.available && settings.readAlong}
+              disabled={!readAlong.available}
+              onChange={(value) => onChange({ readAlong: value })}
+            />
+            <ToggleSwitch
+              label={t('LabelReadAlongTapToSeek')}
+              value={readAlong.available && settings.readAlongTapToSeek}
+              disabled={!readAlong.available || !settings.readAlong}
+              onChange={(value) => onChange({ readAlongTapToSeek: value })}
+            />
+            {!readAlong.available && readAlong.reason && (
+              <p cy-id="ereader-read-along-reason" className="text-warning mt-2 text-sm">
+                {readAlong.reason}
+              </p>
+            )}
+          </div>
         )}
       </div>
     </Modal>

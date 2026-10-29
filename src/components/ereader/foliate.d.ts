@@ -4,6 +4,10 @@ export interface FoliateRelocateDetail {
   index?: number
   section?: { current?: number; total?: number }
   location?: { current?: number; total?: number }
+  /** The visible range in the current section */
+  range?: Range | null
+  /** Only on the renderer's own relocate event (foliate-view re-emits without it) */
+  reason?: string
 }
 
 export interface FoliateTocItem {
@@ -17,6 +21,7 @@ export interface FoliateSection {
 }
 
 export interface FoliateBook {
+  metadata?: { identifier?: string; modified?: string; title?: string }
   toc?: FoliateTocItem[]
   sections?: FoliateSection[]
   rendition?: { layout?: string }
@@ -29,6 +34,8 @@ export interface FoliateBook {
 export interface FoliateRendererElement extends HTMLElement {
   setStyles?: (styles: string | [string, string]) => void
   getContents?: () => Array<{ doc?: Document | null; index?: number }>
+  next?: (distance?: number) => Promise<void>
+  scrollToAnchor?: (anchor: Range | Element, select?: boolean) => Promise<void>
 }
 
 export interface FoliateSearchExcerpt {

@@ -13,6 +13,8 @@ export interface OpenEreaderParams {
   fileId?: string
   /** When false, open without resuming saved progress (defaults to true) */
   keepProgress?: boolean
+  /** Ino of the primary ebook file (when `fileId` is not set), used to look up its read-along data */
+  ebookFileIno?: string
 }
 
 interface EreaderSession extends OpenEreaderParams {
@@ -69,6 +71,7 @@ export function EreaderProvider({ children }: { children: ReactNode }) {
           ebookFormat={session.ebookFormat}
           epubsAllowScriptedContent={session.epubsAllowScriptedContent}
           fileId={session.fileId}
+          readAlongFileId={session.fileId ?? session.ebookFileIno}
           keepProgress={session.keepProgress !== false}
           savedEbookLocation={session.savedEbookLocation}
           savedEbookProgress={session.savedEbookProgress}

@@ -1,4 +1,4 @@
-import { hasServerFeature, parseServerFeatures } from '@/lib/serverFeatures'
+import { hasServerFeature, OPTIONAL_SERVER_FEATURES, parseServerFeatures } from '@/lib/serverFeatures'
 
 describe('parseServerFeatures', () => {
   it('reads the advertised features', () => {
@@ -23,5 +23,13 @@ describe('hasServerFeature', () => {
     expect(hasServerFeature(['chapterbotVerify'], 'chapterbotEpub')).to.equal(false)
     expect(hasServerFeature([], 'chapterbotEpub')).to.equal(false)
     expect(hasServerFeature(undefined, 'chapterbotEpub')).to.equal(false)
+  })
+})
+
+describe('readAlong feature', () => {
+  it('is detected from /status and is not tied to the sidecar', () => {
+    expect(hasServerFeature(parseServerFeatures(['batchEpisodes', 'readAlong']), 'readAlong')).to.equal(true)
+    expect(hasServerFeature(parseServerFeatures(undefined), 'readAlong')).to.equal(false)
+    expect(OPTIONAL_SERVER_FEATURES).to.not.include('readAlong')
   })
 })

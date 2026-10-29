@@ -24,6 +24,7 @@ import {
 import { withBasePath } from '@/lib/basePath'
 import { FixedLayoutZoomController, getFixedLayoutPageSize } from '@/lib/ereader/ereaderFixedLayoutZoom'
 import { attachEpubSecurity } from '@/lib/ereader/ereaderSecurity'
+import type { ReadAlongController } from '@/lib/ereader/readAlongController'
 import { applyEreaderSettingsToView, type EreaderSettings } from '@/lib/ereader/ereaderSettings'
 import { normalizeEreaderToc, type EreaderTocItem } from '@/lib/ereader/ereaderToc'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react'
@@ -65,6 +66,8 @@ interface FoliateViewProps {
   onClose?: () => void
   onError?: () => void
   onLoading?: (loading: boolean) => void
+  /** Read-along highlight/follow driver (EPUB from audio with read-along data) */
+  readAlong?: ReadAlongController | null
 }
 
 const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function FoliateView(
@@ -83,7 +86,8 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
     onTocReady,
     onClose,
     onError,
-    onLoading
+    onLoading,
+    readAlong
   },
   ref
 ) {
@@ -103,6 +107,9 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
   const onZoomChangeRef = useRef(onZoomChange)
   const onComicPageChangeRef = useRef(onComicPageChange)
   const keepProgressRef = useRef(keepProgress)
+  const readAlongRef = useRef(readAlong)
+
+  readAlongRef.current = readAlong
   const currentComicPageIndexRef = useRef(-1)
 
   keepProgressRef.current = keepProgress
@@ -285,6 +292,7 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
     const contentDocs = new Set<Document>()
     const zoomCtrl = zoomCtrlRef.current
     let loadingDelayTimer: ReturnType<typeof setTimeout> | undefined
+    let attachedReadAlong: ReadAlongController | null = null
 
     const setLoading = (loading: boolean) => {
       onLoadingRef.current?.(loading)
@@ -303,7 +311,9 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
     }
 
     const onRelocate = (event: Event) => {
-      scheduleProgressSave((event as CustomEvent<FoliateRelocateDetail>).detail)
+      const detail = (event as CustomEvent<FoliateRelocateDetail>).detail
+      attachedReadAlong?.onRelocate(detail)
+      scheduleProgressSave(detail)
     }
 
     const init = async () => {
@@ -362,6 +372,7 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
           if (handleKeydown) doc.addEventListener('keydown', handleKeydown)
           if (handleWheelZoom) doc.addEventListener('wheel', handleWheelZoom, { passive: false, capture: true })
           contentDocs.add(doc)
+          if (typeof index === 'number') attachedReadAlong?.onDocLoad(doc, index)
         }
 
         view.addEventListener('load', onLoad)
@@ -405,6 +416,8 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
           await view.open(file)
         }
 
+        attachedReadAlong = readAlongRef.current ?? null
+        attachedReadAlong?.attach(view)
         view.addEventListener('relocate', onRelocate)
         removeRelocateListener = () => view.removeEventListener('relocate', onRelocate)
 
@@ -449,6 +462,8 @@ const FoliateView = forwardRef<FoliateViewHandle, FoliateViewProps>(function Fol
       clearLoading()
       removeRelocateListener?.()
       removeLoadListener?.()
+      attachedReadAlong?.detach()
+      attachedReadAlong = null
       removeDocumentKeydownListener?.()
       removeEpubSecurity?.()
       removeWheelListeners?.()

@@ -8,13 +8,17 @@ import LoadingIndicator from '@/components/ui/LoadingIndicator'
 import { useMediaContext } from '@/contexts/MediaContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useEreaderSettings } from '@/hooks/useEreaderSettings'
+import { useReadAlong } from '@/hooks/useReadAlong'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import type { ComicPageInfo } from '@/lib/ereader/ereaderComicDownload'
 import { isComicFormat, usesPageBasedProgress } from '@/lib/ereader/ereaderEbook'
 import { FIXED_LAYOUT_ZOOM_MAX } from '@/lib/ereader/ereaderFixedLayoutZoom'
 import { EREADER_THEME_SHELL_CLASS, supportsReflowableSettings } from '@/lib/ereader/ereaderSettings'
 import type { EreaderTocItem } from '@/lib/ereader/ereaderToc'
+import { ReadAlongController, type ReadAlongStatus } from '@/lib/ereader/readAlongController'
 import { mergeClasses } from '@/lib/merge-classes'
+import { isBookMedia } from '@/types/api'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -25,6 +29,8 @@ interface EreaderOverlayProps {
   ebookFormat: string
   epubsAllowScriptedContent: boolean
   fileId?: string
+  /** Ebook file ino to look up read-along data for (the opened file, or the primary ebook's) */
+  readAlongFileId?: string
   keepProgress?: boolean
   savedEbookLocation?: string | number
   savedEbookProgress?: number
@@ -38,6 +44,7 @@ export default function EreaderOverlay({
   ebookFormat,
   epubsAllowScriptedContent,
   fileId,
+  readAlongFileId,
   keepProgress = true,
   savedEbookLocation,
   savedEbookProgress,
@@ -45,8 +52,26 @@ export default function EreaderOverlay({
 }: EreaderOverlayProps) {
   const t = useTypeSafeTranslations()
   const { showToast } = useGlobalToast()
-  const { isPlayerFullscreen } = useMediaContext()
+  const { isPlayerFullscreen, libraryItemIdStreaming, streamEpisodeId, streamLibraryItem, playerControls } = useMediaContext()
   const { settings, updateSettings } = useEreaderSettings()
+  const hasReadAlongFeature = useServerFeature('readAlong')
+  const readAlongCandidate = ebookFormat.toLowerCase() === 'epub' && !!readAlongFileId
+  const { map: readAlongMap } = useReadAlong(libraryItemId, readAlongFileId, hasReadAlongFeature && readAlongCandidate)
+  const [readAlongStatus, setReadAlongStatus] = useState<ReadAlongStatus>('none')
+  const [isFollowingNarration, setIsFollowingNarration] = useState(true)
+  const seekRef = useRef(playerControls.seek)
+  seekRef.current = playerControls.seek
+  const [readAlong] = useState(
+    () =>
+      new ReadAlongController({
+        onFollowChange: setIsFollowingNarration,
+        onStatusChange: setReadAlongStatus,
+        onSentenceTap: (start) => seekRef.current(start)
+      })
+  )
+  const isStreamingThisBook = libraryItemIdStreaming === libraryItemId && !streamEpisodeId
+  const streamMedia = isStreamingThisBook ? streamLibraryItem?.media : undefined
+  const streamDuration = streamMedia && isBookMedia(streamMedia) ? streamMedia.duration : undefined
   const [showSettings, setShowSettings] = useState(false)
   const [showToc, setShowToc] = useState(false)
   const [toc, setToc] = useState<EreaderTocItem[]>([])
@@ -142,6 +167,23 @@ export default function EreaderOverlay({
   }, [])
 
   useEffect(() => {
+    readAlong.setMap(readAlongMap)
+  }, [readAlong, readAlongMap])
+
+  useEffect(() => {
+    readAlong.setEnabled(settings.readAlong)
+    readAlong.setTapToSeek(settings.readAlongTapToSeek)
+  }, [readAlong, settings.readAlong, settings.readAlongTapToSeek])
+
+  useEffect(() => {
+    readAlong.setPlayback(isStreamingThisBook, streamDuration ?? null)
+  }, [isStreamingThisBook, readAlong, streamDuration])
+
+  const handleFollowNarration = useCallback(() => {
+    readAlong.setFollow(true)
+  }, [readAlong])
+
+  useEffect(() => {
     if (!isOpen) {
       resetSearch()
       setZoomScale(null)
@@ -170,6 +212,14 @@ export default function EreaderOverlay({
   const isComic = isComicFormat(ebookFormat)
   const canZoomOut = zoomScale !== null
   const canZoomIn = zoomScale === null || zoomScale < FIXED_LAYOUT_ZOOM_MAX
+  const isReadAlongActive = !!readAlongMap && readAlongStatus === 'ready' && settings.readAlong && isStreamingThisBook
+  const readAlongSettings = !readAlongMap
+    ? undefined
+    : readAlongStatus === 'mismatch'
+      ? { available: false, reason: t('MessageReadAlongMismatch') }
+      : readAlongStatus === 'audioChanged'
+        ? { available: false, reason: t('MessageReadAlongAudioChanged') }
+        : { available: true }
 
   return createPortal(
     <div inert={isPlayerFullscreen} className={mergeClasses('safe-px fixed inset-x-0 top-0 bottom-(--media-player-height) z-80 flex flex-col', shellClass)}>
@@ -262,6 +312,7 @@ export default function EreaderOverlay({
             onClose={handleCloseRequest}
             onError={handleError}
             onLoading={setIsLoading}
+            readAlong={readAlongCandidate ? readAlong : null}
           />
           {isLoading && (
             <div className="absolute inset-0 z-50 flex items-center justify-center">
@@ -278,6 +329,22 @@ export default function EreaderOverlay({
             />
           )}
           {!isLoading && <button type="button" className="absolute inset-y-0 right-0 z-10 w-1/3 sm:hidden" onClick={goRight} aria-label={t('ButtonNext')} />}
+          {!isLoading && isReadAlongActive && !isFollowingNarration && (
+            <button
+              type="button"
+              cy-id="ereader-follow-narration"
+              className={mergeClasses(
+                'absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-current/25 px-4 py-1.5 text-sm font-medium shadow-lg',
+                shellClass
+              )}
+              onClick={handleFollowNarration}
+            >
+              <span className="material-symbols text-lg" aria-hidden="true">
+                record_voice_over
+              </span>
+              {t('ButtonFollowNarration')}
+            </button>
+          )}
         </div>
         <button
           type="button"
@@ -314,6 +381,7 @@ export default function EreaderOverlay({
         settings={settings}
         onChange={updateSettings}
         onClose={() => setShowSettings(false)}
+        readAlong={readAlongSettings}
       />
     </div>,
     document.body
