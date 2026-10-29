@@ -139,6 +139,14 @@ describe('<SnapToAudioPanel /> proposal', () => {
     cy.get('[cy-id="snap-row"]').eq(0).invoke('text').should('not.contain', 'Moved before spoken heading')
   })
 
+  it('says "No confidence" for a move without one', () => {
+    mountPanel({
+      onSnap: cy.stub().resolves(makeSession([proposal({ index: 0, reason: 'first-chapter', confidence: 'high' }), proposal({ index: 1, proposedStart: 98, reason: 'nearest-longest-pause' })]))
+    })
+    cy.contains('button', 'Snap to audio').click()
+    confidenceDot(0).should('have.attr', 'aria-label', 'No confidence: Moved to nearest pause')
+  })
+
   it('sums up the proposal on one line and flags the unsure move', () => {
     cy.get('[cy-id="snap-summary"]').should('have.text', '2 would move · 1 flagged')
     cy.get('[cy-id="snap-row"]').eq(1).should('have.attr', 'data-flag', 'low-confidence').and('have.class', 'bg-warning/10')
@@ -528,9 +536,14 @@ describe('<SnapToAudioPanel /> whole-book speech check', () => {
     cy.get('@onCheckSpeech').its('firstCall.args.1').should('deep.equal', range(16, 30))
     // the batch goes out for the session that was snapped
     cy.get('@onCheckSpeech').its('firstCall.args.0.snapshot').should('deep.equal', bookSnapshot)
-    // the list waits while the check runs
-    cy.get('[cy-id="snap-proposal"]').should('have.attr', 'inert')
+    // the list stays browsable while the check runs; only the actions wait
+    cy.get('[cy-id="snap-proposal"]').should('not.have.attr', 'inert')
     cy.contains('button', 'Snap to audio').should('be.disabled')
+    cy.contains('button', /^Apply/).should('be.disabled')
+    cy.get('[cy-id="snap-row"][data-index="22"] [cy-id="snap-row-toggle"]').click()
+    cy.get('[cy-id="snap-row-details"]').should('exist')
+    // a choice made during the run survives the batch that checks the row
+    cy.get('[cy-id="snap-row"][data-index="25"] input[type="checkbox"]').click()
 
     release()
     cy.get('[cy-id="snap-speech-progress-label"]').should('have.text', 'Checking speech 30/39')
@@ -543,12 +556,12 @@ describe('<SnapToAudioPanel /> whole-book speech check', () => {
     cy.then(() => expect(state.maxActive).to.equal(1))
 
     // merged: 38 heard, chapter 21 (index 20) late and unchecked, no stale limit warning, nothing left to check
-    cy.get('[cy-id="snap-summary"]').should('have.text', '39 would move · 38 heading heard · 1 flagged')
+    cy.get('[cy-id="snap-summary"]').should('have.text', '39 would move · 38 headings heard · 1 flagged')
     cy.get('[cy-id="snap-row"][data-index="20"]').should('have.attr', 'data-speech', 'late').find('input[type="checkbox"]').should('not.be.checked')
     cy.get('[cy-id="snap-row"][data-index="21"]').should('have.attr', 'data-speech', 'heading').find('input[type="checkbox"]').should('be.checked')
+    cy.get('[cy-id="snap-row"][data-index="25"]').should('have.attr', 'data-speech', 'heading').find('input[type="checkbox"]').should('not.be.checked')
     cy.get('[cy-id="snap-speech-notes"]').should('not.exist')
-    cy.get('[cy-id="snap-proposal"]').should('not.have.attr', 'inert')
-    cy.contains('button', 'Apply 38 changes').should('not.be.disabled')
+    cy.contains('button', 'Apply 37 changes').should('not.be.disabled')
   })
 
   it('cancels between batches, keeps what the last request checked and offers to check the rest', () => {
@@ -565,14 +578,18 @@ describe('<SnapToAudioPanel /> whole-book speech check', () => {
     release()
     cy.get('[cy-id="snap-speech-finishing"]').should('not.exist')
     cy.get('@onCheckSpeech').should('have.been.calledOnce')
-    cy.get('[cy-id="snap-summary"]').should('contain.text', '29 heading heard').and('contain.text', '9 not checked')
+    cy.get('[cy-id="snap-summary"]').should('contain.text', '29 headings heard').and('contain.text', '9 not checked')
     cy.contains('button', 'Snap to audio').should('not.be.disabled')
 
+    // the user's ticks on the rest are kept by the next run
+    cy.get('[cy-id="snap-row"][data-index="35"] input[type="checkbox"]').click()
     cy.contains('button', 'Check speech for 9 more chapters').click()
     cy.get('@onCheckSpeech').should('have.been.calledTwice')
     cy.get('@onCheckSpeech').its('secondCall.args.1').should('deep.equal', range(31, 39))
     release()
     cy.get('[cy-id="snap-summary"]').should('not.contain.text', 'not checked')
+    cy.get('[cy-id="snap-row"][data-index="35"]').should('have.attr', 'data-speech', 'heading').find('input[type="checkbox"]').should('not.be.checked')
+    cy.get('[cy-id="snap-row"][data-index="36"]').find('input[type="checkbox"]').should('be.checked')
   })
 
   it('waits and resends a batch the server turned away as busy', () => {
@@ -605,8 +622,7 @@ describe('<SnapToAudioPanel /> whole-book speech check', () => {
     cy.get('@onCheckSpeech').should('have.been.calledOnce')
   })
 
-  it('gives up on chapters the server keeps leaving unchecked', () => {
-    // chapterbot answers but checks nothing (e.g. it is busy)
+  it('stops when a batch says chapterbot is busy or failed, and offers to try again', () => {
     const onCheckSpeech = cy
       .stub()
       .as('onCheckSpeech')
@@ -617,15 +633,44 @@ describe('<SnapToAudioPanel /> whole-book speech check', () => {
       })
     mountBook({ onCheckSpeech })
     cy.get('[cy-id="snap-speech-warning"]').should('contain.text', 'chapterbot is busy, 15 chapters not checked')
+    cy.get('[cy-id="snap-speech-progress"]').should('not.exist')
+    cy.get('@onCheckSpeech').should('have.been.calledOnce')
+    cy.contains('button', 'Check speech for 24 more chapters').click()
     cy.get('@onCheckSpeech').should('have.been.calledTwice')
     cy.get('[cy-id="snap-speech-progress"]').should('not.exist')
   })
 
+  it('gives up on chapters the server keeps leaving unchecked', () => {
+    // the server answers without a verdict or a reason
+    const onCheckSpeech = cy
+      .stub()
+      .as('onCheckSpeech')
+      .callsFake(async () => batchResult([]))
+    mountBook({ onCheckSpeech })
+    cy.get('@onCheckSpeech').should('have.been.calledTwice')
+    cy.get('[cy-id="snap-speech-progress"]').should('not.exist')
+  })
+
+  it('sends no batches when the snap says the speech check cannot run', () => {
+    const onCheckSpeech = cy.stub().as('onCheckSpeech')
+    const session = firstSession()
+    session.response.warnings = ['Speech check skipped: the audio files are outside the configured chapterbot path map']
+    mountBook({ onCheckSpeech, onSnap: cy.stub().as('onSnap').resolves(session) })
+    cy.get('[cy-id="snap-speech-warning"]').should('contain.text', 'outside the configured chapterbot path map')
+    cy.get('[cy-id="snap-speech-notes"]').should('not.contain.text', 'Check speech for')
+    cy.get('@onCheckSpeech').should('not.have.been.called')
+  })
+
   it('does not batch a plain snap or on a server without the speech check', () => {
     const onCheckSpeech = cy.stub().as('onCheckSpeech')
-    mountPanel({ chapterCount: BOOK, speechCheckAvailable: true, onSnap: cy.stub().resolves(firstSession()), onCheckSpeech })
+    const plain = firstSession()
+    plain.response.options = { ...plain.response.options, verify: false }
+    plain.options = { ...SNAP_DEFAULT_OPTIONS }
+    mountPanel({ chapterCount: BOOK, speechCheckAvailable: true, onSnap: cy.stub().resolves(plain), onCheckSpeech })
     cy.contains('button', 'Snap to audio').click()
     cy.get('[cy-id="snap-proposal"]').should('exist')
+    // nothing was checked, so there is no "check speech for N more"
+    cy.get('[cy-id="snap-speech-notes"]').should('not.exist')
     cy.get('@onCheckSpeech').should('not.have.been.called')
   })
 })
@@ -646,6 +691,15 @@ describe('<SnapToAudioPanel /> Audible lookup hint', () => {
     mountPanel({ showLookupHint: true })
     cy.get('[cy-id="snap-lookup-hint"]').contains('button', 'Snap these to the audio').click()
     cy.get('@onSnap').should('have.been.calledOnceWith', SNAP_DEFAULT_OPTIONS)
+  })
+
+  it('stays when the snap fails', () => {
+    const onLookupHintDismiss = cy.stub().as('onLookupHintDismiss')
+    mountPanel({ showLookupHint: true, onLookupHintDismiss, onSnap: cy.stub().as('onSnap').resolves(null) })
+    cy.get('[cy-id="snap-lookup-hint"]').contains('button', 'Snap these to the audio').click()
+    cy.get('@onSnap').should('have.been.calledOnce')
+    cy.get('[cy-id="snap-lookup-hint"]').contains('button', 'Snap these to the audio').should('not.be.disabled')
+    cy.get('@onLookupHintDismiss').should('not.have.been.called')
   })
 
   it('can be dismissed', () => {

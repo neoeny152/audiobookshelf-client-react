@@ -17,6 +17,7 @@ import {
   getSnapAttention,
   getSnapHeardTitle,
   getSnapRetryIndexes,
+  getSnapSpeechBlock,
   getSnapSpeechPendingIndexes,
   getSnapSpeechProgress,
   getSnapSpeechStatus,
@@ -148,16 +149,17 @@ export function snapReasonLabel(reason: SnapChapterReason, t: TypeSafeTranslatio
   }
 }
 
-function confidenceLabel(confidence: SnapChapterConfidence, t: TypeSafeTranslations): string {
+/** "High confidence: <reason>", or "No confidence: <reason>". */
+function confidenceReasonText(confidence: SnapChapterConfidence, reason: string, t: TypeSafeTranslations): string {
   switch (confidence) {
     case 'high':
-      return t('LabelSnapConfidenceHigh')
+      return t('LabelSnapConfidenceReason', { confidence: t('LabelSnapConfidenceHigh'), reason })
     case 'medium':
-      return t('LabelSnapConfidenceMedium')
+      return t('LabelSnapConfidenceReason', { confidence: t('LabelSnapConfidenceMedium'), reason })
     case 'low':
-      return t('LabelSnapConfidenceLow')
+      return t('LabelSnapConfidenceReason', { confidence: t('LabelSnapConfidenceLow'), reason })
     case 'none':
-      return t('LabelSnapConfidenceNone')
+      return t('LabelSnapNoConfidenceReason', { reason })
   }
 }
 
@@ -294,7 +296,11 @@ export default function SnapToAudioPanel({
   const showSpeech = !!session && snapSessionCheckedSpeech(session)
   const attention = useMemo(() => new Map(rows.map((row) => [row.index, getSnapAttention(row)])), [rows])
   const summary = useMemo(() => (session ? getSnapSummary(rows, session.response, showSpeech) : null), [rows, session, showSpeech])
-  const pendingSpeech = useMemo(() => (session && canBatchSpeech ? getSnapSpeechPendingIndexes(session.response) : []), [canBatchSpeech, session])
+  /** Chapters the speech check has not reached, when it ran and could run again (not when the audio never reaches chapterbot). */
+  const pendingSpeech = useMemo(
+    () => (session && canBatchSpeech && showSpeech && getSnapSpeechBlock(session.response) !== 'unavailable' ? getSnapSpeechPendingIndexes(session.response) : []),
+    [canBatchSpeech, session, showSpeech]
+  )
   /** Heard titles worth offering, by row index (only when the speech check ran and the editor can take them). */
   const heardTitles = useMemo(() => {
     const titles = new Map<number, string>()
@@ -348,7 +354,10 @@ export default function SnapToAudioPanel({
     [updateSession]
   )
 
-  /** Fold a batch into the shown session; the batch's rows get their default check state (late/early ones unchecked). */
+  /**
+   * Fold a batch into the shown session. The user's ticks stay: a row the verdict flags (late/early) is unticked, and a
+   * row that only now would move gets its default; every other row keeps what the user chose.
+   */
   const mergeBatch = useCallback(
     (sessionId: number, result: SnapSpeechBatchResult, indexes: number[]): { session: SnapSession; checked: number[] } | null => {
       const current = sessionRef.current
@@ -358,11 +367,12 @@ export default function SnapToAudioPanel({
       updateSession(next)
       if (merged.checked.length) {
         const defaults = getDefaultSnapChecked(buildSnapRows(next))
+        const wasChanged = new Set(buildSnapRows(current).flatMap((row) => (row.changed ? [row.index] : [])))
         setChecked((prev) => {
           const updated = new Set(prev)
           for (const index of merged.checked) {
-            if (defaults.has(index)) updated.add(index)
-            else updated.delete(index)
+            if (!defaults.has(index)) updated.delete(index)
+            else if (!wasChanged.has(index)) updated.add(index)
           }
           return updated
         })
@@ -388,7 +398,7 @@ export default function SnapToAudioPanel({
       setSpeechBusy(false)
 
       const pendingFor = (s: SnapSession) => getSnapSpeechPendingIndexes(s.response).filter((i) => (attempts.get(i) ?? 0) < MAX_SPEECH_ATTEMPTS)
-      if (!pendingFor(current).length) return
+      if (!pendingFor(current).length || getSnapSpeechBlock(current.response) === 'unavailable') return
       setSpeechProgress(getSnapSpeechProgress(current.response))
 
       try {
@@ -422,6 +432,8 @@ export default function SnapToAudioPanel({
           if (!merged) break
           current = merged.session
           setSpeechProgress(getSnapSpeechProgress(current.response))
+          // chapterbot is busy, failed or cannot reach the audio: more batches would fail the same way (the warning shows)
+          if (getSnapSpeechBlock(result.response)) break
           emptyBatches = merged.checked.length ? 0 : emptyBatches + 1
           if (emptyBatches >= MAX_EMPTY_BATCHES) break
         }
@@ -444,7 +456,6 @@ export default function SnapToAudioPanel({
     async (verifyOverride?: boolean) => {
       if (controlsDisabled) return
       stopSnapPreview()
-      onLookupHintDismiss?.()
       // The toggle only counts while the server still advertises the speech check
       const verify = speechCheckAvailable && (verifyOverride ?? checkSpeech)
       if (verifyOverride !== undefined && speechCheckAvailable) setCheckSpeech(verifyOverride)
@@ -455,6 +466,7 @@ export default function SnapToAudioPanel({
       try {
         next = await onSnap(verify ? { ...options, verify: true } : options)
         if (next) {
+          onLookupHintDismiss?.()
           setShowUnchanged(false)
           setOnlyFlagged(false)
           showSession(next)
@@ -462,7 +474,7 @@ export default function SnapToAudioPanel({
       } finally {
         setIsRunning(false)
       }
-      if (next && verify && canBatchSpeech) void runSpeechBatches(next)
+      if (next && verify && canBatchSpeech && !getSnapSpeechBlock(next.response)) void runSpeechBatches(next)
     },
     [
       canBatchSpeech,
@@ -501,7 +513,7 @@ export default function SnapToAudioPanel({
     } finally {
       setIsRunning(false)
     }
-    if (next && verify && canBatchSpeech) void runSpeechBatches(next)
+    if (next && verify && canBatchSpeech && !getSnapSpeechBlock(next.response)) void runSpeechBatches(next)
   }, [canBatchSpeech, controlsDisabled, onRetry, runSpeechBatches, session, stopSnapPreview, updateSession])
 
   const handleCheckRemainingSpeech = useCallback(() => {
@@ -679,7 +691,7 @@ export default function SnapToAudioPanel({
       )}
 
       {session && (
-        <div className="border-border mt-3 rounded-md border" cy-id="snap-proposal" inert={busy || undefined}>
+        <div className="border-border mt-3 rounded-md border" cy-id="snap-proposal" inert={isRunning || undefined}>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2">
             <div className="flex min-w-0 items-center gap-1">
               <p className="text-sm" role="status" cy-id="snap-summary">
@@ -779,7 +791,7 @@ export default function SnapToAudioPanel({
                     const heardTitle = heardTitles.get(row.index)
                     const selectable = row.changed || !!heardTitle
                     const title = row.title || t('LabelTitle')
-                    const confidenceText = t('LabelSnapConfidenceReason', { confidence: confidenceLabel(row.confidence, t), reason: snapReasonLabel(row.reason, t) })
+                    const confidenceText = confidenceReasonText(row.confidence, snapReasonLabel(row.reason, t), t)
                     const deltaText = row.changed ? t('LabelSnapDelta', { delta: formatSnapDelta(row.delta) }) : ''
                     return (
                       <Fragment key={row.clientKey}>
