@@ -42,12 +42,14 @@ import { SHOW_CHAPTER_MATCH_DEBUG } from '@/lib/chapters/chapterMatching'
 import {
   buildSnapPayload,
   buildSnapRetryPayload,
+  buildSnapSpeechPayload,
   getSnapErrorToast,
   getSnapRetryIndexes,
   mergeSnapRetry,
   type SnapRequestOptions,
   type SnapRow,
-  type SnapSession
+  type SnapSession,
+  type SnapSpeechBatchResult
 } from '@/lib/chapters/chapterSnap'
 import { blurActiveChapterEditorField } from '@/lib/chapterEditorFocus'
 import type { AudibleChapterSearchResult, BookLibraryItem, Chapter, PodcastLibraryItem } from '@/types/api'
@@ -447,6 +449,22 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
     [libraryItem.id, showSnapError]
   )
 
+  /**
+   * Speech check for some chapters of a snap session (the server checks at most SNAP_SPEECH_BATCH_SIZE per request).
+   * Sends the session's snapshot, not the editor rows, so the proposals match the session. 409/429 are left to the
+   * caller to retry; other failures show the usual toast.
+   */
+  const handleSnapSpeechBatch = useCallback(
+    async (session: SnapSession, indexes: number[]): Promise<SnapSpeechBatchResult> => {
+      const result = await callStatusAction(() => snapChaptersAction(libraryItem.id, buildSnapSpeechPayload(session, indexes)))
+      if (result.ok) return { ok: true, response: result.data }
+      const busy = result.status === 409 || result.status === 429
+      if (!busy) showSnapError(result)
+      return { ok: false, busy }
+    },
+    [libraryItem.id, showSnapError]
+  )
+
   /** Write the checked proposals into the editor as unsaved changes (start times only). */
   const handleApplySnap = useCallback(
     (rows: SnapRow[]) => {
@@ -607,6 +625,7 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated }: UseChapt
     handleSetChaptersFromTracks,
     handleSnapToAudio,
     handleSnapRetry,
+    handleSnapSpeechBatch,
     handleApplySnap,
     handleApplySnapTitles,
     setConfirmState,

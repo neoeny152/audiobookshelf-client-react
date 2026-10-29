@@ -97,6 +97,14 @@ function toPayloadOptions(options: SnapRequestOptions): SnapChaptersOptions {
   return verify === true ? { ...rest, verify: true } : rest
 }
 
+/** Snapshot rows as request chapters; ids are the row indexes. */
+function toPayloadChapters(snapshot: SnapSnapshotChapter[]): NonNullable<SnapChaptersPayload['chapters']> {
+  return snapshot.map((chapter, i) => {
+    const title = chapter.title.slice(0, MAX_SNAP_TITLE_LENGTH)
+    return title ? { id: i, title, start: chapter.start } : { id: i, start: chapter.start }
+  })
+}
+
 /** The speech check's result for one chapter, or null when it did not run (or sent something unexpected). */
 export function toSnapSpeech(value: unknown): SnapChapterSpeech | null {
   if (!value || typeof value !== 'object') return null
@@ -186,10 +194,171 @@ export function snapSessionCheckedSpeech(session: SnapSession): boolean {
  * developer notes about the retry contract, which the panel already explains.
  */
 export function getSnapSpeechWarnings(response: SnapChaptersResponse): string[] {
-  // The server's "Resend with indexes" hint is for API callers; the panel has no way to act on it.
+  // The server's "Resend with indexes" hint is for API callers; the panel resends by itself (see the speech batches),
+  // and the per-request limit is what those batches work around, so that warning is noise here.
   return (response.warnings ?? [])
-    .filter((warning) => typeof warning === 'string' && /^speech check/i.test(warning))
+    .filter((warning) => typeof warning === 'string' && isSpeechWarning(warning) && !SPEECH_LIMIT_WARNING.test(warning))
     .map((warning) => warning.replace(/\s*Resend with "indexes".*$/i, ''))
+}
+
+function isSpeechWarning(warning: string): boolean {
+  return /^speech check/i.test(warning)
+}
+
+const SPEECH_LIMIT_WARNING = /^speech check limited to/i
+
+/**
+ * Starts the server checks per snap request (`chapterbotSpeech.js` MAX_VERIFY_STARTS). The panel checks a whole book in
+ * batches of this size; a server with a lower limit just leaves some unchecked, which the next batch picks up.
+ */
+export const SNAP_SPEECH_BATCH_SIZE = 15
+
+/** Reasons the server does not run the speech check for (`chapterSnap.js` SKIP_REASONS). */
+const SPEECH_SKIP_REASONS: ReadonlySet<SnapChapterReason> = new Set(['not-requested', 'not-analysed', 'analysis-failed'])
+
+/** Chapters the speech check can run for: the server skips the first chapter, starts under 1 s and skipped chapters. */
+function isSpeechCheckable(chapter: SnapChaptersResponse['chapters'][number]): boolean {
+  return chapter.index > 0 && chapter.proposedStart >= 1 && !SPEECH_SKIP_REASONS.has(chapter.reason)
+}
+
+/** Speech check coverage: how many checkable chapters have a verdict, out of how many. */
+export function getSnapSpeechProgress(response: SnapChaptersResponse): { checked: number; total: number } {
+  let checked = 0
+  let total = 0
+  for (const chapter of response.chapters) {
+    if (!isSpeechCheckable(chapter)) continue
+    total++
+    if (toSnapSpeech(chapter.speech)) checked++
+  }
+  return { checked, total }
+}
+
+/** Checkable chapters without a speech verdict yet, in book order. */
+export function getSnapSpeechPendingIndexes(response: SnapChaptersResponse): number[] {
+  return response.chapters.filter((chapter) => isSpeechCheckable(chapter) && !toSnapSpeech(chapter.speech)).map((chapter) => chapter.index)
+}
+
+/**
+ * Speech check for some chapters of a session: the chapters exactly as they were snapped (the editor rows at snap time,
+ * with any heard titles applied since), so the server proposes the same starts again, and `indexes` set to the batch.
+ * Every other chapter comes back `not-requested` and is not checked.
+ */
+export function buildSnapSpeechPayload(session: SnapSession, indexes: number[]): SnapChaptersPayload {
+  return {
+    chapters: toPayloadChapters(session.snapshot),
+    indexes,
+    options: toPayloadOptions({ ...session.options, verify: true })
+  }
+}
+
+/**
+ * One speech batch request. `busy`: the server turned it away (409 a snap is already running for this book, 429 the
+ * snap slots are full), so it is worth trying again shortly; the caller does not show a toast for it.
+ */
+export type SnapSpeechBatchResult = { ok: true; response: SnapChaptersResponse } | { ok: false; busy: boolean }
+
+/**
+ * Fold one speech batch into the session's result. A batched chapter takes the batch's proposal (its speech verdict was
+ * heard at that start), keeping the original start. The batch bounds each chapter by the original neighbours, so a
+ * proposal that differs from the session's could cross a neighbour that moved: that chapter keeps the session's
+ * proposal and stays unchecked. Speech warnings come from the latest batch only (they describe what is still unchecked).
+ */
+export function mergeSnapSpeechBatch(
+  previous: SnapChaptersResponse,
+  batch: SnapChaptersResponse,
+  indexes: number[]
+): { response: SnapChaptersResponse; checked: number[] } {
+  if (batch.chapters.length !== previous.chapters.length) return { response: previous, checked: [] }
+  const chapters = previous.chapters.slice()
+  const checked: number[] = []
+  for (const i of [...new Set(indexes)].sort((a, b) => a - b)) {
+    const prev = chapters[i]
+    const next = batch.chapters[i]
+    if (!prev || !next || SPEECH_SKIP_REASONS.has(next.reason) || !toSnapSpeech(next.speech)) continue
+    const moved = Math.abs(next.proposedStart - prev.proposedStart) >= 0.001
+    if (moved) {
+      const before = chapters[i - 1]
+      const after = chapters[i + 1]
+      if ((before && next.proposedStart <= before.proposedStart) || (after && next.proposedStart >= after.proposedStart)) continue
+    }
+    const delta = round3(next.proposedStart - prev.originalStart)
+    chapters[i] = { ...next, title: prev.title, originalStart: prev.originalStart, delta, changed: delta !== 0 }
+    checked.push(i)
+  }
+
+  const proposedChapters = previous.proposedChapters.map((chapter, i) => {
+    const start = chapters[i]?.proposedStart ?? chapter.start
+    const end = chapters[i + 1]?.proposedStart ?? chapter.end
+    return { ...chapter, start, end }
+  })
+  const warnings = [
+    ...(previous.warnings ?? []).filter((warning) => typeof warning === 'string' && !isSpeechWarning(warning)),
+    ...(batch.warnings ?? []).filter((warning) => typeof warning === 'string' && isSpeechWarning(warning))
+  ]
+
+  return {
+    response: {
+      ...previous,
+      options: { ...previous.options, verify: true },
+      chapters,
+      proposedChapters,
+      warnings,
+      stats: { ...previous.stats, elapsedMs: previous.stats.elapsedMs + batch.stats.elapsedMs }
+    },
+    checked
+  }
+}
+
+/** Why a row may need a look: low confidence, the speech check heard the heading on the wrong side, or not at all. */
+export type SnapAttention = 'low-confidence' | 'late' | 'early' | 'no-heading'
+
+/**
+ * The most serious reason to look at this row, or null. Low or no confidence only counts for a row that would move (an
+ * unchanged row with no pause nearby is left alone); a speech verdict counts either way, since it says the start is off.
+ */
+export function getSnapAttention(row: Pick<SnapRow, 'changed' | 'confidence' | 'speech'>): SnapAttention | null {
+  const status = getSnapSpeechStatus(row.speech)
+  if (status === 'late' || status === 'early') return status
+  if (status === 'no-heading') return 'no-heading'
+  if (row.changed && (row.confidence === 'low' || row.confidence === 'none')) return 'low-confidence'
+  return null
+}
+
+export interface SnapSummary {
+  moved: number
+  headingHeard: number
+  flagged: number
+  /** Checkable chapters the speech check has not reached (only when it ran). */
+  notChecked: number
+}
+
+export function getSnapSummary(rows: SnapRow[], response: SnapChaptersResponse, checkedSpeech: boolean): SnapSummary {
+  const progress = checkedSpeech ? getSnapSpeechProgress(response) : { checked: 0, total: 0 }
+  return {
+    moved: rows.filter((row) => row.changed).length,
+    headingHeard: rows.filter((row) => getSnapSpeechStatus(row.speech) === 'heading').length,
+    flagged: rows.filter((row) => getSnapAttention(row) !== null).length,
+    notChecked: progress.total - progress.checked
+  }
+}
+
+/** Signed change with one decimal (`+20.3`, `-1.7`); a move under 0.05 s keeps more so it does not read as 0. */
+export function formatSnapDelta(delta: number): string {
+  const abs = Math.abs(delta)
+  const digits = abs === 0 || abs >= 0.05 ? 1 : abs >= 0.005 ? 2 : 3
+  const text = abs.toFixed(digits)
+  return `${delta < 0 ? '-' : '+'}${text}`
+}
+
+/** `h:mm:ss.s` (tenths truncated like `formatSnapStart`), so every start in the list has the same width. */
+export function formatSnapClock(seconds: number): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return '-'
+  const tenths = Math.floor(round3(seconds) * 10 + 1e-6)
+  const whole = Math.floor(tenths / 10)
+  const h = Math.floor(whole / 3600)
+  const m = Math.floor((whole % 3600) / 60)
+  const s = whole % 60
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${tenths % 10}`
 }
 
 /**
@@ -209,10 +378,7 @@ export function buildSnapPayload(
   }))
 
   const payload: SnapChaptersPayload = {
-    chapters: snapshot.map((chapter, i) => {
-      const title = chapter.title.slice(0, MAX_SNAP_TITLE_LENGTH)
-      return title ? { id: i, title, start: chapter.start } : { id: i, start: chapter.start }
-    }),
+    chapters: toPayloadChapters(snapshot),
     options: toPayloadOptions(options)
   }
 

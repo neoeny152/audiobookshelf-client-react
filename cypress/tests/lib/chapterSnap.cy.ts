@@ -3,15 +3,23 @@ import {
   buildSnapPayload,
   buildSnapRetryPayload,
   buildSnapRows,
+  buildSnapSpeechPayload,
   clampSnapOption,
+  formatSnapClock,
+  formatSnapDelta,
   formatSnapStart,
   getDefaultSnapChecked,
   getSnapErrorToast,
+  getSnapAttention,
   getSnapHeardTitle,
+  getSnapSpeechPendingIndexes,
+  getSnapSpeechProgress,
   getSnapSpeechStatus,
+  getSnapSummary,
   getSnapSpeechWarnings,
   isSnapSpeechFlagged,
   mergeSnapRetry,
+  mergeSnapSpeechBatch,
   SNAP_DEFAULT_OPTIONS,
   snapSessionCheckedSpeech,
   toSnapSpeech,
@@ -498,6 +506,164 @@ describe('snap speech check', () => {
       'Speech check skipped: chapterbot is busy, 4 chapters not checked, try again later'
     ]
     expect(getSnapSpeechWarnings(r)).to.deep.equal(['Speech check skipped: chapterbot is busy, 4 chapters not checked, try again later'])
+  })
+  it('drops the per-request limit warning, which the panel works around with batches', () => {
+    const r = response([])
+    r.warnings = ['Speech check limited to 15 chapters per request: 26 not checked. Resend with "indexes" set to the rest to check them.']
+    expect(getSnapSpeechWarnings(r)).to.deep.equal([])
+  })
+})
+
+describe('snap speech batches', () => {
+  const heard = { before: 'the end', after: 'chapter two', heading: true, late: false, early: false }
+  const snapshot = [0, 100, 200, 300, 400].map((start, i) => ({ clientKey: `ch-${i}`, start, title: `Chapter ${i + 1}` }))
+
+  /** First response: chapters 1-2 checked, 3-4 over the limit. */
+  function first(): SnapChaptersResponse {
+    const r = response([
+      proposal({ index: 0, originalStart: 0, reason: 'first-chapter', confidence: 'high' }),
+      proposal({ index: 1, originalStart: 100, proposedStart: 98, reason: 'heading-lookback', confidence: 'high', speech: heard }),
+      proposal({ index: 2, originalStart: 200, proposedStart: 199, reason: 'nearest-longest-pause', confidence: 'medium', speech: heard }),
+      proposal({ index: 3, originalStart: 300, proposedStart: 297, reason: 'nearest-longest-pause', confidence: 'medium' }),
+      proposal({ index: 4, originalStart: 400, proposedStart: 402, reason: 'nearest-longest-pause', confidence: 'medium' })
+    ])
+    r.options = { ...r.options, verify: true }
+    r.warnings = ['Speech check limited to 2 chapters per request: 2 not checked. Resend with "indexes" set to the rest to check them.']
+    return r
+  }
+
+  /** A batch for chapters 3 and 4: the rest come back not-requested. */
+  function batchOf(three: Partial<SnapChapterProposal>, four: Partial<SnapChapterProposal>): SnapChaptersResponse {
+    return response([
+      proposal({ index: 0, originalStart: 0, reason: 'first-chapter' }),
+      proposal({ index: 1, originalStart: 100, reason: 'not-requested' }),
+      proposal({ index: 2, originalStart: 200, reason: 'not-requested' }),
+      proposal({ index: 3, originalStart: 300, ...three }),
+      proposal({ index: 4, originalStart: 400, ...four })
+    ])
+  }
+
+  it('counts checkable chapters and lists the unchecked ones in book order', () => {
+    const r = first()
+    expect(getSnapSpeechProgress(r)).to.deep.equal({ checked: 2, total: 4 })
+    expect(getSnapSpeechPendingIndexes(r)).to.deep.equal([3, 4])
+    // the first chapter, starts under 1 s and skipped chapters are never checked
+    r.chapters[3] = { ...r.chapters[3], reason: 'not-analysed', proposedStart: 300, changed: false, delta: 0 }
+    expect(getSnapSpeechPendingIndexes(r)).to.deep.equal([4])
+    expect(getSnapSpeechProgress(r).total).to.equal(3)
+  })
+
+  it("sends the session's snapshot with the batch indexes and the speech check on", () => {
+    const session: SnapSession = { snapshot, response: first(), options: { ...SNAP_DEFAULT_OPTIONS } }
+    expect(buildSnapSpeechPayload(session, [3, 4])).to.deep.equal({
+      chapters: snapshot.map((c, i) => ({ id: i, title: c.title, start: c.start })),
+      indexes: [3, 4],
+      options: { ...SNAP_DEFAULT_OPTIONS, verify: true }
+    })
+  })
+
+  it('merges the batch verdicts and keeps everything else', () => {
+    const batch = batchOf(
+      { proposedStart: 297, reason: 'nearest-longest-pause', confidence: 'low', speech: { ...heard, heading: false, late: true } },
+      { proposedStart: 402, reason: 'nearest-longest-pause', confidence: 'medium', speech: heard }
+    )
+    batch.stats = { ...batch.stats, elapsedMs: 30000 }
+    const { response: merged, checked } = mergeSnapSpeechBatch(first(), batch, [3, 4])
+    expect(checked).to.deep.equal([3, 4])
+    expect(merged.chapters[1].proposedStart).to.equal(98)
+    expect(merged.chapters[1].speech).to.deep.equal(heard)
+    expect(merged.chapters[3].speech?.late).to.equal(true)
+    expect(merged.chapters[3].confidence).to.equal('low')
+    expect(merged.chapters[4].speech?.heading).to.equal(true)
+    expect(getSnapSpeechProgress(merged)).to.deep.equal({ checked: 4, total: 4 })
+    expect(getSnapSpeechPendingIndexes(merged)).to.deep.equal([])
+    expect(merged.options.verify).to.equal(true)
+    // the stale limit warning goes: the latest batch had nothing to say
+    expect(merged.warnings).to.deep.equal([])
+    expect(merged.stats.elapsedMs).to.equal(34000)
+    expect(merged.proposedChapters.map((c) => [c.start, c.end])).to.deep.equal([
+      [0, 98],
+      [98, 199],
+      [199, 297],
+      [297, 402],
+      [402, mediaDuration]
+    ])
+  })
+
+  it('takes a different batch proposal with the original start, unless it would cross a neighbour', () => {
+    const prev = first()
+    prev.chapters[2] = { ...prev.chapters[2], proposedStart: 296.5 }
+    const batch = batchOf(
+      { proposedStart: 296.8, reason: 'nearest-longest-pause', confidence: 'medium', speech: heard },
+      { proposedStart: 401, reason: 'inside-pause', confidence: 'high', speech: heard }
+    )
+    const { response: merged, checked } = mergeSnapSpeechBatch(prev, batch, [3, 4])
+    expect(checked).to.deep.equal([3, 4])
+    expect(merged.chapters[3]).to.include({ proposedStart: 296.8, originalStart: 300, delta: -3.2, changed: true })
+    expect(merged.chapters[4]).to.include({ proposedStart: 401, originalStart: 400, delta: 1, changed: true, reason: 'inside-pause' })
+
+    // 296.4 would start before chapter 2's proposal (296.5)
+    const crossing = mergeSnapSpeechBatch(prev, batchOf({ proposedStart: 296.4, speech: heard }, { proposedStart: 401, speech: heard }), [3, 4])
+    expect(crossing.checked).to.deep.equal([4])
+    expect(crossing.response.chapters[3].speech).to.equal(null)
+    expect(crossing.response.chapters[3].proposedStart).to.equal(297)
+  })
+
+  it('leaves unchecked chapters alone and keeps the latest speech warning', () => {
+    const batch = batchOf({ proposedStart: 297, reason: 'nearest-longest-pause', confidence: 'medium' }, { reason: 'not-analysed' })
+    batch.warnings = ['Speech check skipped: chapterbot is busy, 1 chapters not checked, try again later']
+    const prev = first()
+    prev.warnings = ['Time limit reached: developer note', ...prev.warnings]
+    const { response: merged, checked } = mergeSnapSpeechBatch(prev, batch, [3, 4])
+    expect(checked).to.deep.equal([])
+    expect(merged.chapters[4].proposedStart).to.equal(402)
+    expect(merged.warnings).to.deep.equal(['Time limit reached: developer note', 'Speech check skipped: chapterbot is busy, 1 chapters not checked, try again later'])
+  })
+
+  it('ignores a batch for a different chapter list', () => {
+    const prev = first()
+    const { response: merged, checked } = mergeSnapSpeechBatch(prev, response([proposal({ index: 0, originalStart: 0 })]), [0])
+    expect(merged).to.equal(prev)
+    expect(checked).to.deep.equal([])
+  })
+})
+
+describe('snap list summary', () => {
+  const speech = (partial: object) => ({ before: '', after: '', heading: false, late: false, early: false, ...partial })
+
+  it('flags late, early, unheard headings and unsure moves', () => {
+    expect(getSnapAttention({ changed: true, confidence: 'high', speech: speech({ heading: true }) })).to.equal(null)
+    expect(getSnapAttention({ changed: true, confidence: 'low', speech: speech({ late: true }) })).to.equal('late')
+    expect(getSnapAttention({ changed: false, confidence: 'high', speech: speech({ early: true }) })).to.equal('early')
+    expect(getSnapAttention({ changed: false, confidence: 'high', speech: speech({}) })).to.equal('no-heading')
+    expect(getSnapAttention({ changed: true, confidence: 'low', speech: null })).to.equal('low-confidence')
+    expect(getSnapAttention({ changed: true, confidence: 'none', speech: null })).to.equal('low-confidence')
+    // an unchanged row with no pause nearby is fine
+    expect(getSnapAttention({ changed: false, confidence: 'none', speech: null })).to.equal(null)
+  })
+
+  it('counts moves, heard headings, flags and unchecked chapters', () => {
+    const r = response([
+      proposal({ index: 0, originalStart: 0, reason: 'first-chapter', confidence: 'high' }),
+      proposal({ index: 1, originalStart: 100, proposedStart: 98, reason: 'heading-lookback', confidence: 'high', speech: speech({ heading: true }) }),
+      proposal({ index: 2, originalStart: 200, proposedStart: 205, reason: 'nearest-longest-pause', confidence: 'low', speech: speech({ late: true }) }),
+      proposal({ index: 3, originalStart: 300, reason: 'inside-pause', confidence: 'high' })
+    ])
+    const session: SnapSession = { snapshot: [], response: r, options: { ...SNAP_DEFAULT_OPTIONS, verify: true } }
+    expect(getSnapSummary(buildSnapRows(session), r, true)).to.deep.equal({ moved: 2, headingHeard: 1, flagged: 1, notChecked: 1 })
+    expect(getSnapSummary(buildSnapRows(session), r, false).notChecked).to.equal(0)
+  })
+
+  it('formats starts as h:mm:ss.s and changes with a sign and one decimal', () => {
+    expect(formatSnapClock(281.6)).to.equal('0:04:41.6')
+    expect(formatSnapClock(279.8)).to.equal('0:04:39.8')
+    expect(formatSnapClock(59.99)).to.equal('0:00:59.9')
+    expect(formatSnapClock(3600.3)).to.equal('1:00:00.3')
+    expect(formatSnapClock(36000)).to.equal('10:00:00.0')
+    expect(formatSnapDelta(-1.722)).to.equal('-1.7')
+    expect(formatSnapDelta(20.3)).to.equal('+20.3')
+    expect(formatSnapDelta(0.04)).to.equal('+0.04')
+    expect(formatSnapDelta(-0.001)).to.equal('-0.001')
   })
 })
 
