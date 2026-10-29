@@ -79,7 +79,9 @@ export interface SnapRow {
 
 /**
  * Speech check verdict for one row, worst first: the heading sits on the wrong side of the start, then heard or not.
- * 'not-expected': not heard, but the server says the title is front or back matter that is often not read out.
+ * 'not-expected': not heard, but the server says the title is front or back matter that is often not read out, and
+ * it heard no other heading there either (a spoken "Chapter 1" at a "Dedication" start means the start or the title
+ * is wrong, so that stays 'no-heading').
  */
 export type SnapSpeechStatus = 'late' | 'early' | 'heading' | 'no-heading' | 'not-expected'
 
@@ -182,7 +184,7 @@ export function getSnapSpeechStatus(speech: SnapChapterSpeech | null): SnapSpeec
   if (speech.late) return 'late'
   if (speech.early) return 'early'
   if (speech.heading) return 'heading'
-  return speech.expected === false ? 'not-expected' : 'no-heading'
+  return speech.expected === false && !speech.heard ? 'not-expected' : 'no-heading'
 }
 
 /** The speech check heard the heading on the wrong side of the proposed start. */

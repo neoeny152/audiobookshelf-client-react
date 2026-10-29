@@ -386,7 +386,7 @@ describe('snap rows and retry', () => {
 
 describe('snap speech check', () => {
   const snapshot = [0, 100, 200, 300].map((start, i) => ({ clientKey: `ch-${i}`, start, title: `Chapter ${i + 1}` }))
-  const speech = (partial: Partial<{ heading: boolean; late: boolean; early: boolean; expected: boolean }>) => ({
+  const speech = (partial: Partial<{ heading: boolean; late: boolean; early: boolean; expected: boolean; heard: string | null }>) => ({
     before: 'and that was the end of it',
     after: 'chapter two the long road',
     heading: false,
@@ -485,6 +485,9 @@ describe('snap speech check', () => {
     expect(getSnapSpeechStatus(speech({ expected: false }))).to.equal('not-expected')
     expect(getSnapSpeechStatus(speech({ expected: false, heading: true }))).to.equal('heading')
     expect(getSnapSpeechStatus(speech({ expected: true }))).to.equal('no-heading')
+    // a different heading heard at a front matter start: the start or the title is wrong
+    expect(getSnapSpeechStatus(speech({ expected: false, heard: 'Chapter 1' }))).to.equal('no-heading')
+    expect(getSnapSpeechStatus(speech({ expected: false, heard: null }))).to.equal('not-expected')
     expect(isSnapSpeechFlagged(speech({ late: true }))).to.equal(true)
     expect(isSnapSpeechFlagged(speech({ heading: true }))).to.equal(false)
     expect(isSnapSpeechFlagged(null)).to.equal(false)
@@ -691,6 +694,7 @@ describe('snap list summary', () => {
     expect(getSnapAttention({ changed: false, confidence: 'high', speech: speech({}) })).to.equal('no-heading')
     // front matter not read out is not a reason to look, but an unsure move still is
     expect(getSnapAttention({ changed: false, confidence: 'high', speech: speech({ expected: false }) })).to.equal(null)
+    expect(getSnapAttention({ changed: false, confidence: 'high', speech: speech({ expected: false, heard: 'Chapter 1' }) })).to.equal('no-heading')
     expect(getSnapAttention({ changed: true, confidence: 'low', speech: speech({ expected: false }) })).to.equal('low-confidence')
     expect(getSnapAttention({ changed: true, confidence: 'low', speech: null })).to.equal('low-confidence')
     expect(getSnapAttention({ changed: true, confidence: 'none', speech: null })).to.equal('low-confidence')
