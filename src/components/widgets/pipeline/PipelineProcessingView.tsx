@@ -170,6 +170,8 @@ export default function PipelineProcessingView({
             const busy = !!busyItemIds?.has(item.libraryItemId)
             const itemHref = `/library/${libraryId}/item/${item.libraryItemId}`
             const active = isPipelineActive(item.status)
+            // The step that is running would still change the book; the server refuses (409) until it ends
+            const processing = workerCurrent === item.libraryItemId && active
             return (
               <li key={item.libraryItemId} className="flex min-w-0 flex-col gap-2 py-3 sm:flex-row sm:items-center" cy-id="pipeline-row" data-item-id={item.libraryItemId}>
                 <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -180,7 +182,7 @@ export default function PipelineProcessingView({
                       {item.title || t('LabelAutoPipelineUntitled')}
                     </Link>
                     <PipelineStatusChip state={item} />
-                    {workerCurrent === item.libraryItemId && active && (
+                    {processing && (
                       <span className="text-foreground-muted text-xs" cy-id="pipeline-row-current">
                         {t('LabelAutoPipelineWorking')}
                       </span>
@@ -211,7 +213,7 @@ export default function PipelineProcessingView({
                       {t('ButtonAutoPipelineUndoChapters')}
                     </Btn>
                   )}
-                  <Btn size="small" disabled={busy} onClick={() => onDismiss(item)}>
+                  <Btn size="small" disabled={busy || processing} onClick={() => onDismiss(item)}>
                     {t('ButtonAutoPipelineDismiss')}
                   </Btn>
                 </div>

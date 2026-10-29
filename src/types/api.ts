@@ -831,11 +831,15 @@ export interface PipelineProposal {
   blockers?: string[]
   /** The chapters to apply; falls back to `snap.proposedChapters` */
   proposedChapters?: Chapter[]
+  /** A dry run's proposal: shown, but the server refuses to approve it */
+  dryRun?: boolean
 }
 
 export interface PipelineBackup {
   name: string
   createdAt?: number | null
+  /** What wrote it, e.g. `audible:aligned`, `review:aligned`, or `restore` for the copy made before an undo */
+  source?: string | null
   reason?: string | null
 }
 

@@ -164,6 +164,27 @@ describe('<PipelineProcessingView />', () => {
     row('li_f1').contains('button', 'Retry').should('be.disabled')
   })
 
+  it('does not let a book be dismissed while the worker is on it', () => {
+    mountView({ workerCurrent: 'li_q2' })
+    row('li_q2').find('[cy-id="pipeline-row-current"]').should('exist')
+    row('li_q2').contains('button', 'Dismiss').should('be.disabled')
+    row('li_q1').contains('button', 'Dismiss').should('not.be.disabled')
+  })
+
+  it('offers no chapter review for a dry run and no second undo after a restore', () => {
+    const review = ITEMS[2]
+    const applied = ITEMS[4]
+    mountView({
+      initialTab: 'review',
+      items: [
+        { ...review, dryRun: true },
+        { ...applied, libraryItemId: 'li_d3', status: 'needs-review', step: 'chapters', chapters: { ...applied.chapters!, result: 'restored' } }
+      ]
+    })
+    row('li_r1').find('a').filter(':contains("Review chapters")').should('not.exist')
+    row('li_d3').find('button').filter(':contains("Undo chapters")').should('not.exist')
+  })
+
   it('says when a tab is empty', () => {
     mountView({ items: [] })
     cy.get('[cy-id="pipeline-empty"]').should('exist')

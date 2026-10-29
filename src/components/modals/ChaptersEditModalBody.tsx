@@ -10,7 +10,7 @@ import ChaptersModalTable from '@/components/widgets/chapters-edit/ChaptersModal
 import FindChaptersPanel from '@/components/widgets/chapters-edit/FindChaptersPanel'
 import { ShiftTimesFields } from '@/components/widgets/chapters-edit/ShiftTimesPanel'
 import SnapToAudioPanel from '@/components/widgets/chapters-edit/SnapToAudioPanel'
-import { usePipelineProposalItemId } from '@/contexts/PipelineProposalContext'
+import { usePipelineProposalTarget } from '@/contexts/PipelineProposalContext'
 import { useChapterEditor, type PipelineProposalReview } from '@/hooks/useChapterEditor'
 import { getPipelineWhyLabel } from '@/lib/autoPipeline'
 import { useServerFeature } from '@/hooks/useServerFeatures'
@@ -128,12 +128,13 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
   const t = useTypeSafeTranslations()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [footerShadow, setFooterShadow] = useState(false)
-  const proposalItemId = usePipelineProposalItemId()
+  const proposalTarget = usePipelineProposalTarget()
 
   const editor = useChapterEditor({
     initialLibraryItem: libraryItem,
     onItemUpdated,
-    pipelineProposal: proposalItemId === libraryItem.id
+    pipelineProposal: proposalTarget?.itemId === libraryItem.id,
+    onProposalResolved: proposalTarget?.onResolved
   })
   const speechCheckAvailable = useServerFeature('chapterbotVerify')
 
@@ -247,7 +248,9 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     handleSave(captureLeave())
   }, [captureLeave, handleSave])
 
-  const footerDisabled = !hasChanges || isPending
+  // Until the proposal is in, edits would be overwritten by it
+  const proposalLoading = proposalReview?.status === 'loading'
+  const footerDisabled = !hasChanges || isPending || proposalLoading
 
   const requestConfirmIfDirty = useCallback(
     (proceed: () => void) => {
@@ -275,7 +278,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     <>
       <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg" aria-busy={isPending || undefined}>
         {/* Below md (incl. phone landscape) the tools and table scroll together here; from md up only the table scrolls. */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" inert={isPending || undefined}>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" inert={isPending || proposalLoading || undefined}>
           <div className="bg-bg border-border shrink-0 border-b px-4 py-3">
             {proposalReview && (
               <div className="mb-3">
@@ -346,7 +349,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
               onRemoveSelected={handleRemoveSelected}
             />
 
-            {isPending && (
+            {(isPending || proposalLoading) && (
               <div className="bg-bg/50 absolute inset-0 z-10 flex items-center justify-center">
                 <LoadingIndicator variant="inline" />
               </div>

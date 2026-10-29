@@ -53,6 +53,11 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
   const [metadataEditSection, setMetadataEditSection] = useState<MetadataEditSection | null>(null)
   /** Set while the chapter editor reviews the auto pipeline's proposal for this item. */
   const [proposalItemId, setProposalItemId] = useState<string | null>(null)
+  const handleProposalResolved = useCallback(() => setProposalItemId(null), [])
+  const proposalTarget = useMemo(
+    () => (proposalItemId ? { itemId: proposalItemId, onResolved: handleProposalResolved } : null),
+    [handleProposalResolved, proposalItemId]
+  )
   const [isClearQueueDialogOpen, setIsClearQueueDialogOpen] = useState(false)
   const [podcastEpisodesInOrder, setPodcastEpisodesInOrder] = useState<PodcastEpisode[]>([])
   const handlePodcastEpisodesInOrderChange = useCallback((episodes: PodcastEpisode[]) => {
@@ -313,7 +318,7 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
           </div>
         </div>
 
-        <PipelineProposalContext.Provider value={proposalItemId}>
+        <PipelineProposalContext.Provider value={proposalTarget}>
           <LibraryItemMetadataEditModal
             isOpen={metadataEditSection !== null}
             initialSection={metadataEditSection ?? 'details'}

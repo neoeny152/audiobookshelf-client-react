@@ -6,12 +6,16 @@ import {
   getDismissedPipelineItemId,
   getPipelineMatchPercent,
   getPipelineProposalChapters,
+  getPipelineReviewChapters,
   getPipelineTab,
+  getPipelineWhyLabel,
   getPipelineWorkerItemId,
   getPipelineWouldLines,
   hasPipelineChapterReview,
   hasPipelineMatchReview,
   isAudibleProvider,
+  isUnchangedPipelineProposal,
+  pickPipelineUndoBackup,
   toPipelineItemState,
   upsertPipelineItem,
   withAutoPipelineDefaults
@@ -72,6 +76,16 @@ describe('toPipelineItemState', () => {
     expect(parsed?.chapters?.needsReview).to.deep.equal([{ index: 3, why: 'late' }])
   })
 
+  it('reads the chapter source kind the server sends', () => {
+    const parsed = toPipelineItemState({
+      ...state({ status: 'done' }),
+      chapters: { result: 'applied', source: { kind: 'aligned', asin: 'B0', region: 'us', variant: 'raw', diffSec: 1 }, count: 5 }
+    })
+    expect(parsed?.chapters?.source).to.equal('aligned')
+    const scanner = toPipelineItemState({ ...state({ status: 'done' }), chapters: { result: 'kept', source: { kind: 'scanner', fallbackFrom: 'far' } } })
+    expect(scanner?.chapters?.source).to.equal('scanner')
+  })
+
   it('rejects anything that is not a state', () => {
     expect(toPipelineItemState(null)).to.equal(null)
     expect(toPipelineItemState({ libraryItemId: 'x', status: 'exploded' })).to.equal(null)
@@ -115,6 +129,36 @@ describe('tabs and actions', () => {
     expect(canUndoPipelineChapters(state({ status: 'done', dryRun: true, chapters: applied }))).to.equal(false)
     expect(canUndoPipelineChapters(state({ status: 'done' }))).to.equal(false)
     expect(canUndoPipelineChapters(state({ status: 'done', chapters: { ...applied, applied: false, result: 'approved' } }))).to.equal(true)
+    // After one undo the newest backup holds the pipeline's chapters: a second click would redo, so no button
+    expect(canUndoPipelineChapters(state({ status: 'done', chapters: { ...applied, result: 'restored' } }))).to.equal(false)
+  })
+
+  it('undoes to the backup the pipeline made, never to a before-restoring copy', () => {
+    const backups = [
+      { name: 'chapters-3.json', createdAt: 3, source: 'restore', reason: 'before restoring chapters-1.json' },
+      { name: 'chapters-2.json', createdAt: 2, source: 'review:aligned', reason: 'approved' },
+      { name: 'chapters-1.json', createdAt: 1, source: 'audible:aligned', reason: 'auto' }
+    ]
+    expect(pickPipelineUndoBackup(backups, 'chapters-1.json')?.name).to.equal('chapters-1.json')
+    expect(pickPipelineUndoBackup(backups, 'gone.json')?.name).to.equal('chapters-2.json')
+    expect(pickPipelineUndoBackup(backups)?.name).to.equal('chapters-2.json')
+    expect(pickPipelineUndoBackup([backups[0]])).to.equal(null)
+  })
+
+  it('offers no chapter review for a dry run (the server cannot approve it)', () => {
+    const chaptersReview = { result: 'needs-review', source: 'aligned', diffSec: 1, applied: false, needsReview: [], backup: null }
+    expect(hasPipelineChapterReview(state({ status: 'needs-review', chapters: chaptersReview }))).to.equal(true)
+    expect(hasPipelineChapterReview(state({ status: 'needs-review', dryRun: true, chapters: chaptersReview }))).to.equal(false)
+  })
+
+  it('labels the server blocker codes', () => {
+    expect(getPipelineWhyLabel('late')?.key).to.equal('LabelAutoPipelineWhyLate')
+    expect(getPipelineWhyLabel('source-near')?.key).to.equal('LabelAutoPipelineBlockerSourceNear')
+    expect(getPipelineWhyLabel('snap-incomplete')?.key).to.equal('LabelAutoPipelineBlockerSnapIncomplete')
+    expect(getPipelineWhyLabel('user-edited')?.key).to.equal('LabelAutoPipelineBlockerUserEdited')
+    expect(getPipelineWhyLabel('speech-check-unavailable')?.key).to.equal('LabelAutoPipelineBlockerSpeechCheckUnavailable')
+    expect(getPipelineWhyLabel('current-overlapping')?.key).to.equal('LabelAutoPipelineBlockerCurrentBad')
+    expect(getPipelineWhyLabel('something-new')).to.equal(null)
   })
 
   it('replaces an item in place and ignores other libraries', () => {
@@ -184,5 +228,106 @@ describe('pipeline proposal', () => {
 
   it('gives no session when the rows do not line up', () => {
     expect(buildPipelineProposalSession(proposal, [{ clientKey: 'k0' }])).to.equal(null)
+  })
+
+  describe('review chapters', () => {
+    const speech = (partial: Record<string, unknown>) => ({ before: '', after: '', heading: true, late: false, early: false, heard: null, ...partial })
+    const reviewSnap = {
+      ...snap,
+      chapters: [
+        { index: 0, id: 0, title: 'Opening', originalStart: 0, proposedStart: 0, delta: 0, changed: false, reason: 'first', confidence: 'none', speech: null },
+        {
+          index: 1,
+          id: 1,
+          title: 'Chapter 1',
+          originalStart: 20,
+          proposedStart: 21,
+          delta: 1,
+          changed: true,
+          reason: 'snapped',
+          confidence: 'high',
+          speech: speech({})
+        },
+        // The speech check heard the heading before the snapped start: LATE
+        {
+          index: 2,
+          id: 2,
+          title: 'Chapter 2',
+          originalStart: 50,
+          proposedStart: 52,
+          delta: 2,
+          changed: true,
+          reason: 'snapped',
+          confidence: 'high',
+          speech: speech({ late: true })
+        },
+        {
+          index: 3,
+          id: 3,
+          title: 'Chapter 3',
+          originalStart: 70,
+          proposedStart: 71,
+          delta: 1,
+          changed: true,
+          reason: 'snapped',
+          confidence: 'low',
+          speech: speech({})
+        }
+      ],
+      proposedChapters: []
+    } as unknown as SnapChaptersResponse
+    const proposed = [
+      { id: 0, start: 0, end: 21, title: 'Opening' },
+      { id: 1, start: 21, end: 52, title: 'Chapter 1' },
+      { id: 2, start: 52, end: 71, title: 'Chapter 2' },
+      { id: 3, start: 71, end: 100, title: 'Chapter 3' }
+    ]
+    const reviewProposal: PipelineProposal = {
+      source: 'aligned',
+      diffSec: 1,
+      snap: reviewSnap,
+      failing: [
+        { index: 2, why: ['late'] },
+        { index: 3, why: ['confidence-low'] }
+      ],
+      proposedChapters: proposed
+    }
+
+    it('leaves a LATE or low-confidence start where it was before the snap, as the snap panel leaves it unticked', () => {
+      const chapters = getPipelineReviewChapters(reviewProposal)
+      expect(chapters.map((c) => c.start)).to.deep.equal([0, 21, 50, 70])
+      expect(chapters.map((c) => c.end)).to.deep.equal([21, 50, 70, 100])
+      expect(chapters.map((c) => c.title)).to.deep.equal(['Opening', 'Chapter 1', 'Chapter 2', 'Chapter 3'])
+      // The panel session made from these rows still offers the held-back moves
+      const session = buildPipelineProposalSession(reviewProposal, chapters)
+      expect(session?.snapshot.map((row) => row.start)).to.deep.equal([0, 20, 50, 70])
+    })
+
+    it('keeps the proposal as it is when every move passes', () => {
+      const clean = {
+        ...reviewProposal,
+        snap: { ...reviewSnap, chapters: reviewSnap.chapters.slice(0, 2) } as SnapChaptersResponse,
+        proposedChapters: proposed.slice(0, 2)
+      }
+      expect(getPipelineReviewChapters(clean)).to.equal(clean.proposedChapters)
+    })
+
+    it('tells an unchanged proposal from an edited one by titles and starts', () => {
+      expect(
+        isUnchangedPipelineProposal(
+          proposed.map((c) => ({ ...c, end: c.end + 0.5 })),
+          proposed
+        )
+      ).to.equal(true)
+      expect(isUnchangedPipelineProposal(getPipelineReviewChapters(reviewProposal), proposed)).to.equal(false)
+      expect(
+        isUnchangedPipelineProposal(
+          proposed.map((c, i) => (i === 1 ? { ...c, title: 'Renamed' } : c)),
+          proposed
+        )
+      ).to.equal(false)
+      expect(isUnchangedPipelineProposal(proposed.slice(0, 3), proposed)).to.equal(false)
+      expect(isUnchangedPipelineProposal([], [])).to.equal(false)
+    })
   })
 })

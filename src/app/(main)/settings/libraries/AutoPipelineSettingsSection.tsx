@@ -3,7 +3,15 @@
 import Dropdown, { type DropdownItem } from '@/components/ui/Dropdown'
 import TextInput from '@/components/ui/TextInput'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
-import { clampMinConfidence, clampSettleMinutes, isAudibleProvider, MIN_CONFIDENCE_BOUNDS, SETTLE_MINUTES_BOUNDS, withAutoPipelineDefaults } from '@/lib/autoPipeline'
+import {
+  clampMinConfidence,
+  clampSettleMinutes,
+  isAudibleProvider,
+  LOW_CONFIDENCE_WARNING,
+  MIN_CONFIDENCE_BOUNDS,
+  SETTLE_MINUTES_BOUNDS,
+  withAutoPipelineDefaults
+} from '@/lib/autoPipeline'
 import type { AutoPipelineMode, AutoPipelineSettings } from '@/types/api'
 import { useEffect, useId, useState } from 'react'
 import SettingsToggleSwitch from '../SettingsToggleSwitch'
@@ -29,7 +37,10 @@ export interface AutoPipelineSettingsSectionProps {
   onChange: (next: AutoPipelineSettings) => void
 }
 
-/** A number field that commits (clamped) on blur or Enter, so typing "9" on the way to "97" is not clamped to 50. */
+/**
+ * A number field that commits on blur or Enter (not while typing). Above the maximum it is clamped; empty, non-numeric
+ * or below the minimum it goes back to the saved value.
+ */
 function NumberSetting({
   label,
   value,
@@ -50,7 +61,14 @@ function NumberSetting({
   const [draft, setDraft] = useState(String(value))
   useEffect(() => setDraft(String(value)), [value])
   const commit = () => {
-    const next = clamp(Number(draft))
+    // An empty, non-numeric or too small value keeps the saved one. Number('') is 0, and raising that (or a "9" typed on
+    // the way to "97") to the minimum would quietly pick the loosest match threshold the server accepts.
+    const typed = draft.trim() === '' ? NaN : Number(draft)
+    if (!Number.isFinite(typed) || Math.round(typed) < bounds[0]) {
+      setDraft(String(value))
+      return
+    }
+    const next = clamp(typed)
     setDraft(String(next))
     if (next !== value) onCommit(next)
   }
@@ -165,6 +183,11 @@ export default function AutoPipelineSettingsSection({ value, libraryProvider, au
             suffix="%"
             cyId="auto-pipeline-min-confidence"
           />
+          {settings.autoMatchMinConfidence < LOW_CONFIDENCE_WARNING && (
+            <p className="bg-warning/15 border-warning/60 rounded-md border px-3 py-2 text-xs" role="note" cy-id="auto-pipeline-low-confidence">
+              {t('MessageAutoPipelineLowConfidence', { confidence: String(settings.autoMatchMinConfidence) })}
+            </p>
+          )}
           <NumberSetting
             label={t('LabelAutoPipelineSettleMinutes')}
             value={settings.settleMinutes}

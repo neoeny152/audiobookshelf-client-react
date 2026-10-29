@@ -139,7 +139,22 @@ export default function ProcessingClient({ libraryId, canRunLibrary }: Processin
   )
 
   const handleUndoChapters = useCallback(
-    (item: PipelineItemState) => void runItemAction(item, () => undoPipelineChaptersAction(item.libraryItemId), t('ToastAutoPipelineChaptersRestored')),
+    (item: PipelineItemState) =>
+      void runItemAction(
+        item,
+        () => undoPipelineChaptersAction(item.libraryItemId, item.chapters?.backup),
+        t('ToastAutoPipelineChaptersRestored'),
+        () => {
+          // The server says so too (pipeline_item_updated); until then Undo must not be offered again
+          setItems((prev) =>
+            prev.map((entry) =>
+              entry.libraryItemId === item.libraryItemId && entry.chapters
+                ? { ...entry, chapters: { ...entry.chapters, result: 'restored', applied: false } }
+                : entry
+            )
+          )
+        }
+      ),
     [runItemAction, t]
   )
 

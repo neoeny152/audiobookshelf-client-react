@@ -9,7 +9,13 @@ import { useChapterPreviewAudio } from '@/hooks/useChapterPreviewAudio'
 import { useItemPageSocket } from '@/hooks/useItemPageSocket'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { callStatusAction } from '@/lib/actionResult'
-import { buildPipelineProposalSession, getPipelineProposalChapters, normalizePipelineFailing } from '@/lib/autoPipeline'
+import {
+  buildPipelineProposalSession,
+  getPipelineProposalChapters,
+  getPipelineReviewChapters,
+  isUnchangedPipelineProposal,
+  normalizePipelineFailing
+} from '@/lib/autoPipeline'
 import {
   applyChapterTitleDrafts,
   applySnapProposals,
@@ -65,6 +71,8 @@ interface UseChapterEditorOptions {
    * in the snap panel, and save through `proposal/approve` so the pipeline continues.
    */
   pipelineProposal?: boolean
+  /** The proposal was approved, kept or is gone (so the host stops asking the editor to load it). */
+  onProposalResolved?: () => void
 }
 
 /** The auto pipeline proposal under review. `resolved`: approved or kept, saves go back to the normal route. */
@@ -86,7 +94,7 @@ function selectedChapterIds(chapters: EditableChapter[], selectedKeys: Set<strin
   return ids
 }
 
-export function useChapterEditor({ initialLibraryItem, onItemUpdated, pipelineProposal = false }: UseChapterEditorOptions) {
+export function useChapterEditor({ initialLibraryItem, onItemUpdated, pipelineProposal = false, onProposalResolved }: UseChapterEditorOptions) {
   const [libraryItem, setLibraryItem] = useState(initialLibraryItem)
 
   const t = useTypeSafeTranslations()
@@ -273,8 +281,19 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated, pipelinePr
   replaceChapterListRef.current = replaceChapterList
   const mediaDurationRef = useRef(mediaDuration)
   mediaDurationRef.current = mediaDuration
+  const onProposalResolvedRef = useRef(onProposalResolved)
+  onProposalResolvedRef.current = onProposalResolved
+  /** The server's proposed chapters: approving an unchanged list sends no chapters. */
+  const proposedChaptersRef = useRef<Chapter[]>([])
 
-  // Load the pipeline's proposal once per item: its chapters become unsaved edits, its snap the panel's session
+  /** The review is over (approved, kept, gone or never loadable): saves use the normal route from now on. */
+  const resolveProposal = useCallback(() => {
+    setProposalReview((prev) => (prev ? { ...prev, status: 'resolved', session: null } : prev))
+    onProposalResolvedRef.current?.()
+  }, [])
+
+  // Load the pipeline's proposal (the editor is inert until then): its chapters become unsaved edits, its snap the
+  // panel's session. The host stops asking once the review is resolved, so this runs once per review.
   useEffect(() => {
     if (!pipelineProposal) return
     let active = true
@@ -282,12 +301,15 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated, pipelinePr
       if (!active) return
       if (!result.ok) {
         setProposalReview({ status: 'error', session: null, failing: [], blockers: [] })
+        onProposalResolvedRef.current?.()
         showToast(result.error ? t('ToastAutoPipelineProposalFailedWithError', { error: result.error }) : t('ToastAutoPipelineProposalFailed'), {
           type: 'error'
         })
         return
       }
-      const chapters = getPipelineProposalChapters(result.data)
+      proposedChaptersRef.current = getPipelineProposalChapters(result.data)
+      // Moves the snap panel leaves unticked (LATE, EARLY, low confidence) stay at their pre-snap start
+      const chapters = getPipelineReviewChapters(result.data)
       const rows = chapters.length ? replaceChapterListRef.current(initChapters(chapters, mediaDurationRef.current)) : []
       setProposalReview({
         status: 'ready',
@@ -307,16 +329,22 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated, pipelinePr
     startTransition(async () => {
       const result = await callStatusAction(() => rejectPipelineProposalAction(libraryItem.id, true))
       if (!result.ok) {
+        if (result.status === 409) {
+          // Already approved, rejected, re-queued or a dry run: nothing to keep any more
+          resolveProposal()
+          showToast(t('ToastAutoPipelineProposalGone'), { type: 'warning' })
+          return
+        }
         showToast(result.error ? t('ToastAutoPipelineActionFailedWithError', { error: result.error }) : t('ToastAutoPipelineActionFailed'), {
           type: 'error'
         })
         return
       }
-      setProposalReview((prev) => (prev ? { ...prev, status: 'resolved', session: null } : prev))
+      resolveProposal()
       loadSavedChapters(savedChapters, mediaDuration)
       showToast(t('ToastAutoPipelineRejected'), { type: 'success' })
     })
-  }, [libraryItem.id, loadSavedChapters, mediaDuration, savedChapters, showToast, t])
+  }, [libraryItem.id, loadSavedChapters, mediaDuration, resolveProposal, savedChapters, showToast, t])
 
   const isSavingRef = useRef(false)
 
@@ -352,16 +380,24 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated, pipelinePr
       startTransition(async () => {
         try {
           if (approving) {
-            // Backs up and applies on the server, then the pipeline continues (EPUB step)
-            const result = await callStatusAction(() => approvePipelineProposalAction(libraryItem.id, payload))
+            // Backs up and applies on the server, then the pipeline continues (EPUB step). Unchanged: no chapters, so
+            // the server applies its own list and keeps treating it as the pipeline's (not edited by a person).
+            const unchanged = isUnchangedPipelineProposal(payload, proposedChaptersRef.current)
+            const result = await callStatusAction(() => approvePipelineProposalAction(libraryItem.id, unchanged ? undefined : payload))
             if (!result.ok) {
-              showToast(
-                result.error ? t('ToastAutoPipelineActionFailedWithError', { error: result.error }) : t('ToastAutoPipelineActionFailed'),
-                { type: 'error' }
-              )
+              if (result.status === 409) {
+                // A dry run, a stale link, the item re-queued or the audio changed: the proposal cannot be approved, so
+                // stop routing saves to it. The edits stay; the next Save writes them through the normal route.
+                resolveProposal()
+                showToast(t('ToastAutoPipelineProposalGone'), { type: 'warning' })
+                return
+              }
+              showToast(result.error ? t('ToastAutoPipelineActionFailedWithError', { error: result.error }) : t('ToastAutoPipelineActionFailed'), {
+                type: 'error'
+              })
               return
             }
-            setProposalReview((prev) => (prev ? { ...prev, status: 'resolved', session: null } : prev))
+            resolveProposal()
             await refreshAfterChapterUpdate(t('ToastAutoPipelineApproved'))
             onSaved?.()
             return
@@ -391,6 +427,7 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated, pipelinePr
       newChapters,
       preview,
       refreshAfterChapterUpdate,
+      resolveProposal,
       runValidation,
       savedChapters,
       showToast,

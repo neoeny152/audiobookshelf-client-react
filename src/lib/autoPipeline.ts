@@ -1,5 +1,6 @@
-import { SNAP_DEFAULT_OPTIONS, type SnapSession } from '@/lib/chapters/chapterSnap'
-import type { AutoPipelineMode, AutoPipelineSettings, Chapter, PipelineItemState, PipelineItemStatus, PipelineProposal } from '@/types/api'
+import { chapterStartsEqual } from '@/lib/chapters/chapterEditorUtils'
+import { buildSnapRows, getDefaultSnapChecked, SNAP_DEFAULT_OPTIONS, type SnapSession } from '@/lib/chapters/chapterSnap'
+import type { AutoPipelineMode, AutoPipelineSettings, Chapter, PipelineBackup, PipelineItemState, PipelineItemStatus, PipelineProposal } from '@/types/api'
 import type { TranslationKey } from '@/types/translations'
 
 /**
@@ -22,6 +23,11 @@ export const AUTO_PIPELINE_DEFAULTS: Readonly<AutoPipelineSettings> = Object.fre
 
 export const MIN_CONFIDENCE_BOUNDS = Object.freeze([50, 100] as const)
 export const SETTLE_MINUTES_BOUNDS = Object.freeze([1, 120] as const)
+/**
+ * Below this minimum match confidence the settings warn: the server's caps for a wrong title (60), a duration more than
+ * 15 % off (70) or a missing author or duration (80) no longer keep those matches out.
+ */
+export const LOW_CONFIDENCE_WARNING = 90
 
 function clampInt(value: number, [min, max]: readonly [number, number], fallback: number): number {
   if (!Number.isFinite(value)) return fallback
@@ -152,7 +158,8 @@ export function toPipelineItemState(value: unknown): PipelineItemState | null {
     chapters: chapters
       ? {
           result: str(chapters.result),
-          source: typeof chapters.source === 'string' ? chapters.source : str(obj(chapters.source)?.type),
+          // the server sends `{ kind: 'aligned' | 'near' | 'scanner' | ..., asin, region, variant, ... }`
+          source: typeof chapters.source === 'string' ? chapters.source : (str(obj(chapters.source)?.kind) ?? str(obj(chapters.source)?.type)),
           diffSec: num(chapters.diffSec),
           applied: chapters.applied === true,
           needsReview: normalizePipelineFailing(Array.isArray(chapters.needsReview) ? chapters.needsReview : chapters.failing).map((entry) => ({
@@ -190,13 +197,25 @@ const WHY_LABEL: Readonly<Record<string, TranslationKey>> = Object.freeze({
   'analysis-failed': 'LabelAutoPipelineWhyAnalysisFailed'
 })
 
+/** Reasons that hold the whole proposal back (`blockers`, server `chapterPlan.evaluatePolicy` and the chapters step). */
+const BLOCKER_LABEL: Readonly<Record<string, TranslationKey>> = Object.freeze({
+  'source-near': 'LabelAutoPipelineBlockerSourceNear',
+  'source-mismatch': 'LabelAutoPipelineBlockerSourceMismatch',
+  'snap-incomplete': 'LabelAutoPipelineBlockerSnapIncomplete',
+  'user-edited': 'LabelAutoPipelineBlockerUserEdited',
+  'speech-check-unavailable': 'LabelAutoPipelineBlockerSpeechCheckUnavailable',
+  'no-snap': 'LabelAutoPipelineBlockerNoSnap'
+})
+
 /**
- * A translatable label for a policy code (`late`, `confidence-low`, ...): the key and its values, or null for a code
- * this client does not know (shown as the server sent it).
+ * A translatable label for a policy code (`late`, `confidence-low`, a blocker such as `source-near`): the key and its
+ * values, or null for a code this client does not know (shown as the server sent it).
  */
 export function getPipelineWhyLabel(code: string): { key: TranslationKey; values?: Record<string, string> } | null {
   if (code.startsWith('confidence-')) return { key: 'LabelAutoPipelineWhyConfidence', values: { confidence: code.slice('confidence-'.length) } }
-  const key = WHY_LABEL[code]
+  // `current-<problem>`: the person's chapters are clearly broken (no-chapters, overlapping, ...)
+  if (code.startsWith('current-')) return { key: 'LabelAutoPipelineBlockerCurrentBad' }
+  const key = WHY_LABEL[code] ?? BLOCKER_LABEL[code]
   return key ? { key } : null
 }
 
@@ -250,16 +269,35 @@ export function getPipelineWouldLines(state: PipelineItemState): string[] {
   return Array.from(new Set(lines.map((line) => line.trim()).filter(Boolean)))
 }
 
-/** The pipeline wrote chapters (applied or approved, with a backup), so "Undo chapters" can restore the earlier ones. */
+/**
+ * The pipeline wrote chapters (applied or approved, with a backup), so "Undo chapters" can restore the earlier ones.
+ * Not after an undo: the newest backup is then the pipeline's own chapters, and undoing again would put them back.
+ */
 export function canUndoPipelineChapters(state: PipelineItemState): boolean {
   const chapters = state.chapters
-  if (state.dryRun || !chapters) return false
+  if (state.dryRun || !chapters || chapters.result === 'restored') return false
   return chapters.applied || chapters.result === 'applied' || chapters.result === 'approved'
 }
 
-/** The chapters step stopped for review with a proposal to look at. */
+/**
+ * The backup "Undo chapters" restores: the one the pipeline made before writing (`chapters.backup` of the state), else
+ * the newest backup that is not the server's own "before restoring" copy.
+ */
+export function pickPipelineUndoBackup(backups: PipelineBackup[], preferred?: string | null): PipelineBackup | null {
+  if (preferred) {
+    const exact = backups.find((backup) => backup.name === preferred)
+    if (exact) return exact
+  }
+  const candidates = backups.filter((backup) => backup.source !== 'restore')
+  return [...candidates].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0) || b.name.localeCompare(a.name))[0] ?? null
+}
+
+/**
+ * The chapters step stopped for review with a proposal to look at. Not for a dry run: the server refuses to approve
+ * a dry-run proposal, so reviewing it in the editor would lead nowhere.
+ */
 export function hasPipelineChapterReview(state: PipelineItemState): boolean {
-  return state.status === 'needs-review' && state.chapters?.result === 'needs-review'
+  return !state.dryRun && state.status === 'needs-review' && state.chapters?.result === 'needs-review'
 }
 
 /** The match step stopped (review, or failed while matching): the stock match dialog is the way out. */
@@ -303,6 +341,42 @@ export function getProcessingHref(libraryId: string, tab?: PipelineTab): string 
 export function getPipelineProposalChapters(proposal: PipelineProposal): Chapter[] {
   if (Array.isArray(proposal.proposedChapters) && proposal.proposedChapters.length) return proposal.proposedChapters
   return Array.isArray(proposal.snap?.proposedChapters) ? proposal.snap.proposedChapters : []
+}
+
+/**
+ * The chapters the review opens with: the proposal, except that a start the snap panel would leave unticked (flagged
+ * LATE or EARLY by the speech check, or low confidence) stays where it was before the snap. The panel then shows those
+ * rows unticked and still able to move, and Save never writes a move the policy and the panel both held back.
+ */
+export function getPipelineReviewChapters(proposal: PipelineProposal): Chapter[] {
+  const chapters = getPipelineProposalChapters(proposal)
+  const session = buildPipelineProposalSession(proposal, chapters)
+  if (!session) return chapters
+  const ticked = getDefaultSnapChecked(buildSnapRows(session))
+  const entries = session.response.chapters
+  const starts = chapters.map((chapter, i) => {
+    const entry = entries[i]
+    if (i === 0 || !entry.changed || ticked.has(i) || !Number.isFinite(entry.originalStart)) return chapter.start
+    return entry.originalStart
+  })
+  // A start put back can cross a neighbour that moved: then nothing moves (the pre-snap list is in order)
+  const ordered = starts.every((start, i) => i === 0 || start > starts[i - 1])
+  const finalStarts = ordered ? starts : chapters.map((chapter, i) => (i === 0 ? chapter.start : entries[i].originalStart))
+  if (finalStarts.every((start, i) => start === chapters[i].start)) return chapters
+  const last = chapters[chapters.length - 1]
+  return chapters.map((chapter, i) => ({ ...chapter, start: finalStarts[i], end: i < chapters.length - 1 ? finalStarts[i + 1] : last.end }))
+}
+
+/**
+ * The editor's chapters are the pipeline's proposal as it stands (same titles and starts), so approving needs no
+ * chapters: the server then applies its own list and keeps treating the chapters as the pipeline's, not a person's.
+ */
+export function isUnchangedPipelineProposal(chapters: Pick<Chapter, 'title' | 'start'>[], proposed: Pick<Chapter, 'title' | 'start'>[]): boolean {
+  return (
+    chapters.length > 0 &&
+    chapters.length === proposed.length &&
+    chapters.every((chapter, i) => (chapter.title ?? '') === (proposed[i].title ?? '') && chapterStartsEqual(chapter.start, proposed[i].start))
+  )
 }
 
 /**

@@ -73,13 +73,25 @@ describe('<AutoPipelineSettingsSection />', () => {
     cy.get('@onChange').its('lastCall.args.0').should('deep.include', { mode: 'dryRun', autoMatch: false })
   })
 
-  it('clamps the minimum confidence when the field is left', () => {
+  it('keeps the saved value when a number field is left empty or too small, and clamps one too large', () => {
     mountSection({ initial: { ...AUTO_PIPELINE_DEFAULTS, mode: 'on' } })
-    cy.get('[cy-id="auto-pipeline-min-confidence"] input').clear().type('30').blur()
-    cy.get('@onChange').its('lastCall.args.0.autoMatchMinConfidence').should('equal', 50)
-    cy.get('[cy-id="auto-pipeline-min-confidence"] input').should('have.value', '50')
+    cy.get('[cy-id="auto-pipeline-min-confidence"] input').clear().blur()
+    cy.get('[cy-id="auto-pipeline-min-confidence"] input').should('have.value', '95')
+    cy.get('[cy-id="auto-pipeline-min-confidence"] input').clear().type('9').blur()
+    cy.get('[cy-id="auto-pipeline-min-confidence"] input').should('have.value', '95')
+    cy.get('[cy-id="auto-pipeline-settle"] input').clear().type('{enter}')
+    cy.get('[cy-id="auto-pipeline-settle"] input').should('have.value', '5')
+    cy.get('@onChange').should('not.have.been.called')
+    cy.get('[cy-id="auto-pipeline-low-confidence"]').should('not.exist')
     cy.get('[cy-id="auto-pipeline-settle"] input').clear().type('500{enter}')
     cy.get('@onChange').its('lastCall.args.0.settleMinutes').should('equal', 120)
+  })
+
+  it('warns when the minimum confidence is set below 90', () => {
+    mountSection({ initial: { ...AUTO_PIPELINE_DEFAULTS, mode: 'on' } })
+    cy.get('[cy-id="auto-pipeline-min-confidence"] input').clear().type('70').blur()
+    cy.get('@onChange').its('lastCall.args.0.autoMatchMinConfidence').should('equal', 70)
+    cy.get('[cy-id="auto-pipeline-low-confidence"]').should('contain.text', '70 %')
   })
 
   it('warns that matching and chapters are skipped with a non-Audible provider', () => {
