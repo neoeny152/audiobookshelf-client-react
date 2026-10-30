@@ -93,6 +93,7 @@ interface LibraryContextType extends LibrarySettings {
   filterData: LibraryFilterData | null
   filterDataLoading: boolean
   setNumIssues: (count: number) => void
+  setNumDuplicateGroups: (count: number) => void
   refetchFilterDataSilently: () => void
   isSettingsLoaded: boolean
   quickMatchingAuthorIds: ReadonlySet<string>
@@ -142,7 +143,7 @@ export function LibraryProvider({ children, library }: { children: React.ReactNo
   const bookshelfView = serverSettings?.bookshelfView || 0
 
   // Filter data hook
-  const { filterData, isLoading: filterDataLoading, setNumIssues, refetchFilterDataSilently } = useFilterData(library.id)
+  const { filterData, isLoading: filterDataLoading, setNumIssues, setNumDuplicateGroups, refetchFilterDataSilently } = useFilterData(library.id)
 
   // Load settings from localStorage when library changes
   useEffect(() => {
@@ -235,6 +236,7 @@ export function LibraryProvider({ children, library }: { children: React.ReactNo
       filterData,
       filterDataLoading,
       setNumIssues,
+      setNumDuplicateGroups,
       refetchFilterDataSilently,
       isSettingsLoaded,
       quickMatchingAuthorIds,
@@ -259,6 +261,7 @@ export function LibraryProvider({ children, library }: { children: React.ReactNo
       filterData,
       filterDataLoading,
       setNumIssues,
+      setNumDuplicateGroups,
       refetchFilterDataSilently,
       isSettingsLoaded,
       setItemCount,

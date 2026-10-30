@@ -2,7 +2,15 @@
 
 import { fetchLibraryFilterDataAction } from '@/app/actions/libraryActions'
 import { useSocketEvent } from '@/contexts/SocketContext'
-import { isBookLibraryItem, isPodcastLibraryItem, LibraryFilterData, LibraryItem, LibraryItemRemovedPayload, Task } from '@/types/api'
+import {
+  DuplicateItemsUpdatedPayload,
+  isBookLibraryItem,
+  isPodcastLibraryItem,
+  LibraryFilterData,
+  LibraryItem,
+  LibraryItemRemovedPayload,
+  Task
+} from '@/types/api'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const FILTER_DATA_REFETCH_TASK_ACTIONS = ['library-scan', 'watcher-scan', 'batch-item-scan']
@@ -185,6 +193,23 @@ export function useFilterData(libraryId: string | undefined) {
     })
   }, [])
 
+  /** Patch numDuplicateGroups (possible duplicates not dismissed) after the Issues page loaded or changed them. */
+  const setNumDuplicateGroups = useCallback((count: number) => {
+    setFilterData((prev) => {
+      if (!prev || (prev.numDuplicateGroups ?? 0) === count) return prev
+      return { ...prev, numDuplicateGroups: count }
+    })
+  }, [])
+
+  // The server re-checks for duplicates a few seconds after a scan, so the count arrives on its own event
+  const handleDuplicateItemsUpdated = useCallback(
+    (data: DuplicateItemsUpdatedPayload) => {
+      if (data?.libraryId !== libraryId || typeof data.numGroups !== 'number') return
+      setNumDuplicateGroups(data.numGroups)
+    },
+    [libraryId, setNumDuplicateGroups]
+  )
+
   const handleItemAdded = useCallback(
     (item: LibraryItem) => {
       updateFilterDataWithItem(item)
@@ -246,12 +271,14 @@ export function useFilterData(libraryId: string | undefined) {
   useSocketEvent<LibraryItemRemovedPayload>('item_removed', handleItemRemoved)
   useSocketEvent<{ id: string; libraryId: string }>('series_removed', handleSeriesRemoved)
   useSocketEvent<Task>('task_finished', handleTaskFinished, [handleTaskFinished])
+  useSocketEvent<DuplicateItemsUpdatedPayload>('duplicate_items_updated', handleDuplicateItemsUpdated, [handleDuplicateItemsUpdated])
 
   return {
     filterData,
     isLoading,
     error,
     setNumIssues,
+    setNumDuplicateGroups,
     refetchFilterDataSilently
   }
 }

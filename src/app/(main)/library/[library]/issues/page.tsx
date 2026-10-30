@@ -4,6 +4,7 @@ import { isUserAdminOrUp } from '@/lib/userPermissions'
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import BookshelfClient from '../[entityType]/BookshelfClient'
+import DuplicateItemsSection from './DuplicateItemsSection'
 
 export async function generateMetadata(): Promise<Metadata> {
   return staticPageMetadata('TitleAudiobookshelfIssues')
@@ -18,8 +19,11 @@ export default async function IssuesPage({ params }: { params: Promise<{ library
   }
 
   return (
-    <div className="h-full w-full">
-      <BookshelfClient entityType="items" />
+    <div className="flex h-full w-full flex-col">
+      <DuplicateItemsSection libraryId={libraryId} />
+      <div className="min-h-0 w-full flex-1">
+        <BookshelfClient entityType="items" />
+      </div>
     </div>
   )
 }

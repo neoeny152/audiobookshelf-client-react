@@ -289,6 +289,60 @@ export interface LibraryFilterData {
   languages: string[]
   publishedDecades: string[]
   numIssues?: number
+  /** Possible duplicate groups not dismissed (fork server feature duplicateItems, admins only) */
+  numDuplicateGroups?: number
+}
+
+// ============================================================================
+// POSSIBLE DUPLICATE ITEMS (fork server feature duplicateItems)
+// ============================================================================
+
+/** How the items of a group matched: same ASIN, same ISBN, same title + author + length, same podcast feed */
+export type DuplicateMatchType = 'asin' | 'isbn' | 'title' | 'feed'
+
+export interface DuplicateGroupItem {
+  id: string
+  title: string
+  author: string | null
+  path: string
+  relPath: string
+  size: number
+  /** Seconds; 0 for podcasts and ebook-only books */
+  duration: number
+  numAudioFiles: number
+  numEpisodes?: number
+  hasEbook: boolean
+  asin: string | null
+  isbn: string | null
+  addedAt: number
+  isMissing: boolean
+  isInvalid: boolean
+}
+
+export interface DuplicateGroup {
+  id: string
+  matchTypes: DuplicateMatchType[]
+  /** An admin marked the group as not a duplicate */
+  dismissed: boolean
+  items: DuplicateGroupItem[]
+}
+
+export interface LibraryDuplicatesResponse {
+  groups: DuplicateGroup[]
+  /** Groups not dismissed */
+  numGroups: number
+  lastCheckedAt: number | null
+}
+
+export interface UpdateDuplicateGroupResponse {
+  group: DuplicateGroup
+  numGroups: number
+}
+
+/** Socket `duplicate_items_updated` (admins), after the server re-checked a library */
+export interface DuplicateItemsUpdatedPayload {
+  libraryId: string
+  numGroups: number
 }
 
 // ============================================================================

@@ -40,7 +40,8 @@ export default function SideRailContent({
   const onProcessingPage = pathname === processingHref
   // Optional: AppBar mounts this drawer on settings/account (no LibraryProvider)
   const { filterData } = useLibraryOptional()
-  const numIssues = filterData?.numIssues ?? 0
+  // Missing/invalid items plus possible duplicate groups (fork server feature duplicateItems), all listed on the Issues page
+  const numIssues = (filterData?.numIssues ?? 0) + (filterData?.numDuplicateGroups ?? 0)
   const issuesHref = `/library/${libraryId}/issues`
   const libraryHref = `/library/${libraryId}/items`
   const onIssuesPage = isLibraryIssuesPage(pathname)

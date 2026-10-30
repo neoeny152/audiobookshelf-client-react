@@ -65,6 +65,8 @@ import {
   PipelineItemStatus,
   M4bEncodeOptions,
   SeekIndexRepairOptions,
+  LibraryDuplicatesResponse,
+  UpdateDuplicateGroupResponse,
   SeekIndexStatus,
   MediaItemShare,
   MetadataObject,
@@ -1648,6 +1650,33 @@ export async function scanLibrary(libraryId: string, force: boolean = false): Pr
 export async function removeLibraryItemsWithIssues(libraryId: string): Promise<void> {
   return apiRequest<void>(`/api/libraries/${libraryId}/issues`, {
     method: 'DELETE'
+  })
+}
+
+/**
+ * Possible duplicate items of a library, grouped (server feature duplicateItems, admin only)
+ * @param includeDismissed - Also return groups marked as not a duplicate
+ */
+export async function getLibraryDuplicates(libraryId: string, includeDismissed = false): Promise<LibraryDuplicatesResponse> {
+  return apiRequest<LibraryDuplicatesResponse>(`/api/libraries/${libraryId}/duplicates${includeDismissed ? '?include=dismissed' : ''}`)
+}
+
+/**
+ * Re-check a library for possible duplicates now (server feature duplicateItems, admin only)
+ */
+export async function checkLibraryDuplicates(libraryId: string, includeDismissed = false): Promise<LibraryDuplicatesResponse> {
+  return apiRequest<LibraryDuplicatesResponse>(`/api/libraries/${libraryId}/duplicates/check${includeDismissed ? '?include=dismissed' : ''}`, {
+    method: 'POST'
+  })
+}
+
+/**
+ * Mark a possible duplicate group as not a duplicate, or undo that. Nothing is deleted.
+ */
+export async function updateDuplicateGroup(libraryId: string, groupId: string, dismissed: boolean): Promise<UpdateDuplicateGroupResponse> {
+  return apiRequest<UpdateDuplicateGroupResponse>(`/api/libraries/${libraryId}/duplicates/${encodeURIComponent(groupId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ dismissed })
   })
 }
 

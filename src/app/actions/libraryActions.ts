@@ -1,7 +1,10 @@
 'use server'
 
+import { toActionResult, type ActionResult } from '@/lib/actionResult'
 import {
+  checkLibraryDuplicates,
   getLibraryAuthors,
+  getLibraryDuplicates,
   getLibraryCollections,
   getLibraryFilterData,
   getLibraryItems,
@@ -9,9 +12,11 @@ import {
   getLibraryPlaylists,
   getLibrarySeries,
   getRecentEpisodes,
-  removeLibraryItemsWithIssues
+  removeLibraryItemsWithIssues,
+  updateDuplicateGroup
 } from '@/lib/api'
 import { RECENT_EPISODES_PAGE_SIZE } from '@/lib/recentEpisodes'
+import type { LibraryDuplicatesResponse, UpdateDuplicateGroupResponse } from '@/types/api'
 
 export async function fetchLibraryItemsAction(libraryId: string, query: string) {
   return getLibraryItems(libraryId, query)
@@ -48,4 +53,17 @@ export async function fetchRecentEpisodesAction(libraryId: string, page: number)
 
 export async function removeLibraryItemsWithIssuesAction(libraryId: string) {
   return removeLibraryItemsWithIssues(libraryId)
+}
+
+/** Possible duplicate items (server feature duplicateItems, admin only) */
+export async function getLibraryDuplicatesAction(libraryId: string, includeDismissed: boolean): Promise<ActionResult<LibraryDuplicatesResponse>> {
+  return toActionResult(() => getLibraryDuplicates(libraryId, includeDismissed))
+}
+
+export async function checkLibraryDuplicatesAction(libraryId: string, includeDismissed: boolean): Promise<ActionResult<LibraryDuplicatesResponse>> {
+  return toActionResult(() => checkLibraryDuplicates(libraryId, includeDismissed))
+}
+
+export async function updateDuplicateGroupAction(libraryId: string, groupId: string, dismissed: boolean): Promise<ActionResult<UpdateDuplicateGroupResponse>> {
+  return toActionResult(() => updateDuplicateGroup(libraryId, groupId, dismissed))
 }

@@ -47,7 +47,8 @@ export function useLibraryRouteGuard() {
 
     if (isLibraryIssuesPage(pathname)) {
       if (filterDataLoading || filterData === null) return
-      if ((filterData.numIssues ?? 0) === 0) {
+      // The Issues page also lists possible duplicates (fork server feature duplicateItems)
+      if ((filterData.numIssues ?? 0) === 0 && (filterData.numDuplicateGroups ?? 0) === 0) {
         router.replace(`/library/${library.id}`)
       }
     }
