@@ -6,7 +6,6 @@ function mountDialog(overrides: Partial<SeekIndexSnapDialogProps> = {}) {
     fileCount: 4,
     maxDrift: 43.38,
     chapterCount: 50,
-    shiftDefault: true,
     onChoose: cy.stub().as('onChoose'),
     ...overrides
   }
@@ -24,16 +23,18 @@ describe('<SeekIndexSnapDialog />', () => {
       .and('contain.text', 'kept as a backup you can restore')
   })
 
-  it('repair and snap shifts the chapters by default', () => {
+  it('repair and snap keeps chapter times by default, with the hint', () => {
     mountDialog()
-    cy.contains('button', 'Repair and snap').click()
-    cy.get('@onChoose').should('have.been.calledOnceWith', { choice: 'repair', shiftChapters: true })
-  })
-
-  it('does not shift chapters just taken from Audible unless asked', () => {
-    mountDialog({ shiftDefault: false })
+    cy.get('[cy-id="seek-index-snap-dialog"]').should('contain.text', 'Tick this only if these chapters were set from the files or snapped before this repair.')
     cy.contains('button', 'Repair and snap').click()
     cy.get('@onChoose').should('have.been.calledOnceWith', { choice: 'repair', shiftChapters: false })
+  })
+
+  it('shifts the chapters when ticked', () => {
+    mountDialog()
+    cy.get('[cy-id="seek-index-snap-dialog"] input[type="checkbox"]').click()
+    cy.contains('button', 'Repair and snap').click()
+    cy.get('@onChoose').should('have.been.calledOnceWith', { choice: 'repair', shiftChapters: true })
   })
 
   it('snap anyway', () => {

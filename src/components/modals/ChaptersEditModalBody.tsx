@@ -466,8 +466,6 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
         fileCount={snapGuard?.status.needsRepairCount ?? 0}
         maxDrift={snapGuard?.status.maxDrift ?? 0}
         chapterCount={newChapters.length}
-        // Rows just taken from Audible already use the real times; anything else was set on this timeline
-        shiftDefault={!lookupResult}
         onChoose={(choice) => snapGuard?.resolve(choice)}
       />
 

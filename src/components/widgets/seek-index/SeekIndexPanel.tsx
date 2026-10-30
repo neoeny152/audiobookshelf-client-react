@@ -64,7 +64,7 @@ export default function SeekIndexPanel({
 }: SeekIndexPanelProps) {
   const t = useTypeSafeTranslations()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
-  const [shiftChapters, setShiftChapters] = useState(true)
+  const [shiftChapters, setShiftChapters] = useState(false)
 
   const flagged = status?.files.filter((f) => f.needsRepair) ?? []
   const backups = status?.backups ?? []

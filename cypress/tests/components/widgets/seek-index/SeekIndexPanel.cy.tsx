@@ -110,7 +110,7 @@ describe('<SeekIndexPanel />', () => {
     cy.get('[cy-id="seek-index-warning"]').should('not.contain.text', 'Reaper')
   })
 
-  it('confirms before repairing, mentions the backup and shifts saved chapters by default', () => {
+  it('confirms before repairing, mentions the backup and keeps chapter times by default', () => {
     mountPanel()
     cy.contains('button', 'Repair').click()
     cy.get('[cy-id="seek-index-confirm"]')
@@ -119,15 +119,15 @@ describe('<SeekIndexPanel />', () => {
       .and('contain.text', 'kept as a backup you can restore')
     cy.get('@onRepair').should('not.have.been.called')
     cy.get('[role="dialog"]').contains('button', 'Repair').click()
-    cy.get('@onRepair').should('have.been.calledOnceWith', { chapters: 'shift' })
+    cy.get('@onRepair').should('have.been.calledOnceWith', { chapters: 'keep' })
   })
 
-  it('keeps chapter times when the option is unticked', () => {
+  it('shifts saved chapters when the option is ticked', () => {
     mountPanel()
     cy.contains('button', 'Repair').click()
     cy.get('[cy-id="seek-index-confirm"] input[type="checkbox"]').click()
     cy.get('[role="dialog"]').contains('button', 'Repair').click()
-    cy.get('@onRepair').should('have.been.calledOnceWith', { chapters: 'keep' })
+    cy.get('@onRepair').should('have.been.calledOnceWith', { chapters: 'shift' })
   })
 
   it('does not offer the chapter shift without saved chapters', () => {

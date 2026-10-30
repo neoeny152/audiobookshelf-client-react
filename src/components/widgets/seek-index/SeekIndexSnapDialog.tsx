@@ -15,19 +15,18 @@ export interface SeekIndexSnapDialogProps {
   maxDrift: number
   /** Chapters in the editor; the shift option is offered when there are any */
   chapterCount: number
-  /** Whether the shift option starts ticked (off for chapters just taken from Audible, which use the real times) */
-  shiftDefault: boolean
   onChoose: (choice: SeekIndexSnapChoice) => void
 }
 
 /** Asked before a snap on a book whose MP3 files drift: repair first (then snap), snap anyway, or cancel. */
-export default function SeekIndexSnapDialog({ isOpen, fileCount, maxDrift, chapterCount, shiftDefault, onChoose }: SeekIndexSnapDialogProps) {
+export default function SeekIndexSnapDialog({ isOpen, fileCount, maxDrift, chapterCount, onChoose }: SeekIndexSnapDialogProps) {
   const t = useTypeSafeTranslations()
-  const [shiftChapters, setShiftChapters] = useState(shiftDefault)
+  // Off by default: chapters usually come from Audible (real times), and the snap that follows fixes small offsets
+  const [shiftChapters, setShiftChapters] = useState(false)
 
   useEffect(() => {
-    if (isOpen) setShiftChapters(shiftDefault)
-  }, [isOpen, shiftDefault])
+    if (isOpen) setShiftChapters(false)
+  }, [isOpen])
 
   return (
     <ConfirmDialog

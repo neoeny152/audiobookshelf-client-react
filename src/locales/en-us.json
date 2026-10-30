@@ -781,7 +781,7 @@
   "LabelSecondsPlural": "{count, plural, one {# second} other {# seconds}}",
   "LabelSeekIndexBackup": "Originals from {0}: {1} files, {2}",
   "LabelSeekIndexShiftChapters": "Shift the {0} saved chapters to match the corrected timeline",
-  "LabelSeekIndexShiftChaptersHelp": "Right for chapters set on the current timeline (snap, set from tracks, chapters snapped earlier). Leave off for chapters just taken from Audible, which already use the real audio times.",
+  "LabelSeekIndexShiftChaptersHelp": "Tick this only if these chapters were set from the files or snapped before this repair.",
   "LabelSelectAll": "Select all",
   "LabelSelectAllEpisodes": "Select all episodes",
   "LabelSelectEpisodesShowing": "Select {0} episodes showing",
