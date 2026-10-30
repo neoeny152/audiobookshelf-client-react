@@ -34,7 +34,7 @@ function makeResponse(chapters: SnapChapterProposal[], complete = true, duration
     libraryItemId: 'li_1',
     duration,
     complete,
-    options: { ...SNAP_DEFAULT_OPTIONS, leadSec: 0.25, snapToFileStart: false },
+    options: { ...SNAP_DEFAULT_OPTIONS, leadSec: 0.25, snapToFileStart: false, reanchor: true, locate: true },
     stats: { segments: 3, ffmpegCalls: 3, failedSegments: 0, analysedSec: 180, pausesFound: 12, elapsedMs: 6000, moved: 2, unchanged: 1, skipped: 0 },
     chapters,
     proposedChapters: chapters.map((c, i) => ({ id: i, title: c.title, start: c.proposedStart, end: chapters[i + 1]?.proposedStart ?? duration })),
