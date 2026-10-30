@@ -167,6 +167,35 @@ describe('<SeekIndexPanel />', () => {
     cy.get('@onDismissResult').should('have.been.calledOnce')
   })
 
+  it('folds a successful result to its summary after 5 s, unless it is hovered, and Details opens it again', () => {
+    cy.clock()
+    mountPanel({ status: status(repaired().files, [backup]), result })
+    cy.get('[cy-id="seek-index-result"]').trigger('mouseenter')
+    cy.tick(6000)
+    cy.get('[cy-id="seek-index-result-file"]').should('have.length', 2)
+    cy.get('[cy-id="seek-index-result"]').trigger('mouseleave')
+    cy.tick(5000)
+    cy.get('[cy-id="seek-index-result-file"]').should('not.exist')
+    cy.get('[cy-id="seek-index-result"]').should('contain.text', 'Seek index added to 2 files')
+    cy.get('[cy-id="seek-index-result-details"]').should('have.attr', 'aria-expanded', 'false').click()
+    cy.get('[cy-id="seek-index-result-details"]').should('have.attr', 'aria-expanded', 'true')
+    cy.tick(10000)
+    cy.get('[cy-id="seek-index-result-file"]').should('have.length', 2)
+  })
+
+  it('says the backup was deleted instead of showing its size as 0', () => {
+    mountPanel({ status: { ...status(repaired().files, []), lastResult: result }, result })
+    cy.get('[cy-id="seek-index-result-backup"]').should('have.text', 'Backup deleted.')
+  })
+
+  it('keeps a failed result open', () => {
+    cy.clock()
+    mountPanel({ result, taskError: 'Failed to repair "Part  II  Reborn.mp3"' })
+    cy.tick(10000)
+    cy.get('[cy-id="seek-index-result-file"]').should('have.length', 2)
+    cy.get('[cy-id="seek-index-result-details"]').should('not.exist')
+  })
+
   it('reports shifted chapters, a moved last end and failed files', () => {
     mountPanel({ result: { ...result, chapters: { ...result.chapters, endExtended: true } } })
     cy.get('[cy-id="seek-index-result-chapters"]').should('contain.text', 'the last chapter now runs to the new end')

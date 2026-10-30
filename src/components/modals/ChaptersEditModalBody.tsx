@@ -330,7 +330,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
   return (
     <>
       <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg" aria-busy={isPending || undefined}>
-        {/* Below md (incl. phone landscape) the tools and table scroll together here; from md up only the table scrolls. */}
+        {/* The tools and the table scroll together; from md up the table keeps room for a few rows and scrolls its own rows. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" inert={isPending || proposalLoading || undefined}>
           <div className="bg-bg border-border shrink-0 border-b px-4 py-3">
             {seekIndexEnabled && <SeekIndexPanelForState seekIndex={seekIndex} chapterCount={media.chapters?.length ?? 0} className="mb-3" />}
@@ -376,7 +376,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
             </div>
           </div>
 
-          <div className="relative flex flex-1 flex-col px-4 py-4 md:min-h-0 md:overflow-hidden">
+          <div className="relative flex flex-1 flex-col px-4 py-4 md:min-h-[18rem]">
             <ChaptersModalTable
               scrollContainerRef={scrollContainerRef}
               chapters={newChapters}
