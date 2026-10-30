@@ -13,6 +13,7 @@ import {
   AuthorQuickMatchPayload,
   AuthorResponse,
   AuthorUpdateResponse,
+  AutoPipelineSettings,
   BatchGetLibraryItemsResponse,
   BatchUpdateLibraryItemPayload,
   BatchUpdateLibraryItemsResponse,
@@ -643,12 +644,26 @@ export async function runLibraryPipeline(libraryId: string, scope: 'unprocessed'
   return apiRequest<{ queued: number }>(`/api/libraries/${libraryId}/pipeline/run`, { method: 'POST', body: JSON.stringify({ scope }) })
 }
 
+/** Fork only: what is likely wrong with the book. `measure` (admin only) first measures MP3s without a seek header. */
+export async function getItemHealth(libraryItemId: string, measure = false): Promise<unknown> {
+  return apiRequest(`/api/items/${libraryItemId}/health${measure ? '?measure=1' : ''}`)
+}
+
+/** Partial update of the library's automatic processing settings (the server merges it over the stored ones). */
+export async function updateLibraryAutoPipeline(libraryId: string, autoPipeline: Partial<AutoPipelineSettings>): Promise<Library> {
+  return apiRequest<Library>(`/api/libraries/${libraryId}`, { method: 'PATCH', body: JSON.stringify({ settings: { autoPipeline } }) })
+}
+
 /** Throws ApiError 404 when the pipeline never saw the item. */
 export async function getItemPipeline(libraryItemId: string): Promise<PipelineItemState> {
   return apiRequest<PipelineItemState>(`/api/items/${libraryItemId}/pipeline`)
 }
 
-export async function runItemPipeline(libraryItemId: string, body: { steps?: ('match' | 'chapters' | 'epub')[]; force?: boolean } = {}): Promise<PipelineItemState> {
+/** `fix`: Fix automatically (match and chapters, 90 % match threshold). `repairSeekIndex`: admin only, rewrite drifting MP3s first. */
+export async function runItemPipeline(
+  libraryItemId: string,
+  body: { steps?: ('match' | 'chapters' | 'epub')[]; force?: boolean; fix?: boolean; repairSeekIndex?: boolean } = {}
+): Promise<PipelineItemState> {
   return apiRequest<PipelineItemState>(`/api/items/${libraryItemId}/pipeline/run`, { method: 'POST', body: JSON.stringify(body) })
 }
 

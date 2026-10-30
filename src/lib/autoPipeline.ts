@@ -18,11 +18,16 @@ export const AUTO_PIPELINE_DEFAULTS: Readonly<AutoPipelineSettings> = Object.fre
   autoMatchProvider: null,
   autoChapters: true,
   autoEpub: false,
-  settleMinutes: 5
+  settleMinutes: 5,
+  autoRepairSeekIndex: false,
+  nightlySweep: false,
+  sweepStart: '01:00',
+  sweepEnd: '06:00'
 })
 
 export const MIN_CONFIDENCE_BOUNDS = Object.freeze([50, 100] as const)
 export const SETTLE_MINUTES_BOUNDS = Object.freeze([1, 120] as const)
+const SWEEP_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 /**
  * Below this minimum match confidence the settings warn: the server's caps for a wrong title (60), a duration more than
  * 15 % off (70) or a missing author or duration (80) no longer keep those matches out.
@@ -45,7 +50,10 @@ export function clampSettleMinutes(value: number): number {
 /** The stored settings with defaults for anything missing or of the wrong type (older libraries have none). */
 export function withAutoPipelineDefaults(value: unknown): AutoPipelineSettings {
   const stored = value && typeof value === 'object' ? (value as Partial<Record<keyof AutoPipelineSettings, unknown>>) : {}
-  const bool = (key: 'autoMatch' | 'autoChapters' | 'autoEpub') => (typeof stored[key] === 'boolean' ? (stored[key] as boolean) : AUTO_PIPELINE_DEFAULTS[key])
+  const bool = (key: 'autoMatch' | 'autoChapters' | 'autoEpub' | 'autoRepairSeekIndex' | 'nightlySweep') =>
+    typeof stored[key] === 'boolean' ? (stored[key] as boolean) : AUTO_PIPELINE_DEFAULTS[key]
+  const time = (key: 'sweepStart' | 'sweepEnd') =>
+    typeof stored[key] === 'string' && SWEEP_TIME_RE.test(stored[key] as string) ? (stored[key] as string) : AUTO_PIPELINE_DEFAULTS[key]
   return {
     mode: AUTO_PIPELINE_MODES.includes(stored.mode as AutoPipelineMode) ? (stored.mode as AutoPipelineMode) : AUTO_PIPELINE_DEFAULTS.mode,
     autoMatch: bool('autoMatch'),
@@ -54,7 +62,11 @@ export function withAutoPipelineDefaults(value: unknown): AutoPipelineSettings {
     autoMatchProvider: typeof stored.autoMatchProvider === 'string' && stored.autoMatchProvider ? stored.autoMatchProvider : null,
     autoChapters: bool('autoChapters'),
     autoEpub: bool('autoEpub'),
-    settleMinutes: typeof stored.settleMinutes === 'number' ? clampSettleMinutes(stored.settleMinutes) : AUTO_PIPELINE_DEFAULTS.settleMinutes
+    settleMinutes: typeof stored.settleMinutes === 'number' ? clampSettleMinutes(stored.settleMinutes) : AUTO_PIPELINE_DEFAULTS.settleMinutes,
+    autoRepairSeekIndex: bool('autoRepairSeekIndex'),
+    nightlySweep: bool('nightlySweep'),
+    sweepStart: time('sweepStart'),
+    sweepEnd: time('sweepEnd')
   }
 }
 
@@ -66,6 +78,7 @@ export function isAudibleProvider(provider: string | null | undefined): boolean 
 export const PIPELINE_STATUSES: readonly PipelineItemStatus[] = Object.freeze([
   'queued',
   'waiting',
+  'repairing',
   'matching',
   'chapters',
   'epub',
@@ -93,6 +106,7 @@ export function isPipelineActive(status: PipelineItemStatus): boolean {
 export const PIPELINE_STATUS_LABEL: Readonly<Record<PipelineItemStatus, TranslationKey>> = Object.freeze({
   queued: 'LabelPipelineStatusQueued',
   waiting: 'LabelPipelineStatusWaiting',
+  repairing: 'LabelPipelineStatusRepairing',
   matching: 'LabelPipelineStatusMatching',
   chapters: 'LabelPipelineStatusChapters',
   epub: 'LabelPipelineStatusEpub',
@@ -110,15 +124,19 @@ export const PIPELINE_TAB_CHIP_CLASS: Readonly<Record<PipelineTab, string>> = Ob
   failed: 'bg-error/20 text-foreground border-error/60'
 })
 
-function str(value: unknown): string | null {
+type RepairResult = NonNullable<PipelineItemState['repair']>['result']
+const REPAIR_RESULTS: readonly RepairResult[] = ['not-needed', 'needs-ok', 'would-repair', 'running', 'repaired', 'failed']
+const PIPELINE_TRIGGERS: readonly NonNullable<PipelineItemState['trigger']>[] = ['scan', 'manual', 'fix', 'sweep']
+
+export function str(value: unknown): string | null {
   return typeof value === 'string' && value ? value : null
 }
 
-function num(value: unknown): number | null {
+export function num(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-function obj(value: unknown): Record<string, unknown> | null {
+export function obj(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
 }
 
@@ -131,8 +149,12 @@ export function toPipelineItemState(value: unknown): PipelineItemState | null {
   if (!state) return null
   if (typeof state.libraryItemId !== 'string' || !state.libraryItemId) return null
   if (typeof state.status !== 'string' || !PIPELINE_STATUSES.includes(state.status as PipelineItemStatus)) return null
+  const repair = obj(state.repair)
+  const repairResult = REPAIR_RESULTS.find((result) => result === repair?.result)
   const match = obj(state.match)
   const chapters = obj(state.chapters)
+  const partial = obj(chapters?.partial)
+  const seekIndex = obj(chapters?.seekIndex)
   const epub = obj(state.epub)
   return {
     libraryItemId: state.libraryItemId,
@@ -142,13 +164,16 @@ export function toPipelineItemState(value: unknown): PipelineItemState | null {
     step: str(state.step),
     reason: str(state.reason),
     dryRun: state.dryRun === true,
+    trigger: PIPELINE_TRIGGERS.find((trigger) => trigger === state.trigger) ?? null,
     queuedAt: num(state.queuedAt),
     updatedAt: num(state.updatedAt),
     attempts: num(state.attempts) ?? 0,
     notBefore: num(state.notBefore),
+    repair: repair && repairResult ? { result: repairResult, files: num(repair.files), maxDrift: num(repair.maxDrift) } : null,
     match: match
       ? {
           result: str(match.result),
+          reason: str(match.reason),
           confidence: num(match.confidence),
           asin: str(match.asin),
           candidates: Array.isArray(match.candidates) ? match.candidates.filter((c) => !!obj(c)) : [],
@@ -158,6 +183,7 @@ export function toPipelineItemState(value: unknown): PipelineItemState | null {
     chapters: chapters
       ? {
           result: str(chapters.result),
+          reason: str(chapters.reason),
           // the server sends `{ kind: 'aligned' | 'near' | 'scanner' | ..., asin, region, variant, ... }`
           source: typeof chapters.source === 'string' ? chapters.source : (str(obj(chapters.source)?.kind) ?? str(obj(chapters.source)?.type)),
           diffSec: num(chapters.diffSec),
@@ -168,7 +194,9 @@ export function toPipelineItemState(value: unknown): PipelineItemState | null {
           })),
           backup: str(chapters.backup),
           count: num(chapters.count),
-          would: str(chapters.would)
+          would: str(chapters.would),
+          partial: partial ? { applied: num(partial.applied) ?? 0, flagged: num(partial.flagged) ?? 0 } : null,
+          seekIndex: seekIndex ? { files: num(seekIndex.files) ?? 0, maxDrift: num(seekIndex.maxDrift) ?? 0 } : null
         }
       : null,
     epub: epub ? { result: str(epub.result), jobId: str(epub.jobId), fileName: str(epub.fileName), would: str(epub.would) } : null,

@@ -52,6 +52,11 @@ describe('withAutoPipelineDefaults', () => {
       autoMatchMinConfidence: 50,
       settleMinutes: 120
     })
+    expect(withAutoPipelineDefaults({ autoRepairSeekIndex: 1, nightlySweep: true, sweepStart: '24:00', sweepEnd: '23:30' })).to.deep.equal({
+      ...AUTO_PIPELINE_DEFAULTS,
+      nightlySweep: true,
+      sweepEnd: '23:30'
+    })
   })
 })
 
@@ -84,6 +89,19 @@ describe('toPipelineItemState', () => {
     expect(parsed?.chapters?.source).to.equal('aligned')
     const scanner = toPipelineItemState({ ...state({ status: 'done' }), chapters: { result: 'kept', source: { kind: 'scanner', fallbackFrom: 'far' } } })
     expect(scanner?.chapters?.source).to.equal('scanner')
+  })
+
+  it('reads the repair step, the fix trigger and a partial apply', () => {
+    const parsed = toPipelineItemState({
+      ...state({ status: 'needs-review' }),
+      trigger: 'fix',
+      repair: { result: 'repaired', files: 4, maxDrift: 41.2, backupId: 'b1' },
+      chapters: { result: 'needs-review', reason: '2 late', partial: { applied: 48, flagged: 2 } }
+    })
+    expect(parsed?.trigger).to.equal('fix')
+    expect(parsed?.repair).to.deep.equal({ result: 'repaired', files: 4, maxDrift: 41.2 })
+    expect(parsed?.chapters?.partial).to.deep.equal({ applied: 48, flagged: 2 })
+    expect(toPipelineItemState({ ...state(), trigger: 'cron', repair: { result: 'maybe' } })).to.include({ trigger: null, repair: null })
   })
 
   it('rejects anything that is not a state', () => {
@@ -198,7 +216,18 @@ describe('pipeline proposal', () => {
     stats: {},
     chapters: [
       { index: 0, id: 0, title: 'Opening', originalStart: 0, proposedStart: 0, delta: 0, changed: false, reason: 'first', confidence: 'none', speech: null },
-      { index: 1, id: 1, title: 'Chapter 1', originalStart: 30, proposedStart: 31.5, delta: 1.5, changed: true, reason: 'snapped', confidence: 'high', speech: null }
+      {
+        index: 1,
+        id: 1,
+        title: 'Chapter 1',
+        originalStart: 30,
+        proposedStart: 31.5,
+        delta: 1.5,
+        changed: true,
+        reason: 'snapped',
+        confidence: 'high',
+        speech: null
+      }
     ],
     proposedChapters: [
       { id: 0, start: 0, end: 31.5, title: 'Opening' },

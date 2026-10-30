@@ -1,6 +1,7 @@
 'use client'
 
 import { clearPodcastDownloadQueueAction } from '@/app/actions/mediaActions'
+import { getItemHealthAction, runItemPipelineAction, updateLibraryAutoPipelineAction } from '@/app/actions/pipelineActions'
 import LibraryItemMetadataEditModal, { type MetadataEditSection } from '@/components/modals/LibraryItemMetadataEditModal'
 import IconBtn from '@/components/ui/IconBtn'
 import AudioTracksTable from '@/components/widgets/AudioTracksTable'
@@ -12,20 +13,27 @@ import AuthorLinks from '@/components/widgets/AuthorLinks'
 import ExpandableHtml from '@/components/widgets/ExpandableHtml'
 import LibraryFilesTable from '@/components/widgets/LibraryFilesTable'
 import LoadingSpinner from '@/components/widgets/LoadingSpinner'
+import GuidedFixCard, { type GuidedFixActions } from '@/components/widgets/guided-fix/GuidedFixCard'
 import PipelineStatusChip from '@/components/widgets/pipeline/PipelineStatusChip'
+import { useSeekIndexEnabled } from '@/components/widgets/seek-index/SeekIndexWarning'
 import TranscriptSection from '@/components/widgets/transcripts/TranscriptSection'
+import { GuidedFixContext } from '@/contexts/GuidedFixContext'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { PipelineProposalContext } from '@/contexts/PipelineProposalContext'
+import { useTasks } from '@/contexts/TasksContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
 import { useCoverAccentColor } from '@/hooks/useCoverAccentColor'
+import { useItemHealth } from '@/hooks/useItemHealth'
 import { useItemPageSocket } from '@/hooks/useItemPageSocket'
 import { useItemPipelineState } from '@/hooks/useItemPipelineState'
+import { useSeekIndex } from '@/hooks/useSeekIndex'
 import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
-import { getProcessingHref, getPipelineTab } from '@/lib/autoPipeline'
+import { getPipelineReviewHref, getProcessingHref, getPipelineTab } from '@/lib/autoPipeline'
 import { getLibraryItemCoverUrl } from '@/lib/coverUtils'
 import { secondsToTimestamp } from '@/lib/datefns'
+import { getGuideSteps, rememberGuidedFixDismissed, type GuideStepId } from '@/lib/itemHealth'
 import { mergeLibraryItemUpdate } from '@/lib/libraryItemUpdatedUtils'
 import { computeProgress } from '@/lib/mediaProgress'
 import { BookLibraryItem, BookMetadata, PodcastEpisode, PodcastLibraryItem, PodcastMetadata } from '@/types/api'
@@ -81,6 +89,23 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
 
   const isPodcast = libraryItem.mediaType === 'podcast'
   const isBookWithAudio = libraryItem.mediaType === 'book' && ((libraryItem as BookLibraryItem).media.tracks?.length ?? 0) > 0
+
+  // Guided fix (fork only): the card that offers Guide me and Fix automatically, for admins. The first look measures
+  // MP3s without a seek header.
+  const seekIndexEnabled = useSeekIndexEnabled()
+  const { health, reload: reloadHealth } = useItemHealth(libraryItem.id, { enabled: seekIndexEnabled && isBookWithAudio, measure: true })
+  const [guide, setGuide] = useState<{ steps: GuideStepId[]; index: number } | null>(null)
+  const guideStep = guide ? guide.steps[guide.index] : null
+  const seekIndex = useSeekIndex({ libraryItemId: libraryItem.id, enabled: guideStep === 'repair' })
+  const { getTaskProgress } = useTasks()
+  const guidedFixActions = useMemo<GuidedFixActions>(
+    () => ({
+      getHealth: getItemHealthAction,
+      run: runItemPipelineAction,
+      enableAutoRepair: () => updateLibraryAutoPipelineAction(libraryItem.libraryId, { autoRepairSeekIndex: true })
+    }),
+    [libraryItem.libraryId]
+  )
   const metadata = libraryItem.media.metadata as BookMetadata | PodcastMetadata
   const podcastAuthor = 'author' in metadata ? metadata.author : undefined
   const subtitle = 'subtitle' in metadata ? metadata.subtitle : undefined
@@ -96,6 +121,50 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
 
   const handleOpenMetadataEdit = (section: MetadataEditSection) => {
     setMetadataEditSection(section)
+  }
+
+  /** Each guide step past the repair happens in the edit modal: match, then the chapter editor */
+  const openGuideStep = useCallback((step: GuideStepId) => {
+    if (step === 'match') setMetadataEditSection('match')
+    else if (step !== 'repair') setMetadataEditSection('chapters')
+  }, [])
+
+  const handleStartGuide = (from?: GuideStepId) => {
+    if (!health) return
+    const steps = getGuideSteps(health)
+    const index = Math.max(0, from ? steps.indexOf(from) : 0)
+    setGuide({ steps, index })
+    openGuideStep(steps[index])
+  }
+
+  const guidedFix = useMemo(() => {
+    if (!guide || !guideStep) return null
+    return {
+      stepId: guideStep,
+      stepIndex: guide.index,
+      total: guide.steps.length,
+      paused: guideStep !== 'repair' && metadataEditSection === null,
+      advance: () => {
+        const index = guide.index + 1
+        if (index < guide.steps.length) {
+          setGuide({ ...guide, index })
+          openGuideStep(guide.steps[index])
+          return
+        }
+        // Done: the card stays away until the book's issues change again
+        void reloadHealth().then((next) => {
+          if (next) rememberGuidedFixDismissed(libraryItem.id, next.issues)
+          setGuide(null)
+        })
+      },
+      resume: () => openGuideStep(guideStep),
+      stop: () => setGuide(null)
+    }
+  }, [guide, guideStep, libraryItem.id, metadataEditSection, openGuideStep, reloadHealth])
+
+  const handleGuideRepairFiles = async () => {
+    const result = await seekIndex.repairAndWait({ chapters: 'keep' })
+    return !!result && result.files.every((file) => file.status !== 'failed')
   }
 
   const handleCloseMetadataEdit = () => {
@@ -231,6 +300,21 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
 
               <LibraryItemDetails libraryItem={libraryItem} />
 
+              {health && (
+                <GuidedFixContext.Provider value={guidedFix}>
+                  <GuidedFixCard
+                    libraryItemId={libraryItem.id}
+                    health={health}
+                    pipelineState={pipelineState}
+                    repairProgress={getTaskProgress(libraryItem.id) ?? null}
+                    reviewHref={getPipelineReviewHref(library.id, libraryItem.id)}
+                    actions={guidedFixActions}
+                    onStartGuide={handleStartGuide}
+                    onRepairFiles={handleGuideRepairFiles}
+                  />
+                </GuidedFixContext.Provider>
+              )}
+
               {/* Podcast episode downloads queue */}
               {episodeDownloadsQueued.length > 0 && (
                 <div className="bg-info/40 relative mx-auto mt-4 max-w-max rounded-md px-4 py-2 text-sm font-semibold text-gray-100 md:mx-0">
@@ -323,12 +407,14 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
         </div>
 
         <PipelineProposalContext.Provider value={proposalTarget}>
-          <LibraryItemMetadataEditModal
-            isOpen={metadataEditSection !== null}
-            initialSection={metadataEditSection ?? 'details'}
-            libraryItem={libraryItem}
-            onClose={handleCloseMetadataEdit}
-          />
+          <GuidedFixContext.Provider value={guidedFix}>
+            <LibraryItemMetadataEditModal
+              isOpen={metadataEditSection !== null}
+              initialSection={metadataEditSection ?? 'details'}
+              libraryItem={libraryItem}
+              onClose={handleCloseMetadataEdit}
+            />
+          </GuidedFixContext.Provider>
         </PipelineProposalContext.Provider>
         <ConfirmDialog
           isOpen={isClearQueueDialogOpen}

@@ -223,6 +223,13 @@ export interface AutoPipelineSettings {
   autoEpub: boolean
   /** 1..120: wait this long after the last file change before processing a new book */
   settleMinutes: number
+  /** Rewrite MP3s without a seek index (with a backup) without asking; off: they wait for an OK */
+  autoRepairSeekIndex: boolean
+  /** Work through never-processed books in the quiet hours */
+  nightlySweep: boolean
+  /** "HH:MM", server local time; an end before the start crosses midnight */
+  sweepStart: string
+  sweepEnd: string
 }
 
 export interface Library {
@@ -906,7 +913,7 @@ export interface EpubJob {
   origin?: string | null
 }
 
-export type PipelineItemStatus = 'queued' | 'waiting' | 'matching' | 'chapters' | 'epub' | 'done' | 'needs-review' | 'failed' | 'skipped'
+export type PipelineItemStatus = 'queued' | 'waiting' | 'repairing' | 'matching' | 'chapters' | 'epub' | 'done' | 'needs-review' | 'failed' | 'skipped'
 
 export interface PipelineMatchCandidate {
   asin?: string | null
@@ -926,12 +933,21 @@ export interface PipelineItemState {
   /** Short text for the UI */
   reason: string | null
   dryRun: boolean
+  /** What queued the run: `fix` is Fix automatically, `sweep` the nightly sweep */
+  trigger?: 'scan' | 'manual' | 'fix' | 'sweep' | null
   queuedAt: number | null
   updatedAt: number | null
   attempts: number
   notBefore: number | null
+  repair?: {
+    result: 'not-needed' | 'needs-ok' | 'would-repair' | 'running' | 'repaired' | 'failed'
+    files: number | null
+    maxDrift: number | null
+  } | null
   match: {
     result: string | null
+    /** Why it needs review: `low-confidence`, `ambiguous`, `no-match` */
+    reason?: string | null
     confidence: number | null
     asin: string | null
     candidates: PipelineMatchCandidate[]
@@ -939,6 +955,8 @@ export interface PipelineItemState {
   } | null
   chapters: {
     result: string | null
+    /** e.g. `needs-seek-index-repair`, or the policy summary */
+    reason?: string | null
     source: string | null
     diffSec: number | null
     applied: boolean
@@ -947,11 +965,30 @@ export interface PipelineItemState {
     /** Number of chapters applied or proposed */
     count?: number | null
     would?: string | null
+    /** Chapters that passed were applied; the flagged ones wait for review */
+    partial?: { applied: number; flagged: number } | null
+    /** needs-seek-index-repair: the files that drift */
+    seekIndex?: { files: number; maxDrift: number } | null
   } | null
   epub: { result: string | null; jobId: string | null; fileName: string | null; would?: string | null } | null
   /** Dry run: what the pipeline would have done */
   would?: string | null
 }
+
+/** `GET /api/items/:id/health`: what is likely wrong with a book and the step to take first */
+export interface ItemHealth {
+  libraryItemId: string
+  duration: { stored: number; drift: number; unmeasured: number }
+  seekIndex: { needsRepairCount: number; maxDrift: number; processing: boolean }
+  match: { asin: string | null; confidence: number | null; reason: string | null }
+  chapters: { count: number; kind: string | null; end: number | null; audible: { count: number; runtimeSec: number } | null }
+  issues: ItemHealthIssue[]
+  next: 'repair' | 'match' | 'chapters' | null
+  autoFix: { available: boolean; autoRepair: boolean; minConfidence: number }
+}
+
+export type ItemHealthIssue =
+  'seek-index' | 'unmatched' | 'low-confidence' | 'chapters-from-files' | 'chapters-length' | 'chapters-count' | 'chapters-unverified'
 
 export interface LibraryPipelineResponse {
   mode: AutoPipelineMode

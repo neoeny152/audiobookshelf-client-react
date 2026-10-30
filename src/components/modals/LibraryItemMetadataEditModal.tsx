@@ -6,6 +6,7 @@ import { LibraryItemEditModalContent } from '@/components/modals/LibraryItemEdit
 import LibraryItemModal, { useLibraryItemModal, type LibraryItemModalItemSource, type UnsavedChangesLeaveHandle } from '@/components/modals/LibraryItemModal'
 import { MatchModalBody } from '@/components/modals/MatchModal'
 import { SectionedModalBody, type Section } from '@/components/modals/SectionedModal'
+import { useGuidedFix } from '@/contexts/GuidedFixContext'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { isBookMediaWithTracks, type BookLibraryItem, type PodcastLibraryItem } from '@/types/api'
@@ -85,6 +86,7 @@ function LibraryItemMetadataEditModalBody({
   const t = useTypeSafeTranslations()
   const { library } = useLibrary()
   const { resolvedItem } = useLibraryItemModal()
+  const guide = useGuidedFix()
 
   const includeChaptersNav = isBookWithAudioTracks(resolvedItem) || (!resolvedItem && (initialSection === 'chapters' || library.mediaType === 'book'))
 
@@ -133,8 +135,8 @@ function LibraryItemMetadataEditModalBody({
       ) : selectedSection === 'chapters' ? (
         <ChaptersEditModalBody closeRequestRef={chaptersCloseRef} onPendingChange={onChaptersPendingChange} />
       ) : (
-        // Unguarded: the match was just applied, so there is nothing to discard.
-        <MatchModalBody closeRequestRef={matchCloseRef} onMatchApplied={() => setSelectedSection('details')} />
+        // Unguarded: the match was just applied, so there is nothing to discard. Guide me goes on to the chapters.
+        <MatchModalBody closeRequestRef={matchCloseRef} onMatchApplied={() => (guide?.stepId === 'match' ? guide.advance() : setSelectedSection('details'))} />
       )}
     </SectionedModalBody>
   )

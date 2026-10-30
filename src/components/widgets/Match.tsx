@@ -1,20 +1,25 @@
 'use client'
 
 import { searchBooksAction, searchPodcastsAction } from '@/app/actions/matchActions'
+import { getItemHealthAction } from '@/app/actions/pipelineActions'
 import type { UnsavedChangesLeaveHandle } from '@/components/modals/LibraryItemModal'
 import Btn from '@/components/ui/Btn'
 import Dropdown from '@/components/ui/Dropdown'
 import { MultiSelectItem } from '@/components/ui/MultiSelect'
 import TextInput from '@/components/ui/TextInput'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
+import GuideTarget from '@/components/widgets/guided-fix/GuideTarget'
 import BookMatchView from '@/components/widgets/match/BookMatchView'
 import MatchCard from '@/components/widgets/match/MatchCard'
 import PodcastMatchView from '@/components/widgets/match/PodcastMatchView'
 import { useBookProviders, useMetadata, usePodcastProviders } from '@/contexts/MetadataContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { useUnsavedChangesLeave } from '@/hooks/useUnsavedChangesLeave'
+import { callStatusAction } from '@/lib/actionResult'
 import { getLibraryItemCoverUrl } from '@/lib/coverUtils'
+import { formatDrift } from '@/lib/itemHealth'
 import { BookLibraryItem, BookSearchResult, isBookMedia, isPodcastMedia, PodcastLibraryItem, PodcastSearchResult } from '@/types/api'
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition, type Ref } from 'react'
 
@@ -85,6 +90,9 @@ export default function Match({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const searchInitItemIdRef = useRef<string | null>(null)
   const [hasScrollbar, setHasScrollbar] = useState(false)
+  /** Measured minus stored length of the book's MP3s (fork servers), which the match scores already use */
+  const [measuredDrift, setMeasuredDrift] = useState(0)
+  const healthAvailable = useServerFeature('mp3SeekIndex')
 
   const media = useMemo(() => libraryItem.media || {}, [libraryItem.media])
   const mediaMetadata = useMemo(() => media.metadata || {}, [media.metadata])
@@ -318,6 +326,18 @@ export default function Match({
     setFocusedCardIndex(null)
   }, [searchResults])
 
+  // The search measured the MP3s that needed it, so this read is cheap
+  useEffect(() => {
+    if (!healthAvailable || isPodcast || !hasSearched) return
+    let active = true
+    void callStatusAction(() => getItemHealthAction(libraryItem.id)).then((result) => {
+      if (active && result.ok) setMeasuredDrift(result.data?.duration.drift ?? 0)
+    })
+    return () => {
+      active = false
+    }
+  }, [hasSearched, healthAvailable, isPodcast, libraryItem.id, searchResults])
+
   // Check if scrollbar is present and adjust padding accordingly
   useEffect(() => {
     const checkScrollbar = () => {
@@ -397,6 +417,12 @@ export default function Match({
             </div>
           )}
 
+          {!isPendingSearch && Math.abs(measuredDrift) > 1 && (
+            <p className="text-foreground-muted mt-3 shrink-0 text-xs" cy-id="match-measured-duration">
+              {t('MessageMatchMeasuredDuration', { drift: formatDrift(measuredDrift, t) })}
+            </p>
+          )}
+
           {!isPendingSearch && !searchResults.length && hasSearched && (
             <div className="flex flex-1 items-center justify-center">
               <p>{t('MessageNoResults')}</p>
@@ -412,18 +438,28 @@ export default function Match({
               role="listbox"
               aria-label={t('AriaLabelSearchResults')}
             >
-              {searchResults.map((result, index) => (
-                <MatchCard
-                  key={index}
-                  book={result}
-                  isPodcast={isPodcast}
-                  currentBookDuration={currentBookDuration}
-                  onSelect={handleSelectMatch}
-                  isFocused={focusedCardIndex === index}
-                  cardIndex={index}
-                  onArrowKey={handleCardArrowKey}
-                />
-              ))}
+              {searchResults.map((result, index) => {
+                const card = (
+                  <MatchCard
+                    key={index}
+                    book={result}
+                    isPodcast={isPodcast}
+                    currentBookDuration={currentBookDuration}
+                    onSelect={handleSelectMatch}
+                    isFocused={focusedCardIndex === index}
+                    cardIndex={index}
+                    onArrowKey={handleCardArrowKey}
+                  />
+                )
+                // Guide me points at the best result
+                return index === 0 ? (
+                  <GuideTarget key={index} step="match">
+                    {card}
+                  </GuideTarget>
+                ) : (
+                  card
+                )
+              })}
             </div>
           )}
         </div>

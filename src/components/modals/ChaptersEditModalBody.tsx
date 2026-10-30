@@ -10,9 +10,11 @@ import ChaptersModalTable from '@/components/widgets/chapters-edit/ChaptersModal
 import FindChaptersPanel from '@/components/widgets/chapters-edit/FindChaptersPanel'
 import { ShiftTimesFields } from '@/components/widgets/chapters-edit/ShiftTimesPanel'
 import SnapToAudioPanel from '@/components/widgets/chapters-edit/SnapToAudioPanel'
+import GuideTarget from '@/components/widgets/guided-fix/GuideTarget'
 import SeekIndexSnapDialog, { type SeekIndexSnapChoice } from '@/components/widgets/seek-index/SeekIndexSnapDialog'
 import { SeekIndexPanelForState, useSeekIndexEnabled } from '@/components/widgets/seek-index/SeekIndexWarning'
 import { useSeekIndex } from '@/hooks/useSeekIndex'
+import { useGuidedFix } from '@/contexts/GuidedFixContext'
 import { usePipelineProposalTarget } from '@/contexts/PipelineProposalContext'
 import { useChapterEditor, type PipelineProposalReview } from '@/hooks/useChapterEditor'
 import { getPipelineWhyLabel } from '@/lib/autoPipeline'
@@ -20,6 +22,7 @@ import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { useUnsavedChangesLeave } from '@/hooks/useUnsavedChangesLeave'
 import { blurActiveChapterEditorField } from '@/lib/chapterEditorFocus'
+import type { SnapRow } from '@/lib/chapters/chapterSnap'
 import { secondsToTimestamp } from '@/lib/datefns'
 import { formatDuration } from '@/lib/formatDuration'
 import { mergeClasses } from '@/lib/merge-classes'
@@ -132,6 +135,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [footerShadow, setFooterShadow] = useState(false)
   const proposalTarget = usePipelineProposalTarget()
+  const guide = useGuidedFix()
 
   const editor = useChapterEditor({
     initialLibraryItem: libraryItem,
@@ -246,6 +250,23 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     [handleSnapToAudio, reloadForSeekResult, seekIndex, seekIndexEnabled]
   )
 
+  // Guide me: the lookup, applying the snap and the save each finish their step
+  const handleGuidedLookupResult = useCallback(
+    (data: AudibleChapterSearchResult) => {
+      handleLookupResult(data)
+      if (guide?.stepId === 'lookup') guide.advance()
+    },
+    [guide, handleLookupResult]
+  )
+  const handleGuidedApplySnap = useCallback(
+    (rows: SnapRow[]) => {
+      const applied = handleApplySnap(rows)
+      if (applied > 0 && guide?.stepId === 'snap') guide.advance()
+      return applied
+    },
+    [guide, handleApplySnap]
+  )
+
   /** The Audible lookup the "Snap these to the audio" hint was dismissed for (a new lookup brings it back). */
   const [snapHintDismissedFor, setSnapHintDismissedFor] = useState<typeof lookupResult>(null)
   const showSnapLookupHint = !!lookupResult && snapHintDismissedFor !== lookupResult
@@ -341,7 +362,9 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
             )}
             <div className="flex w-full flex-wrap items-end justify-between gap-x-2 gap-y-3">
               <div className="w-full min-w-0 md:w-auto">
-                <FindChaptersPanel metadata={media.metadata} onResult={handleLookupResult} requestProceed={requestConfirmIfDirty} />
+                <GuideTarget step="lookup">
+                  <FindChaptersPanel metadata={media.metadata} onResult={handleGuidedLookupResult} requestProceed={requestConfirmIfDirty} />
+                </GuideTarget>
               </div>
               <div className="flex w-full shrink-0 items-end justify-between gap-2 md:contents">
                 <ShiftTimesFields
@@ -359,20 +382,22 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
               </div>
             </div>
             <div className="border-border mt-3 border-t pt-3">
-              <SnapToAudioPanel
-                chapterCount={newChapters.length}
-                disabled={isPending}
-                onSnap={guardedSnap}
-                onRetry={handleSnapRetry}
-                onCheckSpeech={handleSnapSpeechBatch}
-                onApply={handleApplySnap}
-                onApplyTitles={handleApplySnapTitles}
-                preview={preview}
-                speechCheckAvailable={speechCheckAvailable}
-                showLookupHint={showSnapLookupHint}
-                onLookupHintDismiss={dismissSnapLookupHint}
-                initialSession={proposalReview?.session ?? null}
-              />
+              <GuideTarget step="snap">
+                <SnapToAudioPanel
+                  chapterCount={newChapters.length}
+                  disabled={isPending}
+                  onSnap={guardedSnap}
+                  onRetry={handleSnapRetry}
+                  onCheckSpeech={handleSnapSpeechBatch}
+                  onApply={handleGuidedApplySnap}
+                  onApplyTitles={handleApplySnapTitles}
+                  preview={preview}
+                  speechCheckAvailable={speechCheckAvailable}
+                  showLookupHint={showSnapLookupHint}
+                  onLookupHintDismiss={dismissSnapLookupHint}
+                  initialSession={proposalReview?.session ?? null}
+                />
+              </GuideTarget>
             </div>
           </div>
 
@@ -454,9 +479,17 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
             >
               {t('ButtonDiscardChanges')}
             </Btn>
-            <Btn color="bg-success text-success-foreground" size="small" loading={isPending} disabled={footerDisabled} onClick={() => handleSave()}>
-              {t('ButtonSave')}
-            </Btn>
+            <GuideTarget step="save">
+              <Btn
+                color="bg-success text-success-foreground"
+                size="small"
+                loading={isPending}
+                disabled={footerDisabled}
+                onClick={() => handleSave(guide?.stepId === 'save' ? guide.advance : undefined)}
+              >
+                {t('ButtonSave')}
+              </Btn>
+            </GuideTarget>
           </div>
         </div>
       </div>
