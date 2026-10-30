@@ -649,6 +649,11 @@ export async function getItemHealth(libraryItemId: string, measure = false): Pro
   return apiRequest(`/api/items/${libraryItemId}/health${measure ? '?measure=1' : ''}`)
 }
 
+/** Fork only: the library's books whose health has an issue other than unverified chapters (canUpdate). */
+export async function getLibraryNeedsWork(libraryId: string): Promise<unknown> {
+  return apiRequest(`/api/libraries/${libraryId}/needs-work`)
+}
+
 /** Partial update of the library's automatic processing settings (the server merges it over the stored ones). */
 export async function updateLibraryAutoPipeline(libraryId: string, autoPipeline: Partial<AutoPipelineSettings>): Promise<Library> {
   return apiRequest<Library>(`/api/libraries/${libraryId}`, { method: 'PATCH', body: JSON.stringify({ settings: { autoPipeline } }) })
@@ -659,7 +664,7 @@ export async function getItemPipeline(libraryItemId: string): Promise<PipelineIt
   return apiRequest<PipelineItemState>(`/api/items/${libraryItemId}/pipeline`)
 }
 
-/** `fix`: Fix automatically (match and chapters, 90 % match threshold). `repairSeekIndex`: admin only, rewrite drifting MP3s first. */
+/** `fix`: Fix it for me (match and chapters, 90 % match threshold). `repairSeekIndex`: admin only, rewrite drifting MP3s first. */
 export async function runItemPipeline(
   libraryItemId: string,
   body: { steps?: ('match' | 'chapters' | 'epub')[]; force?: boolean; fix?: boolean; repairSeekIndex?: boolean } = {}

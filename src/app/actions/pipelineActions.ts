@@ -3,13 +3,14 @@
 import * as api from '@/lib/api'
 import { toStatusActionResult, type StatusActionResult } from '@/lib/actionResult'
 import { pickPipelineUndoBackup } from '@/lib/autoPipeline'
-import { toItemHealth } from '@/lib/itemHealth'
+import { toItemHealth, toNeedsWorkItems } from '@/lib/itemHealth'
 import type {
   AutoPipelineSettings,
   Chapter,
   ItemHealth,
   Library,
   LibraryPipelineResponse,
+  NeedsWorkItem,
   PipelineBackup,
   PipelineItemState,
   PipelineItemStatus,
@@ -30,7 +31,7 @@ export async function getItemPipelineAction(libraryItemId: string): Promise<Stat
   return toStatusActionResult(() => api.getItemPipeline(libraryItemId))
 }
 
-/** `fix`: Fix automatically. `repairSeekIndex`: consent to rewrite drifting MP3s for this run (admin only). */
+/** `fix`: Fix it for me. `repairSeekIndex`: consent to rewrite drifting MP3s for this run (admin only). */
 export async function runItemPipelineAction(
   libraryItemId: string,
   options?: { fix?: boolean; repairSeekIndex?: boolean }
@@ -41,6 +42,11 @@ export async function runItemPipelineAction(
 export async function getItemHealthAction(libraryItemId: string, measure = false): Promise<StatusActionResult<ItemHealth | null>> {
   const result = await toStatusActionResult(() => api.getItemHealth(libraryItemId, measure))
   return result.ok ? { ok: true, data: toItemHealth(result.data) } : result
+}
+
+export async function getLibraryNeedsWorkAction(libraryId: string): Promise<StatusActionResult<NeedsWorkItem[]>> {
+  const result = await toStatusActionResult(() => api.getLibraryNeedsWork(libraryId))
+  return result.ok ? { ok: true, data: toNeedsWorkItems(result.data) } : result
 }
 
 export async function updateLibraryAutoPipelineAction(libraryId: string, autoPipeline: Partial<AutoPipelineSettings>): Promise<StatusActionResult<Library>> {

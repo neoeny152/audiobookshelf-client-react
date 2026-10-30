@@ -211,7 +211,7 @@ export default function AutoPipelineSettingsSection({ value, libraryProvider, au
       </div>
 
       <div className="flex min-w-0 flex-col gap-2" cy-id="auto-pipeline-repair-sweep">
-        {/* Not tied to the mode: Fix automatically on the item page uses it too, and it can always be turned off */}
+        {/* Not tied to the mode: Fix it for me on the item page uses it too, and it can always be turned off */}
         <SettingsToggleSwitch
           label={t('LabelAutoPipelineAutoRepair')}
           value={settings.autoRepairSeekIndex}

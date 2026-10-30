@@ -13,7 +13,8 @@ const STEP_TEXT: Readonly<Record<GuideStepId, TranslationKey>> = Object.freeze({
   match: 'LabelGuideStepMatch',
   lookup: 'LabelGuideStepLookup',
   snap: 'LabelGuideStepSnap',
-  save: 'LabelGuideStepSave'
+  save: 'LabelGuideStepSave',
+  epub: 'LabelGuideStepEpub'
 })
 
 /** The guide while `step` is its current step and not paused, else null */

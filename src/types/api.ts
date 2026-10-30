@@ -933,7 +933,7 @@ export interface PipelineItemState {
   /** Short text for the UI */
   reason: string | null
   dryRun: boolean
-  /** What queued the run: `fix` is Fix automatically, `sweep` the nightly sweep */
+  /** What queued the run: `fix` is Fix it for me, `sweep` the nightly sweep */
   trigger?: 'scan' | 'manual' | 'fix' | 'sweep' | null
   queuedAt: number | null
   updatedAt: number | null
@@ -989,6 +989,11 @@ export interface ItemHealth {
 
 export type ItemHealthIssue =
   'seek-index' | 'unmatched' | 'low-confidence' | 'chapters-from-files' | 'chapters-length' | 'chapters-count' | 'chapters-unverified'
+
+/** `GET /api/libraries/:id/needs-work` (fork only): a book with an issue other than `chapters-unverified`, which is left out */
+export interface NeedsWorkItem extends Pick<ItemHealth, 'libraryItemId' | 'issues' | 'next' | 'duration' | 'match' | 'chapters'> {
+  title: string
+}
 
 export interface LibraryPipelineResponse {
   mode: AutoPipelineMode

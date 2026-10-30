@@ -9,6 +9,7 @@ import { cookies } from 'next/headers'
 import AccountActionsRow from './AccountActionsRow'
 import AccountEReaderDevices from './AccountEReaderDevices'
 import AuthSessionsTable from './AuthSessionsTable'
+import GuidanceSetting from './GuidanceSetting'
 import ThemeSelector from './ThemeSelector'
 import UserLanguageSelector from './UserLanguageSelector'
 
@@ -47,6 +48,7 @@ export default async function AccountPage() {
         <div className="w-full">
           <ThemeSelector value={currentTheme} label={t('LabelTheme')} />
         </div>
+        <GuidanceSetting />
         <div className="bg-border h-px w-full" />
         <AccountEReaderDevices />
         <AuthSessionsTable />

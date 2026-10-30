@@ -43,6 +43,8 @@ const epubFromAudioActions: EpubFromAudioActions = {
 interface LibraryItemActionButtonsProps {
   libraryItem: BookLibraryItem | PodcastLibraryItem
   onEdit: () => void
+  /** Fork only: the book needs work and Edit starts Guide me, so the pencil pulses gently */
+  editHighlighted?: boolean
   onOpenMatch?: () => void
   /** Current RSS feed state (from useItemPageSocket + initial server data). */
   rssFeed?: RssFeed | null
@@ -54,6 +56,7 @@ interface LibraryItemActionButtonsProps {
 export default function LibraryItemActionButtons({
   libraryItem,
   onEdit,
+  editHighlighted = false,
   onOpenMatch,
   rssFeed = null,
   showPlayButton,
@@ -278,10 +281,13 @@ export default function LibraryItemActionButtons({
 
         {userCanUpdate && (
           <Tooltip text={t('LabelEdit')} position="top">
-            <span className="inline-flex">
+            <span className="relative inline-flex">
               <IconBtn ariaLabel={t('LabelEdit')} onClick={onEdit} outlined className="mx-0.5" size="small">
                 edit
               </IconBtn>
+              {editHighlighted && (
+                <span aria-hidden="true" className="ring-primary pointer-events-none absolute inset-0 rounded ring-2 motion-safe:animate-pulse" cy-id="edit-highlight" />
+              )}
             </span>
           </Tooltip>
         )}

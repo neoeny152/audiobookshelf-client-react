@@ -1,4 +1,5 @@
 import { LibraryProvider } from '@/contexts/LibraryContext'
+import { NeedsWorkProvider } from '@/contexts/NeedsWorkContext'
 import { staticPageMetadata } from '@/lib/pageMetadata'
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
@@ -31,10 +32,12 @@ export default async function LibraryLayout({
 
   return (
     <LibraryProvider library={currentLibrary}>
-      <LibrarySelectionLayout>
-        <AppBar libraries={libraries} currentLibraryId={currentLibraryId} />
-        <LibraryLayoutWrapper>{children}</LibraryLayoutWrapper>
-      </LibrarySelectionLayout>
+      <NeedsWorkProvider>
+        <LibrarySelectionLayout>
+          <AppBar libraries={libraries} currentLibraryId={currentLibraryId} />
+          <LibraryLayoutWrapper>{children}</LibraryLayoutWrapper>
+        </LibrarySelectionLayout>
+      </NeedsWorkProvider>
     </LibraryProvider>
   )
 }

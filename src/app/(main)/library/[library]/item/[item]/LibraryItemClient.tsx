@@ -1,5 +1,6 @@
 'use client'
 
+import { startEpubJobAction } from '@/app/actions/epubActions'
 import { clearPodcastDownloadQueueAction } from '@/app/actions/mediaActions'
 import { getItemHealthAction, runItemPipelineAction, updateLibraryAutoPipelineAction } from '@/app/actions/pipelineActions'
 import LibraryItemMetadataEditModal, { type MetadataEditSection } from '@/components/modals/LibraryItemMetadataEditModal'
@@ -13,7 +14,7 @@ import AuthorLinks from '@/components/widgets/AuthorLinks'
 import ExpandableHtml from '@/components/widgets/ExpandableHtml'
 import LibraryFilesTable from '@/components/widgets/LibraryFilesTable'
 import LoadingSpinner from '@/components/widgets/LoadingSpinner'
-import GuidedFixCard, { type GuidedFixActions } from '@/components/widgets/guided-fix/GuidedFixCard'
+import GuidedFixHint, { type GuidedFixActions } from '@/components/widgets/guided-fix/GuidedFixHint'
 import PipelineStatusChip from '@/components/widgets/pipeline/PipelineStatusChip'
 import { useSeekIndexEnabled } from '@/components/widgets/seek-index/SeekIndexWarning'
 import TranscriptSection from '@/components/widgets/transcripts/TranscriptSection'
@@ -24,19 +25,21 @@ import { useTasks } from '@/contexts/TasksContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
 import { useCoverAccentColor } from '@/hooks/useCoverAccentColor'
+import { useGuidancePreference } from '@/hooks/useGuidancePreference'
 import { useItemHealth } from '@/hooks/useItemHealth'
 import { useItemPageSocket } from '@/hooks/useItemPageSocket'
 import { useItemPipelineState } from '@/hooks/useItemPipelineState'
 import { useSeekIndex } from '@/hooks/useSeekIndex'
 import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
-import { getPipelineReviewHref, getProcessingHref, getPipelineTab } from '@/lib/autoPipeline'
+import { getPipelineReviewHref, getProcessingHref, getPipelineTab, isPipelineActive } from '@/lib/autoPipeline'
 import { getLibraryItemCoverUrl } from '@/lib/coverUtils'
 import { secondsToTimestamp } from '@/lib/datefns'
-import { getGuideSteps, rememberGuidedFixDismissed, type GuideStepId } from '@/lib/itemHealth'
+import { canMakeEpubFromAudio, findEpubFromAudioFile } from '@/lib/epubFromAudio'
+import { getGuidancePreference, getGuideSteps, isGuidedFixDismissed, rememberGuidedFixDismissed, type EpubOffer, type GuideStepId } from '@/lib/itemHealth'
 import { mergeLibraryItemUpdate } from '@/lib/libraryItemUpdatedUtils'
 import { computeProgress } from '@/lib/mediaProgress'
-import { BookLibraryItem, BookMetadata, PodcastEpisode, PodcastLibraryItem, PodcastMetadata } from '@/types/api'
+import { BookLibraryItem, BookMetadata, ItemHealthIssue, PodcastEpisode, PodcastLibraryItem, PodcastMetadata } from '@/types/api'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
@@ -90,11 +93,37 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
   const isPodcast = libraryItem.mediaType === 'podcast'
   const isBookWithAudio = libraryItem.mediaType === 'book' && ((libraryItem as BookLibraryItem).media.tracks?.length ?? 0) > 0
 
-  // Guided fix (fork only): the card that offers Guide me and Fix automatically, for admins. The first look measures
-  // MP3s without a seek header.
+  // Guided fix (fork only): for admins, a hint that sends them to Edit, which starts Guide me, unless they turned guidance
+  // off. The first look measures MP3s without a seek header.
   const seekIndexEnabled = useSeekIndexEnabled()
-  const { health, reload: reloadHealth } = useItemHealth(libraryItem.id, { enabled: seekIndexEnabled && isBookWithAudio, measure: true })
+  const guidanceOff = useGuidancePreference() === 'off'
+  const { health, reload: reloadHealth } = useItemHealth(libraryItem.id, { enabled: seekIndexEnabled && isBookWithAudio && !guidanceOff, measure: true })
   const [guide, setGuide] = useState<{ steps: GuideStepId[]; index: number } | null>(null)
+  /** A guide just ended and no guidance preference is set: the hint asks what to do next time */
+  const [askNextTime, setAskNextTime] = useState(false)
+  /** The issue set dismissed here (also kept in storage, which may be unavailable) */
+  const [dismissedIssues, setDismissedIssues] = useState<string | null>(null)
+  const hintDismissed = !!health && (dismissedIssues === health.issues.join(',') || isGuidedFixDismissed(libraryItem.id, health.issues))
+  const dismissHint = useCallback(
+    (issues: ItemHealthIssue[]) => {
+      rememberGuidedFixDismissed(libraryItem.id, issues)
+      setDismissedIssues(issues.join(','))
+    },
+    [libraryItem.id]
+  )
+  // Edit starts the guide while the hint shows (not while the pipeline works on the book)
+  const needsGuide =
+    !!health &&
+    !guide &&
+    !hintDismissed &&
+    !(pipelineState && isPipelineActive(pipelineState.status)) &&
+    health.issues.some((issue) => issue !== 'chapters-unverified')
+  // The guide's optional last step: a read-along EPUB from the audio for a book without an EPUB (see EpubOffer)
+  const epubFromAudioAvailable = useServerFeature('chapterbotEpub')
+  const epubOffer: EpubOffer | null =
+    epubFromAudioAvailable && canMakeEpubFromAudio(libraryItem) && !findEpubFromAudioFile(libraryItem) && !(libraryItem as BookLibraryItem).media.ebookFile
+      ? 'create'
+      : null
   const guideStep = guide ? guide.steps[guide.index] : null
   const seekIndex = useSeekIndex({ libraryItemId: libraryItem.id, enabled: guideStep === 'repair' })
   const { getTaskProgress } = useTasks()
@@ -102,7 +131,17 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
     () => ({
       getHealth: getItemHealthAction,
       run: runItemPipelineAction,
-      enableAutoRepair: () => updateLibraryAutoPipelineAction(libraryItem.libraryId, { autoRepairSeekIndex: true })
+      enableAutoRepair: () => updateLibraryAutoPipelineAction(libraryItem.libraryId, { autoRepairSeekIndex: true }),
+      // A box left unticked keeps the library's setting
+      enableAutomation: ({ autoRepairSeekIndex, autoEpub }) =>
+        updateLibraryAutoPipelineAction(libraryItem.libraryId, {
+          mode: 'on',
+          autoMatch: true,
+          autoChapters: true,
+          ...(autoRepairSeekIndex && { autoRepairSeekIndex }),
+          ...(autoEpub && { autoEpub })
+        }),
+      startEpub: startEpubJobAction
     }),
     [libraryItem.libraryId]
   )
@@ -123,15 +162,16 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
     setMetadataEditSection(section)
   }
 
-  /** Each guide step past the repair happens in the edit modal: match, then the chapter editor */
+  /** The match and the chapter steps happen in the edit modal; the repair and the EPUB in the hint line */
   const openGuideStep = useCallback((step: GuideStepId) => {
     if (step === 'match') setMetadataEditSection('match')
+    else if (step === 'epub') setMetadataEditSection(null)
     else if (step !== 'repair') setMetadataEditSection('chapters')
   }, [])
 
   const handleStartGuide = (from?: GuideStepId) => {
     if (!health) return
-    const steps = getGuideSteps(health)
+    const steps = getGuideSteps(health, { epub: !!epubOffer })
     // a step asked for by name (Pick the match) is kept even when the health read since no longer lists it
     if (from && !steps.includes(from)) steps.splice(steps.indexOf('lookup'), 0, from)
     const index = from ? steps.indexOf(from) : 0
@@ -145,7 +185,7 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
       stepId: guideStep,
       stepIndex: guide.index,
       total: guide.steps.length,
-      paused: guideStep !== 'repair' && metadataEditSection === null,
+      paused: guideStep !== 'repair' && guideStep !== 'epub' && metadataEditSection === null,
       advance: () => {
         const index = guide.index + 1
         if (index < guide.steps.length) {
@@ -153,16 +193,22 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
           openGuideStep(guide.steps[index])
           return
         }
-        // Done: the card stays away until the book's issues change again
+        // Done: the hint stays away until the book's issues change again
         void reloadHealth().then((next) => {
-          if (next) rememberGuidedFixDismissed(libraryItem.id, next.issues)
+          if (next) dismissHint(next.issues)
+          setMetadataEditSection(null)
           setGuide(null)
+          setAskNextTime(getGuidancePreference() === null)
         })
       },
       resume: () => openGuideStep(guideStep),
-      stop: () => setGuide(null)
+      // Stopped on purpose: Edit opens the editor again until the book's issues change
+      stop: () => {
+        if (health) dismissHint(health.issues)
+        setGuide(null)
+      }
     }
-  }, [guide, guideStep, libraryItem.id, metadataEditSection, openGuideStep, reloadHealth])
+  }, [dismissHint, guide, guideStep, health, metadataEditSection, openGuideStep, reloadHealth])
 
   const handleGuideRepairFiles = async () => {
     const result = await seekIndex.repairAndWait({ chapters: 'keep' })
@@ -298,21 +344,6 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
 
               <LibraryItemDetails libraryItem={libraryItem} />
 
-              {health && (
-                <GuidedFixContext.Provider value={guidedFix}>
-                  <GuidedFixCard
-                    libraryItemId={libraryItem.id}
-                    health={health}
-                    pipelineState={pipelineState}
-                    repairProgress={getTaskProgress(libraryItem.id) ?? null}
-                    reviewHref={getPipelineReviewHref(library.id, libraryItem.id)}
-                    actions={guidedFixActions}
-                    onStartGuide={handleStartGuide}
-                    onRepairFiles={handleGuideRepairFiles}
-                  />
-                </GuidedFixContext.Provider>
-              )}
-
               {/* Podcast episode downloads queue */}
               {episodeDownloadsQueued.length > 0 && (
                 <div className="bg-info/40 relative mx-auto mt-4 max-w-max rounded-md px-4 py-2 text-sm font-semibold text-gray-100 md:mx-0">
@@ -356,13 +387,36 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
 
               <LibraryItemActionButtons
                 libraryItem={libraryItem}
-                onEdit={() => handleOpenMetadataEdit('details')}
+                editHighlighted={needsGuide}
+                onEdit={() => (needsGuide ? handleStartGuide() : handleOpenMetadataEdit('details'))}
                 onOpenMatch={() => handleOpenMetadataEdit('match')}
                 rssFeed={rssFeed ?? null}
                 showPlayButton={showPlayButton}
                 isItemPlaying={isItemPlaying}
                 onPlay={handlePlay}
               />
+
+              {health && (
+                <GuidedFixContext.Provider value={guidedFix}>
+                  <GuidedFixHint
+                    libraryItemId={libraryItem.id}
+                    health={health}
+                    pipelineState={pipelineState}
+                    repairProgress={getTaskProgress(libraryItem.id) ?? null}
+                    reviewHref={getPipelineReviewHref(library.id, libraryItem.id)}
+                    actions={guidedFixActions}
+                    dismissed={hintDismissed}
+                    onDismiss={() => dismissHint(health.issues)}
+                    onStartGuide={handleStartGuide}
+                    onRepairFiles={handleGuideRepairFiles}
+                    askNextTime={askNextTime}
+                    onNextTimeAnswered={() => setAskNextTime(false)}
+                    canAutomate={autoPipelineAvailable}
+                    epubOffer={epubOffer}
+                    canAutomateEpub={epubFromAudioAvailable}
+                  />
+                </GuidedFixContext.Provider>
+              )}
 
               {description && <ExpandableHtml html={description} lineClamp={4} className="mt-6" />}
 

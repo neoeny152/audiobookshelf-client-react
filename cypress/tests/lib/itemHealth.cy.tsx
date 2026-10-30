@@ -1,5 +1,5 @@
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
-import { formatDrift, getGuideSteps, toItemHealth } from '@/lib/itemHealth'
+import { formatDrift, getGuideSteps, toItemHealth, toNeedsWorkItems } from '@/lib/itemHealth'
 
 function DriftProbe({ seconds }: { seconds: number }) {
   const t = useTypeSafeTranslations()
@@ -38,11 +38,23 @@ describe('toItemHealth', () => {
   })
 })
 
+describe('toNeedsWorkItems', () => {
+  it('reads the books with their title and drops entries that are not one', () => {
+    const items = toNeedsWorkItems({ items: [{ ...redRising, title: 'Red Rising' }, { title: 'No id' }] })
+    expect(items).to.have.length(1)
+    expect(items[0]).to.deep.include({ libraryItemId: 'c1c77a16', title: 'Red Rising', next: 'repair' })
+    expect(items[0].match).to.deep.equal({ asin: null, confidence: 85, reason: 'low-confidence' })
+    expect(items[0]).not.to.have.any.keys('seekIndex', 'autoFix')
+    expect(toNeedsWorkItems(null)).to.deep.equal([])
+  })
+})
+
 describe('getGuideSteps', () => {
   it('starts with the repair and the match only when the book needs them', () => {
     expect(getGuideSteps({ issues: ['seek-index', 'unmatched', 'chapters-from-files'] })).to.deep.equal(['repair', 'match', 'lookup', 'snap', 'save'])
     expect(getGuideSteps({ issues: ['low-confidence'] })).to.deep.equal(['match', 'lookup', 'snap', 'save'])
     expect(getGuideSteps({ issues: ['chapters-count'] })).to.deep.equal(['lookup', 'snap', 'save'])
+    expect(getGuideSteps({ issues: ['chapters-count'] }, { epub: true })).to.deep.equal(['lookup', 'snap', 'save', 'epub'])
   })
 })
 
