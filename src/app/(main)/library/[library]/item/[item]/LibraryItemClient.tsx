@@ -13,6 +13,7 @@ import ExpandableHtml from '@/components/widgets/ExpandableHtml'
 import LibraryFilesTable from '@/components/widgets/LibraryFilesTable'
 import LoadingSpinner from '@/components/widgets/LoadingSpinner'
 import PipelineStatusChip from '@/components/widgets/pipeline/PipelineStatusChip'
+import TranscriptSection from '@/components/widgets/transcripts/TranscriptSection'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { PipelineProposalContext } from '@/contexts/PipelineProposalContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
@@ -291,6 +292,9 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
                     onGoToTimestamp={handleGoToTimestamp}
                   />
                 )}
+
+                {/* transcripts (fork feature) */}
+                {isBookWithAudio && <TranscriptSection libraryItem={libraryItem} title={libraryItem.media.metadata.title ?? ''} />}
 
                 {/* audio tracks table */}
                 {libraryItem.mediaType === 'book' && (libraryItem.media.tracks?.length ?? 0) > 0 && (

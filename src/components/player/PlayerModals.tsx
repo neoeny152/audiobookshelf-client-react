@@ -7,6 +7,7 @@ import ChaptersModal from './ChaptersModal'
 import PlayerSettingsModal from './PlayerSettingsModal'
 import QueueItemsModal from './QueueItemsModal'
 import SleepTimerModal from './SleepTimerModal'
+import TranscriptModal from './TranscriptModal'
 import type { PlayerControlsState } from './usePlayerControlsState'
 
 interface PlayerModalsProps {
@@ -35,6 +36,10 @@ export default function PlayerModals({ controls }: PlayerModalsProps) {
     setIsSleepTimerModalOpen,
     isQueueModalOpen,
     setIsQueueModalOpen,
+    isTranscriptModalOpen,
+    setIsTranscriptModalOpen,
+    transcripts,
+    transcriptEpisodeId,
     sleepTimer
   } = controls
 
@@ -87,6 +92,15 @@ export default function PlayerModals({ controls }: PlayerModalsProps) {
         onDecrement={decrementSleepTimer}
       />
       <QueueItemsModal isOpen={isQueueModalOpen} zIndexClass={playerOverlayZIndex} onClose={() => setIsQueueModalOpen(false)} />
+      <TranscriptModal
+        isOpen={isTranscriptModalOpen}
+        libraryItemId={libraryItemId}
+        episodeId={transcriptEpisodeId}
+        list={transcripts.list}
+        zIndexClass={playerOverlayZIndex}
+        onSeek={seek}
+        onClose={() => setIsTranscriptModalOpen(false)}
+      />
     </>
   )
 }

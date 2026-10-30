@@ -203,6 +203,10 @@ export interface LibrarySettings {
   epubsAllowScriptedContent?: boolean
   /** Fork only (`autoPipeline` server feature): hands-off processing of new books. Stock servers never send it. */
   autoPipeline?: AutoPipelineSettings
+  /** Fork only (`transcripts` server feature, podcast libraries): fetch the creator's transcripts with each episode */
+  downloadPodcastTranscripts?: boolean
+  /** Fork only (`transcripts` server feature, podcast libraries): transcribe new episodes without a timed transcript */
+  autoTranscribePodcastEpisodes?: boolean
 }
 
 export type AutoPipelineMode = 'off' | 'dryRun' | 'on'
@@ -2171,6 +2175,8 @@ export interface RssPodcastEpisode {
   chaptersUrl: string
   chaptersType: string
   chapters: RssPodcastChapter[]
+  /** Fork only (`transcripts` server feature): the item's `<podcast:transcript>` tags, passed back on download */
+  transcripts?: { url: string; type: string | null; language: string | null; rel: string | null }[]
 }
 
 export interface RssPodcastMetadata {

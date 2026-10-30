@@ -36,7 +36,10 @@ export default function PlayerSecondaryToolbar({ controls, className, onPlayback
     setIsSleepTimerModalOpen,
     setIsChaptersModalOpen,
     setIsQueueModalOpen,
-    setIsSettingsModalOpen
+    setIsSettingsModalOpen,
+    hasTranscripts,
+    isTranscriptModalOpen,
+    setIsTranscriptModalOpen
   } = controls
 
   const { sleepTimerSet, remainingString } = sleepTimer
@@ -108,6 +111,19 @@ export default function PlayerSecondaryToolbar({ controls, className, onPlayback
             ariaLabel={t('LabelViewChapters')}
           >
             format_list_bulleted
+          </IconBtn>
+        </Tooltip>
+      )}
+      {hasTranscripts && (
+        <Tooltip text={t('ButtonTranscript')} position="top" className={tooltipClass}>
+          <IconBtn
+            size="custom"
+            borderless
+            className={mergeClasses('w-9 text-2xl sm:w-10', toolbarButtonClass)}
+            onClick={() => setIsTranscriptModalOpen(!isTranscriptModalOpen)}
+            ariaLabel={t('ButtonTranscript')}
+          >
+            subtitles
           </IconBtn>
         </Tooltip>
       )}

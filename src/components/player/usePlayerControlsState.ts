@@ -5,7 +5,9 @@ import { useMediaContext } from '@/contexts/MediaContext'
 import { useUser } from '@/contexts/UserContext'
 import type { PlayerHandler } from '@/hooks/usePlayerHandler'
 import { usePlayerChapterQueueNavigation } from '@/hooks/usePlayerChapterQueueNavigation'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useSleepTimer } from '@/hooks/useSleepTimer'
+import { useTranscripts } from '@/hooks/useTranscripts'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { LibraryItem, PlayerState } from '@/types/api'
 import { useCallback, useMemo, useState } from 'react'
@@ -14,7 +16,7 @@ export function usePlayerControlsState(playerHandler: PlayerHandler, streamLibra
   const t = useTypeSafeTranslations()
   const { showToast } = useGlobalToast()
   const { getBookmarksForLibraryItem } = useUser()
-  const { playerQueueItems } = useMediaContext()
+  const { playerQueueItems, streamEpisodeId } = useMediaContext()
   const {
     handleNext: handleNextChapter,
     handlePrevious: handlePreviousChapter,
@@ -29,6 +31,7 @@ export function usePlayerControlsState(playerHandler: PlayerHandler, streamLibra
   const [isBookmarksModalOpen, setIsBookmarksModalOpen] = useState(false)
   const [isSleepTimerModalOpen, setIsSleepTimerModalOpen] = useState(false)
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false)
+  const [isTranscriptModalOpen, setIsTranscriptModalOpen] = useState(false)
   const [bookmarkCurrentTime, setBookmarkCurrentTime] = useState(0)
 
   const { jumpBackward, jumpForward, playPause, seek, pause, getCurrentTime } = playerHandler.controls
@@ -46,6 +49,12 @@ export function usePlayerControlsState(playerHandler: PlayerHandler, streamLibra
   })
 
   const libraryItemId = streamLibraryItem.id
+
+  // Transcripts (fork feature): the toolbar button shows when the item or episode has one
+  const transcriptsFeature = useServerFeature('transcripts')
+  const transcriptEpisodeId = isPodcast ? streamEpisodeId : null
+  const transcripts = useTranscripts(libraryItemId, transcriptEpisodeId, transcriptsFeature)
+  const hasTranscripts = (transcripts.list?.transcripts.length ?? 0) > 0
   const bookmarks = useMemo(() => getBookmarksForLibraryItem(libraryItemId), [libraryItemId, getBookmarksForLibraryItem])
 
   const isPlaying = playerState === PlayerState.PLAYING
@@ -73,9 +82,11 @@ export function usePlayerControlsState(playerHandler: PlayerHandler, streamLibra
     setIsBookmarksModalOpen(false)
     setIsSleepTimerModalOpen(false)
     setIsQueueModalOpen(false)
+    setIsTranscriptModalOpen(false)
   }, [])
 
-  const isAnyModalOpen = isSettingsModalOpen || isChaptersModalOpen || isBookmarksModalOpen || isSleepTimerModalOpen || isQueueModalOpen
+  const isAnyModalOpen =
+    isSettingsModalOpen || isChaptersModalOpen || isBookmarksModalOpen || isSleepTimerModalOpen || isQueueModalOpen || isTranscriptModalOpen
 
   return {
     playerHandler,
@@ -106,6 +117,11 @@ export function usePlayerControlsState(playerHandler: PlayerHandler, streamLibra
     setIsSleepTimerModalOpen,
     isQueueModalOpen,
     setIsQueueModalOpen,
+    isTranscriptModalOpen,
+    setIsTranscriptModalOpen,
+    transcripts,
+    transcriptEpisodeId,
+    hasTranscripts,
     bookmarkCurrentTime,
     openBookmarksModal,
     closeAllModals,

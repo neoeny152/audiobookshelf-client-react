@@ -3,6 +3,7 @@
 import PreviewCover from '@/components/covers/PreviewCover'
 import EpisodeModal, { useEpisodeModal, type EpisodeModalItemSource } from '@/components/modals/EpisodeModal'
 import LoadingIndicator from '@/components/ui/LoadingIndicator'
+import TranscriptSection from '@/components/widgets/transcripts/TranscriptSection'
 import { useMediaContext } from '@/contexts/MediaContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { getLibraryItemCoverUrl } from '@/lib/coverUtils'
@@ -158,6 +159,8 @@ function ViewEpisodeModalBody({ onClose }: ViewEpisodeModalBodyProps) {
           <p className="mb-2 text-xs">{audioFileDuration}</p>
         </div>
       </div>
+
+      <TranscriptSection libraryItem={libraryItem} episodeId={episode.id} title={episode.title || ''} variant="plain" />
     </>
   )
 }

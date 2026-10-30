@@ -116,6 +116,7 @@ import { ApiError, NetworkError, UnauthorizedError } from './apiErrors'
 import { getBasePath, getSafeRedirectPath, withBasePath } from './basePath'
 import { isNextRedirectError } from './nextErrors'
 import { getUserDefaultUrlPath } from './userPermissions'
+import type { TranscriptJob } from './transcripts'
 
 const PUBLIC_ENDPOINTS = ['/status']
 const refreshTokenExpiry = parseInt(process.env.REFRESH_TOKEN_EXPIRY || '') || 7 * 24 * 60 * 60 // 7 days
@@ -592,6 +593,40 @@ export async function getCurrentEpubJob(libraryItemId: string): Promise<EpubJob>
 /** Cancel a queued or running EPUB job. A running job stops at its next segment, so it may report `cancelRequested` first. */
 export async function cancelEpubJob(libraryItemId: string, jobId: string): Promise<EpubJob> {
   return apiRequest<EpubJob>(`/api/items/${libraryItemId}/epub/${encodeURIComponent(jobId)}`, { method: 'DELETE' })
+}
+
+// Transcripts (fork only, /status `transcripts` and `transcriptsGenerate`)
+
+/**
+ * Queue a transcript generated from the audio of a book or a podcast episode (admin; `transcriptsGenerate`).
+ * `method`: `auto` reuses the read-along data of an EPUB made from a book's audio when there is one.
+ * Throws ApiError 400/403/404/409 (already running).
+ */
+export async function generateTranscript(libraryItemId: string, episodeId?: string | null, method: TranscriptJob['method'] = 'auto'): Promise<{ job: TranscriptJob }> {
+  return apiRequest<{ job: TranscriptJob }>(`/api/items/${libraryItemId}/transcripts/generate`, {
+    method: 'POST',
+    body: JSON.stringify({ ...(episodeId ? { episodeId } : {}), method })
+  })
+}
+
+/** Cancel a queued or running transcript generation (admin). Throws ApiError 404 when none is running. */
+export async function cancelTranscriptJob(libraryItemId: string, episodeId?: string | null): Promise<{ job: TranscriptJob }> {
+  const search = episodeId ? `?episodeId=${encodeURIComponent(episodeId)}` : ''
+  return apiRequest<{ job: TranscriptJob }>(`/api/items/${libraryItemId}/transcripts/job${search}`, { method: 'DELETE' })
+}
+
+/** Delete the generated transcript (admin). Creator and local transcripts are never deleted. */
+export async function deleteGeneratedTranscript(libraryItemId: string, episodeId?: string | null): Promise<void> {
+  const search = episodeId ? `?episodeId=${encodeURIComponent(episodeId)}` : ''
+  await apiRequest<unknown>(`/api/items/${libraryItemId}/transcripts/generated${search}`, { method: 'DELETE' })
+}
+
+/** Read the podcast's RSS feed again for `<podcast:transcript>` tags (admin). */
+export async function refreshTranscriptsFromFeed(libraryItemId: string, episodeId?: string | null): Promise<{ updated: number; withTranscripts: number }> {
+  return apiRequest<{ updated: number; withTranscripts: number }>(`/api/items/${libraryItemId}/transcripts/refresh-feed`, {
+    method: 'POST',
+    body: JSON.stringify(episodeId ? { episodeId } : {})
+  })
 }
 
 // Auto pipeline (fork only, /status `autoPipeline`)

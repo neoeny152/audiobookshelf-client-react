@@ -27,6 +27,8 @@ export default function LibrarySettingsTab({ settings, mediaType, onSettingsChan
   const autoPipelineFeature = useServerFeature('autoPipeline')
   const chapterbotEpubFeature = useServerFeature('chapterbotEpub')
   const chapterbotVerifyFeature = useServerFeature('chapterbotVerify')
+  const transcriptsFeature = useServerFeature('transcripts')
+  const transcriptsGenerateFeature = useServerFeature('transcriptsGenerate')
 
   const handleSettingChanged = <K extends keyof LibrarySettings>(key: K, value: LibrarySettings[K]) => {
     onSettingsChange((prev) => ({ ...prev, [key]: value }))
@@ -104,6 +106,22 @@ export default function LibrarySettingsTab({ settings, mediaType, onSettingsChan
               value={!!settings.onlyShowLaterBooksInContinueSeries}
               onChange={(value) => handleSettingChanged('onlyShowLaterBooksInContinueSeries', value)}
               tooltip={t('LabelSettingsOnlyShowLaterBooksInContinueSeriesHelp')}
+            />
+          )}
+          {!isBookLibrary && transcriptsFeature && (
+            <SettingsToggleSwitch
+              label={t('LabelSettingsDownloadPodcastTranscripts')}
+              value={!!settings.downloadPodcastTranscripts}
+              onChange={(value) => handleSettingChanged('downloadPodcastTranscripts', value)}
+              tooltip={t('LabelSettingsDownloadPodcastTranscriptsHelp')}
+            />
+          )}
+          {!isBookLibrary && transcriptsFeature && (transcriptsGenerateFeature || !!settings.autoTranscribePodcastEpisodes) && (
+            <SettingsToggleSwitch
+              label={t('LabelSettingsAutoTranscribePodcastEpisodes')}
+              value={!!settings.autoTranscribePodcastEpisodes}
+              onChange={(value) => handleSettingChanged('autoTranscribePodcastEpisodes', value)}
+              tooltip={t('LabelSettingsAutoTranscribePodcastEpisodesHelp')}
             />
           )}
           {!isBookLibrary && (
