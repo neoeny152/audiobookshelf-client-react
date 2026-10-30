@@ -718,6 +718,8 @@ export interface SeekIndexStatus {
   /** largest |measured - stored| among the files that need repair, seconds */
   maxDrift: number
   processing: boolean
+  /** A repair that a restart (or cancel) cut short: these files were never done (the server resumes it after a restart) */
+  interrupted?: { backupId: string; pendingCount: number; files: string[]; mode: 'keep' | 'shift' } | null
   lastResult: SeekIndexRepairResult | null
   /** newest first */
   backups: SeekIndexBackup[]

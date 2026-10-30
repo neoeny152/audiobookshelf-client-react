@@ -138,6 +138,17 @@ describe('<SeekIndexPanel />', () => {
     cy.get('@onRepair').should('have.been.calledOnceWith', { chapters: 'keep' })
   })
 
+  it('offers Resume for a repair that a restart cut short, keeping its chapter choice', () => {
+    const files = parts.map((p, i) => (i === 0 ? { ...p, mp3SeekIndex: 'xing' as const, needsRepair: false } : p))
+    mountPanel({
+      status: { ...status(files, [backup]), interrupted: { backupId: backup.id, pendingCount: 1, files: ['Part  II  Reborn.mp3'], mode: 'shift' } }
+    })
+    cy.get('[cy-id="seek-index-interrupted"]').should('have.text', 'Repair was interrupted: 1 files still need repair.')
+    cy.contains('button', 'Resume').click()
+    cy.get('[role="dialog"]').should('not.exist')
+    cy.get('@onRepair').should('have.been.calledOnceWith', { chapters: 'shift' })
+  })
+
   it('shows progress instead of the warning while a task runs', () => {
     mountPanel({ running: true, progress: '42%', status: status(parts, [backup]) })
     cy.get('[cy-id="seek-index-progress"]').should('contain.text', '42%')

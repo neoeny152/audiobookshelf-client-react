@@ -68,7 +68,8 @@ export default function SeekIndexPanel({
 
   const flagged = status?.files.filter((f) => f.needsRepair) ?? []
   const backups = status?.backups ?? []
-  const showWarning = !running && flagged.length > 0
+  const interrupted = running ? null : (status?.interrupted ?? null)
+  const showWarning = !running && (flagged.length > 0 || !!interrupted)
 
   if (!running && !result && !showWarning && !error && !backups.length) return null
 
@@ -170,7 +171,12 @@ export default function SeekIndexPanel({
         <Alert type="warning" autoFocus={false}>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" cy-id="seek-index-warning">
             <div className="min-w-0 flex-1 basis-64">
-              <p>{t('MessageSeekIndexMissing', { 0: flagged.length, 1: (status?.maxDrift ?? 0).toFixed(1) })}</p>
+              {interrupted && (
+                <p className="font-semibold" cy-id="seek-index-interrupted">
+                  {t('MessageSeekIndexRepairInterrupted', { 0: interrupted.pendingCount })}
+                </p>
+              )}
+              {flagged.length > 0 && <p>{t('MessageSeekIndexMissing', { 0: flagged.length, 1: (status?.maxDrift ?? 0).toFixed(1) })}</p>}
               <ul className="text-foreground-muted mt-1 list-none text-xs">
                 {flagged.map((f) => (
                   <li key={f.ino} cy-id="seek-index-measured">
@@ -184,9 +190,16 @@ export default function SeekIndexPanel({
                 ))}
               </ul>
             </div>
-            <Btn size="small" loading={starting} onClick={() => setConfirm({ kind: 'repair' })}>
-              {t('ButtonRepairSeekIndex')}
-            </Btn>
+            {interrupted ? (
+              // Continues a repair that was already confirmed, with the chapter choice made then
+              <Btn size="small" loading={starting} onClick={() => onRepair({ chapters: interrupted.mode })}>
+                {t('ButtonResumeSeekIndexRepair')}
+              </Btn>
+            ) : (
+              <Btn size="small" loading={starting} onClick={() => setConfirm({ kind: 'repair' })}>
+                {t('ButtonRepairSeekIndex')}
+              </Btn>
+            )}
           </div>
         </Alert>
       )}
