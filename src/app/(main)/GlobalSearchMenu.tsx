@@ -1,6 +1,7 @@
 import AuthorImage from '@/components/covers/AuthorImage'
 import { FlatResultItem, SearchResultType } from '@/hooks/useGlobalSearchTransformer'
 import { useMenuPosition } from '@/hooks/useMenuPosition'
+import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { useScrollToFocused } from '@/hooks/useScrollToFocused'
 import { mergeClasses } from '@/lib/merge-classes'
 import Link from 'next/link'
@@ -72,6 +73,7 @@ export default function GlobalSearchMenu({
   usePortal = false,
   triggerRef
 }: GlobalSearchMenuProps) {
+  const t = useTypeSafeTranslations()
   // Scroll focused item into view
   // Scroll focused item into view
   const [menuPosition, setMenuPosition] = useState({ top: '0px', left: '0px', width: 'auto' })
@@ -172,6 +174,22 @@ export default function GlobalSearchMenu({
               {result.subtitle && (
                 <div className="text-xxs text-foreground-subdued truncate">
                   {shouldHighlightSubtitle ? <HighlightMatch text={result.subtitle} query={searchQuery} /> : <span>{result.subtitle}</span>}
+                </div>
+              )}
+              {/* Show the file path for results that matched by file name or path */}
+              {result.matchedFile && (
+                <div
+                  className="text-xxs text-foreground-subdued flex min-w-0 items-center gap-1"
+                  title={t('LabelMatchedFile')}
+                  data-testid="search-result-matched-file"
+                >
+                  <span className="material-symbols shrink-0 text-xs" aria-hidden="true">
+                    description
+                  </span>
+                  <span className="sr-only">{t('LabelMatchedFile')}:</span>
+                  <span className="truncate">
+                    <HighlightMatch text={result.matchedFile} query={searchQuery.trim().replace(/\\/g, '/')} />
+                  </span>
                 </div>
               )}
               {/* Show author if it exists */}

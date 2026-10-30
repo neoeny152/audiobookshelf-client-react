@@ -2,7 +2,7 @@ import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { withBasePath } from '@/lib/basePath'
 import { getLibraryItemCoverSrc, getPlaceholderCoverUrl } from '@/lib/coverUtils'
 import { filterEncode } from '@/lib/filterUtils'
-import { SearchLibraryResponse } from '@/types/api'
+import { SearchFileMatch, SearchLibraryResponse } from '@/types/api'
 import { useMemo } from 'react'
 
 export type SearchResultType = 'book' | 'podcast' | 'episode' | 'author' | 'series' | 'tag' | 'genre' | 'narrator' | 'collection' | 'playlist' | 'header'
@@ -19,7 +19,11 @@ export interface FlatResultItem {
   isPlaceholder?: boolean // For "Thinking", "No Results"
   placeholderText?: string
   author?: string
+  /** File path the result matched by, when it matched by file name or path rather than metadata */
+  matchedFile?: string
 }
+
+const getMatchedFile = (result: SearchFileMatch): string | undefined => (result.matchKey === 'file' && result.matchText ? result.matchText : undefined)
 
 interface UseGlobalSearchTransformerProps {
   searchResults: SearchLibraryResponse | null
@@ -99,7 +103,8 @@ export function useGlobalSearchTransformer({
       author: item.libraryItem.media.metadata.authorName,
       link: `/library/${item.libraryItem.libraryId}/item/${item.libraryItem.id}`,
       imageSrc: getLibraryItemCoverSrc(item.libraryItem, getPlaceholderCoverUrl()),
-      originalItem: item.libraryItem
+      originalItem: item.libraryItem,
+      matchedFile: getMatchedFile(item)
     }))
 
     // Podcasts
@@ -110,7 +115,8 @@ export function useGlobalSearchTransformer({
       subtitle: item.libraryItem.media.metadata.author,
       link: `/library/${item.libraryItem.libraryId}/item/${item.libraryItem.id}`,
       imageSrc: getLibraryItemCoverSrc(item.libraryItem, getPlaceholderCoverUrl()),
-      originalItem: item.libraryItem
+      originalItem: item.libraryItem,
+      matchedFile: getMatchedFile(item)
     }))
 
     // Episodes

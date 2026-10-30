@@ -1624,9 +1624,19 @@ export interface PersonalizedShelf {
 // SEARCH
 // ============================================================================
 
+/**
+ * Set on book/podcast search results that matched by file name or path instead of metadata.
+ * The server only searches files when the query ends with an audio/ebook extension or contains a path separator.
+ */
+export interface SearchFileMatch {
+  matchKey?: 'file'
+  /** Matched file path relative to the item folder, or the item's relative path for folder matches */
+  matchText?: string | null
+}
+
 export interface SearchLibraryResponse {
-  book: Array<{ libraryItem: BookLibraryItem }>
-  podcast: Array<{ libraryItem: PodcastLibraryItem }>
+  book: Array<{ libraryItem: BookLibraryItem } & SearchFileMatch>
+  podcast: Array<{ libraryItem: PodcastLibraryItem } & SearchFileMatch>
   narrators: Array<{ name: string; numBooks: number }>
   tags: Array<{ name: string; numItems: number }>
   genres: Array<{ name: string; numItems: number }>

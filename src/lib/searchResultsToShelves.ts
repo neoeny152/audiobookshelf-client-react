@@ -1,6 +1,8 @@
-import type { SearchLibraryResponse } from '@/types/api'
+import type { SearchFileMatch, SearchLibraryResponse } from '@/types/api'
 import type { SearchShelf } from '@/types/search'
 import type { TypeSafeTranslations } from '@/types/translations'
+
+const isFileMatch = (res: SearchFileMatch): boolean => res.matchKey === 'file'
 
 export function searchResultsHasResults(results: SearchLibraryResponse | null): boolean {
   if (!results) return false
@@ -22,23 +24,51 @@ export function searchResultsToShelves(results: SearchLibraryResponse | null, t:
 
   const shelves: SearchShelf[] = []
 
-  if (results.book?.length) {
+  // Results that matched by file name or path get their own shelf after the metadata matches (#5680)
+  const books = results.book ?? []
+  const bookMetadataMatches = books.filter((res) => !isFileMatch(res))
+  const bookFileMatches = books.filter(isFileMatch)
+  const podcasts = results.podcast ?? []
+  const podcastMetadataMatches = podcasts.filter((res) => !isFileMatch(res))
+  const podcastFileMatches = podcasts.filter(isFileMatch)
+
+  if (bookMetadataMatches.length) {
     shelves.push({
       id: 'books',
       label: t('LabelBooks'),
       type: 'book',
-      entities: results.book.map((res) => res.libraryItem),
-      total: results.book.length
+      entities: bookMetadataMatches.map((res) => res.libraryItem),
+      total: bookMetadataMatches.length
     })
   }
 
-  if (results.podcast?.length) {
+  if (podcastMetadataMatches.length) {
     shelves.push({
       id: 'podcasts',
       label: t('LabelPodcasts'),
       type: 'podcast',
-      entities: results.podcast.map((res) => res.libraryItem),
-      total: results.podcast.length
+      entities: podcastMetadataMatches.map((res) => res.libraryItem),
+      total: podcastMetadataMatches.length
+    })
+  }
+
+  if (bookFileMatches.length) {
+    shelves.push({
+      id: 'books-file-matches',
+      label: t('LabelMatchedByFileName'),
+      type: 'book',
+      entities: bookFileMatches.map((res) => res.libraryItem),
+      total: bookFileMatches.length
+    })
+  }
+
+  if (podcastFileMatches.length) {
+    shelves.push({
+      id: 'podcasts-file-matches',
+      label: t('LabelMatchedByFileName'),
+      type: 'podcast',
+      entities: podcastFileMatches.map((res) => res.libraryItem),
+      total: podcastFileMatches.length
     })
   }
 
