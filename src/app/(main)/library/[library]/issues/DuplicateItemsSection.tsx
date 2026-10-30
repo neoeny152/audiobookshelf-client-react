@@ -92,7 +92,8 @@ export default function DuplicateItemsSection({ libraryId }: { libraryId: string
         showToast(result.error || t('ToastDuplicateGroupUpdateFailed'), { type: 'error' })
         return
       }
-      setGroups((prev) => prev.map((group) => (group.id === groupId ? result.data.group : group)))
+      const updatedGroup = result.data.group
+      setGroups((prev) => (updatedGroup ? prev.map((group) => (group.id === groupId ? updatedGroup : group)) : prev.filter((group) => group.id !== groupId)))
       setNumDuplicateGroups(result.data.numGroups)
     },
     [libraryId, setNumDuplicateGroups, showToast, t]

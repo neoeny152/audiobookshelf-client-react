@@ -335,7 +335,8 @@ export interface LibraryDuplicatesResponse {
 }
 
 export interface UpdateDuplicateGroupResponse {
-  group: DuplicateGroup
+  /** null when a member was removed since the last check */
+  group: DuplicateGroup | null
   numGroups: number
 }
 
