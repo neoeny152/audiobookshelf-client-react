@@ -1,9 +1,19 @@
-> [!WARNING]
-> **Personal fork. Not the official Audiobookshelf project, not affiliated with or endorsed by its maintainers.**
-> I use this for my own experiments and my own server. It is not supported, may break, and may never be updated. Use it at your own risk.
-> I am not accepting issues or PRs here, and changes are not being offered upstream.
-> For the real project, go to [advplyr/audiobookshelf](https://github.com/advplyr/audiobookshelf) and [audiobookshelf.org](https://www.audiobookshelf.org).
-> Licensed under GPL-3.0, like upstream.
+> [!NOTE]
+> **Personal fork of Audiobookshelf for learning and experiments; not affiliated with or supported by the Audiobookshelf project.**
+> The real project is [audiobookshelf/audiobookshelf-client-react](https://github.com/audiobookshelf/audiobookshelf-client-react) (server: [advplyr/audiobookshelf](https://github.com/advplyr/audiobookshelf)). This fork follows upstream `master`, and fixes that fit upstream are offered back as pull requests.
+>
+> Added in this fork (web client), for the matching fork server:
+> - Chapter editor: snap to audio, speech check, heard-title suggestions, millisecond precision
+> - EPUB from audio and read-along highlighting in the e-reader
+> - Automatic processing settings and Processing page, MP3 seek index repair, guided fix on the item page
+> - Transcripts in the player and on item and episode pages
+> - Possible duplicates on the Issues page, search by file name or path
+> - Batch editing improvements, server error toasts, changed-field highlights and unsaved-changes guards
+> - Playback progress sync on pause and after a paused seek
+>
+> Optional features only show when the server advertises them, so the client also works with a stock server.
+>
+> Built with AI assistance (Claude). Licensed under GPL-3.0, like upstream.
 
 # NextJs client for audiobookshelf
 
