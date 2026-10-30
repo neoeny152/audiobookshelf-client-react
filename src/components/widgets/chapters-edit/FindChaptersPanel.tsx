@@ -90,7 +90,7 @@ export default function FindChaptersPanel({ metadata, onResult, requestProceed }
         value={asinInput}
         label="ASIN" // i18n-ignore
         size="small"
-        className="w-26"
+        className="w-32"
         onChange={setAsinInput}
       />
       <Dropdown

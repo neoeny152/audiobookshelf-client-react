@@ -123,6 +123,23 @@ describe('<SeekIndexPanel />', () => {
     cy.contains('button', 'Repair').should('have.attr', 'aria-describedby')
   })
 
+  it('keeps chapter times without asking in the guide', () => {
+    mountPanel({}, { stepId: 'repair', stepIndex: 1, total: 6, paused: false, advance: cy.stub(), resume: cy.stub(), stop: cy.stub() })
+    cy.contains('button', 'Repair').click()
+    cy.get('[cy-id="seek-index-confirm"]').should('not.contain.text', 'Shift')
+    cy.get('[role="dialog"]').contains('button', 'Repair').click()
+    cy.get('@onRepair').should('have.been.calledOnceWith', { chapters: 'keep' })
+  })
+
+  it('keeps the guide step line while the repair runs', () => {
+    mountPanel(
+      { running: true, progress: '28%' },
+      { stepId: 'repair', stepIndex: 1, total: 6, paused: false, advance: cy.stub(), resume: cy.stub(), stop: cy.stub() }
+    )
+    cy.get('[cy-id="seek-index-progress"]').should('contain.text', '28%')
+    cy.get('[cy-id="guide-hint"]').should('contain.text', 'Step 2 of 6')
+  })
+
   it('confirms before repairing, mentions the backup and keeps chapter times by default', () => {
     mountPanel()
     cy.contains('button', 'Repair').click()

@@ -4,13 +4,13 @@ import Btn from '@/components/ui/Btn'
 import Checkbox from '@/components/ui/Checkbox'
 import Alert from '@/components/widgets/Alert'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
-import GuideTarget from '@/components/widgets/guided-fix/GuideTarget'
+import GuideTarget, { GuideHint } from '@/components/widgets/guided-fix/GuideTarget'
 import { useGuidedFix } from '@/contexts/GuidedFixContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { formatJsDatetime, secondsToTimestamp } from '@/lib/datefns'
 import { bytesPretty } from '@/lib/string'
 import type { SeekIndexBackup, SeekIndexRepairOptions, SeekIndexRepairResult, SeekIndexStatus } from '@/types/api'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 
 export interface SeekIndexPanelProps {
   status: SeekIndexStatus | null
@@ -69,6 +69,7 @@ export default function SeekIndexPanel({
 }: SeekIndexPanelProps) {
   const t = useTypeSafeTranslations()
   const guide = useGuidedFix()
+  const progressHintId = useId()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [shiftChapters, setShiftChapters] = useState(false)
   /** Whether the result shown at `finishedAt` is folded; unset until the timer or the Details button decides */
@@ -103,7 +104,8 @@ export default function SeekIndexPanel({
     confirmMessage = (
       <div className="flex flex-col gap-3" cy-id="seek-index-confirm">
         <p>{t('MessageConfirmRepairSeekIndex', { 0: flagged.length })}</p>
-        {chapterCount > 0 && <SeekIndexShiftChaptersOption chapterCount={chapterCount} value={shiftChapters} onChange={setShiftChapters} />}
+        {/* Not in Guide me: its next steps look up and snap the chapters again, so the saved times are kept */}
+        {chapterCount > 0 && !guide && <SeekIndexShiftChaptersOption chapterCount={chapterCount} value={shiftChapters} onChange={setShiftChapters} />}
       </div>
     )
   } else if (confirm?.kind === 'restore') {
@@ -125,6 +127,8 @@ export default function SeekIndexPanel({
           <p className="text-sm" cy-id="seek-index-progress">
             {t('MessageSeekIndexRepairing', { 0: progress })}
           </p>
+          {/* Guide me's step line stays while its repair runs */}
+          <GuideHint step="repair" id={progressHintId} className="mt-1" />
         </Alert>
       )}
 
@@ -295,7 +299,7 @@ export default function SeekIndexPanel({
         onConfirm={() => {
           const current = confirm
           setConfirm(null)
-          if (current?.kind === 'repair') onRepair({ chapters: chapterCount > 0 && shiftChapters ? 'shift' : 'keep' })
+          if (current?.kind === 'repair') onRepair({ chapters: chapterCount > 0 && shiftChapters && !guide ? 'shift' : 'keep' })
           else if (current?.kind === 'restore') onRestore(current.backup.id)
           else if (current?.kind === 'delete') onDeleteBackup(current.backup.id)
         }}

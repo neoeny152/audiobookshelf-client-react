@@ -69,17 +69,19 @@ export function GuideHint({ step, id, text, className }: { step: GuideStepId; id
  * says which step it is; the control (a form's submit button, else the first button, found again when the content
  * changes) gets the hint added to its description. Focus is never moved. The wrapper stays the same element either
  * way, so the control keeps its state when the step changes. `hintAbove` keeps the hint in view over a control that
- * grows (the snap results); `text` replaces the step's usual hint.
+ * grows (the snap results); `text` replaces the step's usual hint; `fit` keeps the ring to the control's width.
  */
 export default function GuideTarget({
   step,
   text,
   hintAbove = false,
+  fit = false,
   children
 }: {
   step: GuideStepId
   text?: TranslationKey
   hintAbove?: boolean
+  fit?: boolean
   children: ReactNode
 }) {
   const hintId = useId()
@@ -115,7 +117,7 @@ export default function GuideTarget({
   return (
     <div>
       {hintAbove && <GuideHint step={step} id={hintId} text={text} className="mb-2" />}
-      <div ref={ref} className="relative">
+      <div ref={ref} className={mergeClasses('relative', fit && 'w-fit')}>
         {children}
         {active && <span aria-hidden="true" className={mergeClasses(GUIDE_RING_CLASS, '-inset-1')} />}
       </div>

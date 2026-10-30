@@ -43,6 +43,9 @@ interface ChaptersEditContentProps {
   onItemUpdated?: (item: BookLibraryItem) => void
 }
 
+/** Audible's runtime is rounded and counts the credits, so a difference up to this is normal and not highlighted */
+const LOOKUP_DURATION_WARN_SEC = 5 * 60
+
 function lookupDurationMessageKey(durationShorter: boolean, durationLonger: boolean) {
   if (durationShorter) return 'MessageLookupComparisonDurationShorter'
   if (durationLonger) return 'MessageLookupComparisonDurationLonger'
@@ -73,7 +76,8 @@ function LookupComparison({
       {t.rich(lookupDurationMessageKey(durationShorter, durationLonger), {
         foundDuration: secondsToTimestamp(foundDurationSec),
         durationDifference: durationDiffDescription,
-        durationDiff: (chunks) => (durationMatches ? chunks : <span className="text-warning font-semibold">{chunks}</span>)
+        durationDiff: (chunks) =>
+          durationMatches || durationDiffSec <= LOOKUP_DURATION_WARN_SEC ? chunks : <span className="text-warning font-semibold">{chunks}</span>
       })}{' '}
       {t.rich(countsDiffer ? 'MessageLookupComparisonChaptersDiffer' : 'MessageLookupComparisonChaptersMatch', {
         foundCount: foundChapterCount,
@@ -485,7 +489,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
             >
               {t('ButtonDiscardChanges')}
             </Btn>
-            <GuideTarget step="save">
+            <GuideTarget step="save" fit>
               <Btn
                 color="bg-success text-success-foreground"
                 size="small"
