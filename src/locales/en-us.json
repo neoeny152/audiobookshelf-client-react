@@ -838,6 +838,7 @@
   "LabelSnapReasonFileStart": "Moved to start of audio file",
   "LabelSnapReasonFirstChapter": "First chapter",
   "LabelSnapReasonHeadingLookback": "Moved before spoken heading",
+  "LabelSnapReasonHeadingLocated": "Spoken heading found further away",
   "LabelSnapReasonInsidePause": "Already in a pause",
   "LabelSnapReasonNearestPause": "Moved to nearest pause",
   "LabelSnapReasonNoPause": "No pause nearby - unchanged",

@@ -640,6 +640,10 @@ export interface SnapChaptersOptions {
   leadSec?: number
   headingLookbackSec?: number
   snapToFileStart?: boolean
+  /** Map the starts onto part files named like a chapter before snapping (server default true; older servers ignore it). */
+  reanchor?: boolean
+  /** With `verify`: search a wider transcript for headings not heard at their start and move the start there (server default true). */
+  locate?: boolean
   /** Speech check (only when the server advertises `chapterbotVerify`; a 400 otherwise). Fills each chapter's `speech`. */
   verify?: boolean
 }
@@ -658,6 +662,7 @@ export type SnapChapterReason =
   | 'file-start'
   | 'nearest-longest-pause'
   | 'heading-lookback'
+  | 'heading-located'
   | 'no-pause-in-window'
   | 'order-conflict'
   | 'not-requested'
