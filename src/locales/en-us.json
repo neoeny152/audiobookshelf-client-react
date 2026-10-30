@@ -839,6 +839,7 @@
   "LabelSnapReasonFirstChapter": "First chapter",
   "LabelSnapReasonHeadingLookback": "Moved before spoken heading",
   "LabelSnapReasonHeadingLocated": "Spoken heading found further away",
+  "LabelSnapReasonAlignedToHeadings": "Placed between the headings found around it",
   "LabelSnapReasonInsidePause": "Already in a pause",
   "LabelSnapReasonNearestPause": "Moved to nearest pause",
   "LabelSnapReasonNoPause": "No pause nearby - unchanged",

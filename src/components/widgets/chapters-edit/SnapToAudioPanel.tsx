@@ -143,6 +143,8 @@ export function snapReasonLabel(reason: SnapChapterReason, t: TypeSafeTranslatio
       return t('LabelSnapReasonHeadingLookback')
     case 'heading-located':
       return t('LabelSnapReasonHeadingLocated')
+    case 'aligned-to-headings':
+      return t('LabelSnapReasonAlignedToHeadings')
     case 'no-pause-in-window':
       return t('LabelSnapReasonNoPause')
     case 'order-conflict':

@@ -663,6 +663,7 @@ export type SnapChapterReason =
   | 'nearest-longest-pause'
   | 'heading-lookback'
   | 'heading-located'
+  | 'aligned-to-headings'
   | 'no-pause-in-window'
   | 'order-conflict'
   | 'not-requested'
