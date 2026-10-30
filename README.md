@@ -13,6 +13,8 @@
 >
 > Optional features only show when the server advertises them, so the client also works with a stock server.
 >
+> Full change list, upstream issue links, container images and how the fork is maintained: [FORK.md](FORK.md).
+>
 > Built with AI assistance (Claude). Licensed under GPL-3.0, like upstream.
 
 # NextJs client for audiobookshelf

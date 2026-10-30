@@ -2,7 +2,7 @@
 #   abs-client — React client repo root (package.json, src, scripts)
 #   abs-server — audiobookshelf server repo root (index.js, tsconfig.server.json, server/)
 # Local: docker-compose.yml (abs-client=., abs-server=../audiobookshelf)
-# CI: .github/workflows/docker-build.yml (abs-client=client-react, abs-server=.)
+# CI: .github/workflows/fork-image.yml (abs-client=client-react, abs-server=server)
 
 ARG NUSQLITE3_DIR="/usr/local/lib/nusqlite3"
 ARG NUSQLITE3_PATH="${NUSQLITE3_DIR}/libnusqlite3.so"
