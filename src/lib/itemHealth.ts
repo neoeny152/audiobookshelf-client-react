@@ -87,13 +87,13 @@ export function getIssueReason(issue: ItemHealthIssue, health: Pick<ItemHealth, 
 }
 
 /**
- * Guide me, in order: repair and match only when the book needs them, then lookup, snap and save, and last the optional
- * EPUB step when `epub` (there is an EpubOffer for the book).
+ * Guide me, in order: the match and the repair (in the chapter editor) only when the book needs them, then lookup, snap
+ * and save, and last the optional EPUB step when `epub` (there is an EpubOffer for the book).
  */
 export function getGuideSteps(health: Pick<ItemHealth, 'issues'>, { epub = false }: { epub?: boolean } = {}): GuideStepId[] {
   const steps: GuideStepId[] = []
-  if (health.issues.includes('seek-index')) steps.push('repair')
   if (health.issues.includes('unmatched') || health.issues.includes('low-confidence')) steps.push('match')
+  if (health.issues.includes('seek-index')) steps.push('repair')
   steps.push('lookup', 'snap', 'save')
   if (epub) steps.push('epub')
   return steps

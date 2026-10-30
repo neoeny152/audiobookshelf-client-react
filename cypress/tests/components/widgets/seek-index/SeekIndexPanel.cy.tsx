@@ -1,4 +1,5 @@
 import SeekIndexPanel, { type SeekIndexPanelProps } from '@/components/widgets/seek-index/SeekIndexPanel'
+import { GuidedFixContext, type GuidedFix } from '@/contexts/GuidedFixContext'
 import type { SeekIndexBackup, SeekIndexFileStatus, SeekIndexRepairResult, SeekIndexStatus } from '@/types/api'
 
 // Red Rising: stored (estimated) vs measured durations; Part III has a header, Part IV is CBR without drift
@@ -77,7 +78,7 @@ const result: SeekIndexRepairResult = {
 
 const repaired = () => status(parts.map((p) => ({ ...p, mp3SeekIndex: p.needsRepair ? 'xing' : p.mp3SeekIndex, needsRepair: false })))
 
-function mountPanel(overrides: Partial<SeekIndexPanelProps> = {}) {
+function mountPanel(overrides: Partial<SeekIndexPanelProps> = {}, guide: GuidedFix | null = null) {
   const props: SeekIndexPanelProps = {
     status: status(),
     chapterCount: 12,
@@ -93,7 +94,11 @@ function mountPanel(overrides: Partial<SeekIndexPanelProps> = {}) {
     onDismissResult: cy.stub().as('onDismissResult'),
     ...overrides
   }
-  cy.mount(<SeekIndexPanel {...props} />)
+  cy.mount(
+    <GuidedFixContext.Provider value={guide}>
+      <SeekIndexPanel {...props} />
+    </GuidedFixContext.Provider>
+  )
 }
 
 describe('<SeekIndexPanel />', () => {
@@ -108,6 +113,14 @@ describe('<SeekIndexPanel />', () => {
     cy.get('[cy-id="seek-index-measured"]').should('have.length', 2)
     cy.get('[cy-id="seek-index-measured"]').eq(0).should('have.text', 'Part  I  Slave.mp3: 02:06:11 → 02:06:28 (+17.4 s)')
     cy.get('[cy-id="seek-index-warning"]').should('not.contain.text', 'Reaper')
+  })
+
+  it("points Guide me's repair step at the Repair button, saying why", () => {
+    mountPanel({}, { stepId: 'repair', stepIndex: 1, total: 6, paused: false, advance: cy.stub(), resume: cy.stub(), stop: cy.stub() })
+    cy.get('[cy-id="guide-hint"]')
+      .should('contain.text', 'Step 2 of 6: These MP3s report the wrong length')
+      .and('contain.text', 'lossless; the originals are backed up')
+    cy.contains('button', 'Repair').should('have.attr', 'aria-describedby')
   })
 
   it('confirms before repairing, mentions the backup and keeps chapter times by default', () => {

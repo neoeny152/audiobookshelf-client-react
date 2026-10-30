@@ -82,6 +82,10 @@ export interface MediaCardProps {
    */
   renderSeriesNameOverlay?: (isHovering: boolean) => ReactNode
   /**
+   * Optional short line under the title and author (detail views), e.g. a book that needs processing
+   */
+  footerNote?: ReactNode
+  /**
    * Optional episode to display instead of the main library item (e.g. for recent episodes)
    */
   episode?: PodcastEpisode
@@ -138,6 +142,7 @@ function MediaCard(props: MediaCardProps) {
     renderBadges,
     renderOverlayBadges,
     renderSeriesNameOverlay,
+    footerNote,
     episode,
     isSelectionMode = false,
     selected = false,
@@ -584,6 +589,7 @@ function MediaCard(props: MediaCardProps) {
               lastUpdated={lastUpdated}
               startedAt={startedAt}
               finishedAt={finishedAt}
+              note={footerNote}
             />
           )
         }

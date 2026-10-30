@@ -14,6 +14,7 @@ import ReadIconBtn from '@/components/ui/ReadIconBtn'
 import Tooltip from '@/components/ui/Tooltip'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
 import EpubFromAudio, { type EpubFromAudioActions } from '@/components/widgets/EpubFromAudio'
+import { GUIDE_RING_CLASS } from '@/components/widgets/guided-fix/GuideTarget'
 import type { MediaCardMoreMenuSubitem } from '@/components/widgets/media-card/MediaCardMoreMenu'
 import { useMediaCardActions } from '@/components/widgets/media-card/useMediaCardActions'
 import { useEreader } from '@/contexts/EreaderContext'
@@ -27,6 +28,7 @@ import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { withBasePath } from '@/lib/basePath'
 import { canMakeEpubFromAudio, findEpubFromAudioFile, toEpubJob } from '@/lib/epubFromAudio'
 import { getEbookFormat } from '@/lib/ereader/ereaderEbook'
+import { mergeClasses } from '@/lib/merge-classes'
 import { PlayerState, type BookLibraryItem, type EpubJob, type PodcastLibraryItem, type RssFeed } from '@/types/api'
 import { useRouter } from 'next/navigation'
 import { useCallback, useMemo, useState } from 'react'
@@ -285,9 +287,7 @@ export default function LibraryItemActionButtons({
               <IconBtn ariaLabel={t('LabelEdit')} onClick={onEdit} outlined className="mx-0.5" size="small">
                 edit
               </IconBtn>
-              {editHighlighted && (
-                <span aria-hidden="true" className="ring-primary pointer-events-none absolute inset-0 rounded ring-2 motion-safe:animate-pulse" cy-id="edit-highlight" />
-              )}
+              {editHighlighted && <span aria-hidden="true" className={mergeClasses(GUIDE_RING_CLASS, '-inset-0.5')} cy-id="edit-highlight" />}
             </span>
           </Tooltip>
         )}

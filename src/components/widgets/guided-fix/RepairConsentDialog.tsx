@@ -8,8 +8,6 @@ interface RepairConsentDialogProps {
   /** MP3 files that would be rewritten */
   fileCount: number
   yesButtonText: string
-  /** Offer "Do this automatically from now on"; not for a repair of this one book only */
-  offerAutomatic?: boolean
   onClose: () => void
   /** `always`: the "Do this automatically from now on" box was ticked */
   onConfirm: (always: boolean) => void
@@ -19,7 +17,7 @@ interface RepairConsentDialogProps {
  * The OK to rewrite a book's MP3s before the pipeline goes on, with the option to stop asking (the library's Repair MP3
  * seek index automatically setting). Chapter times are always kept.
  */
-export default function RepairConsentDialog({ isOpen, fileCount, yesButtonText, offerAutomatic = true, onClose, onConfirm }: RepairConsentDialogProps) {
+export default function RepairConsentDialog({ isOpen, fileCount, yesButtonText, onClose, onConfirm }: RepairConsentDialogProps) {
   const t = useTypeSafeTranslations()
   return (
     <ConfirmDialog
@@ -29,10 +27,10 @@ export default function RepairConsentDialog({ isOpen, fileCount, yesButtonText, 
         <div className="flex flex-col gap-3" cy-id="repair-consent">
           <p className="font-semibold">{t('HeaderRepairBeforeFix')}</p>
           <p>{t('MessageConfirmRepairSeekIndex', { 0: fileCount })}</p>
-          {offerAutomatic && <p className="text-foreground-muted text-xs">{t('LabelDoThisAutomaticallyHelp')}</p>}
+          <p className="text-foreground-muted text-xs">{t('LabelDoThisAutomaticallyHelp')}</p>
         </div>
       }
-      checkboxLabel={offerAutomatic ? t('LabelDoThisAutomatically') : undefined}
+      checkboxLabel={t('LabelDoThisAutomatically')}
       yesButtonText={yesButtonText}
       yesButtonClassName="bg-primary"
       onClose={onClose}

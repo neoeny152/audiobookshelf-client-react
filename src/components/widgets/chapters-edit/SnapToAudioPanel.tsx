@@ -304,6 +304,13 @@ export default function SnapToAudioPanel({
 
   const speechRunning = speechProgress !== null
   const busy = isRunning || speechRunning
+  // The results end with Apply: bring it into view when a run or speech check finishes (it can sit below the fold)
+  const applyBarRef = useRef<HTMLDivElement>(null)
+  const wasBusyRef = useRef(false)
+  useEffect(() => {
+    if (wasBusyRef.current && !busy) applyBarRef.current?.scrollIntoView({ block: 'nearest' })
+    wasBusyRef.current = busy
+  }, [busy])
   const controlsDisabled = disabled || busy || finishingBatch
   const canBatchSpeech = speechCheckAvailable && !!onCheckSpeech
 
@@ -968,7 +975,7 @@ export default function SnapToAudioPanel({
             <p className="border-border text-foreground-muted border-t px-3 py-2 text-sm">{t('MessageSnapNoFlagged')}</p>
           )}
 
-          <div className="border-border flex flex-wrap justify-end gap-2 border-t px-3 py-2">
+          <div ref={applyBarRef} className="border-border flex flex-wrap justify-end gap-2 border-t px-3 py-2">
             {heardTitles.size > 0 && (
               <Btn size="small" disabled={controlsDisabled || checkedHeardRows.length === 0} onClick={() => applyHeardTitles(checkedHeardRows)}>
                 {t('ButtonSnapUseHeardTitles', { count: checkedHeardRows.length })}

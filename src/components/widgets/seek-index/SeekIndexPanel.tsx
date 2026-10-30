@@ -4,6 +4,8 @@ import Btn from '@/components/ui/Btn'
 import Checkbox from '@/components/ui/Checkbox'
 import Alert from '@/components/widgets/Alert'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
+import GuideTarget from '@/components/widgets/guided-fix/GuideTarget'
+import { useGuidedFix } from '@/contexts/GuidedFixContext'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { formatJsDatetime, secondsToTimestamp } from '@/lib/datefns'
 import { bytesPretty } from '@/lib/string'
@@ -66,6 +68,7 @@ export default function SeekIndexPanel({
   onDismissResult
 }: SeekIndexPanelProps) {
   const t = useTypeSafeTranslations()
+  const guide = useGuidedFix()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [shiftChapters, setShiftChapters] = useState(false)
   /** Whether the result shown at `finishedAt` is folded; unset until the timer or the Details button decides */
@@ -209,38 +212,41 @@ export default function SeekIndexPanel({
 
       {showWarning && (
         <Alert type="warning" autoFocus={false}>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" cy-id="seek-index-warning">
-            <div className="min-w-0 flex-1 basis-64">
-              {interrupted && (
-                <p className="font-semibold" cy-id="seek-index-interrupted">
-                  {t('MessageSeekIndexRepairInterrupted', { 0: interrupted.pendingCount })}
-                </p>
+          {/* Guide me's repair step points here; its hint says why on a row of its own */}
+          <GuideTarget step="repair">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" cy-id="seek-index-warning">
+              <div className="min-w-0 flex-1 basis-64">
+                {interrupted && (
+                  <p className="font-semibold" cy-id="seek-index-interrupted">
+                    {t('MessageSeekIndexRepairInterrupted', { 0: interrupted.pendingCount })}
+                  </p>
+                )}
+                {flagged.length > 0 && <p>{t('MessageSeekIndexMissing', { 0: flagged.length, 1: (status?.maxDrift ?? 0).toFixed(1) })}</p>}
+                <ul className="text-foreground-muted mt-1 list-none text-xs">
+                  {flagged.map((f) => (
+                    <li key={f.ino} cy-id="seek-index-measured">
+                      {t('MessageSeekIndexFileDuration', {
+                        0: f.filename,
+                        1: secondsToTimestamp(f.duration),
+                        2: secondsToTimestamp(f.measuredDuration ?? f.duration),
+                        3: signed(f.durationError ?? 0)
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {interrupted ? (
+                // Continues a repair that was already confirmed, with the chapter choice made then
+                <Btn size="small" loading={starting} onClick={() => onRepair({ chapters: interrupted.mode })}>
+                  {t('ButtonResumeSeekIndexRepair')}
+                </Btn>
+              ) : (
+                <Btn size="small" loading={starting} onClick={() => setConfirm({ kind: 'repair' })}>
+                  {t('ButtonRepairSeekIndex')}
+                </Btn>
               )}
-              {flagged.length > 0 && <p>{t('MessageSeekIndexMissing', { 0: flagged.length, 1: (status?.maxDrift ?? 0).toFixed(1) })}</p>}
-              <ul className="text-foreground-muted mt-1 list-none text-xs">
-                {flagged.map((f) => (
-                  <li key={f.ino} cy-id="seek-index-measured">
-                    {t('MessageSeekIndexFileDuration', {
-                      0: f.filename,
-                      1: secondsToTimestamp(f.duration),
-                      2: secondsToTimestamp(f.measuredDuration ?? f.duration),
-                      3: signed(f.durationError ?? 0)
-                    })}
-                  </li>
-                ))}
-              </ul>
             </div>
-            {interrupted ? (
-              // Continues a repair that was already confirmed, with the chapter choice made then
-              <Btn size="small" loading={starting} onClick={() => onRepair({ chapters: interrupted.mode })}>
-                {t('ButtonResumeSeekIndexRepair')}
-              </Btn>
-            ) : (
-              <Btn size="small" loading={starting} onClick={() => setConfirm({ kind: 'repair' })}>
-                {t('ButtonRepairSeekIndex')}
-              </Btn>
-            )}
-          </div>
+          </GuideTarget>
         </Alert>
       )}
 
@@ -252,7 +258,8 @@ export default function SeekIndexPanel({
         </Alert>
       )}
 
-      {backups.length > 0 && !running && (
+      {/* Not while Guide me runs: restoring or deleting a backup is no step of it */}
+      {backups.length > 0 && !running && !guide && (
         <div className="border-border rounded-md border px-3 py-2 text-sm" cy-id="seek-index-backups">
           {backups.map((backup) => (
             <div key={backup.id} className="flex flex-wrap items-center gap-2 py-1" cy-id="seek-index-backup">

@@ -29,7 +29,6 @@ import { useGuidancePreference } from '@/hooks/useGuidancePreference'
 import { useItemHealth } from '@/hooks/useItemHealth'
 import { useItemPageSocket } from '@/hooks/useItemPageSocket'
 import { useItemPipelineState } from '@/hooks/useItemPipelineState'
-import { useSeekIndex } from '@/hooks/useSeekIndex'
 import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { getPipelineReviewHref, getProcessingHref, getPipelineTab, isPipelineActive } from '@/lib/autoPipeline'
@@ -99,8 +98,8 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
   const guidanceOff = useGuidancePreference() === 'off'
   const { health, reload: reloadHealth } = useItemHealth(libraryItem.id, { enabled: seekIndexEnabled && isBookWithAudio && !guidanceOff, measure: true })
   const [guide, setGuide] = useState<{ steps: GuideStepId[]; index: number } | null>(null)
-  /** A guide just ended and no guidance preference is set: the hint asks what to do next time */
-  const [askNextTime, setAskNextTime] = useState(false)
+  /** What a guide that just ended did, while the hint asks what to do next time (no guidance preference set yet) */
+  const [doneSummary, setDoneSummary] = useState<string | null>(null)
   /** The issue set dismissed here (also kept in storage, which may be unavailable) */
   const [dismissedIssues, setDismissedIssues] = useState<string | null>(null)
   const hintDismissed = !!health && (dismissedIssues === health.issues.join(',') || isGuidedFixDismissed(libraryItem.id, health.issues))
@@ -125,7 +124,6 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
       ? 'create'
       : null
   const guideStep = guide ? guide.steps[guide.index] : null
-  const seekIndex = useSeekIndex({ libraryItemId: libraryItem.id, enabled: guideStep === 'repair' })
   const { getTaskProgress } = useTasks()
   const guidedFixActions = useMemo<GuidedFixActions>(
     () => ({
@@ -162,11 +160,11 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
     setMetadataEditSection(section)
   }
 
-  /** The match and the chapter steps happen in the edit modal; the repair and the EPUB in the hint line */
+  /** The match happens in the edit modal's Match tab, the repair and the chapter steps in its Chapters tab, the EPUB in the hint line */
   const openGuideStep = useCallback((step: GuideStepId) => {
     if (step === 'match') setMetadataEditSection('match')
     else if (step === 'epub') setMetadataEditSection(null)
-    else if (step !== 'repair') setMetadataEditSection('chapters')
+    else setMetadataEditSection('chapters')
   }, [])
 
   const handleStartGuide = (from?: GuideStepId) => {
@@ -185,7 +183,7 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
       stepId: guideStep,
       stepIndex: guide.index,
       total: guide.steps.length,
-      paused: guideStep !== 'repair' && guideStep !== 'epub' && metadataEditSection === null,
+      paused: guideStep !== 'epub' && metadataEditSection === null,
       advance: () => {
         const index = guide.index + 1
         if (index < guide.steps.length) {
@@ -198,7 +196,13 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
           if (next) dismissHint(next.issues)
           setMetadataEditSection(null)
           setGuide(null)
-          setAskNextTime(getGuidancePreference() === null)
+          if (getGuidancePreference() !== null) return
+          const done = [
+            guide.steps.includes('repair') ? t('LabelGuideDoneRepaired') : null,
+            guide.steps.includes('match') && next?.match.asin ? t('LabelGuideDoneMatched') : null,
+            next ? t('LabelGuideDoneChapters', { count: next.chapters.count }) : null
+          ]
+          setDoneSummary(done.filter(Boolean).join(', '))
         })
       },
       resume: () => openGuideStep(guideStep),
@@ -208,12 +212,7 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
         setGuide(null)
       }
     }
-  }, [dismissHint, guide, guideStep, health, metadataEditSection, openGuideStep, reloadHealth])
-
-  const handleGuideRepairFiles = async () => {
-    const result = await seekIndex.repairAndWait({ chapters: 'keep' })
-    return !!result && result.files.every((file) => file.status !== 'failed')
-  }
+  }, [dismissHint, guide, guideStep, health, metadataEditSection, openGuideStep, reloadHealth, t])
 
   const handleCloseMetadataEdit = () => {
     setMetadataEditSection(null)
@@ -408,9 +407,8 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
                     dismissed={hintDismissed}
                     onDismiss={() => dismissHint(health.issues)}
                     onStartGuide={handleStartGuide}
-                    onRepairFiles={handleGuideRepairFiles}
-                    askNextTime={askNextTime}
-                    onNextTimeAnswered={() => setAskNextTime(false)}
+                    doneSummary={doneSummary}
+                    onNextTimeAnswered={() => setDoneSummary(null)}
                     canAutomate={autoPipelineAvailable}
                     epubOffer={epubOffer}
                     canAutomateEpub={epubFromAudioAvailable}

@@ -76,8 +76,7 @@ function mountHint({
         dismissed={false}
         onDismiss={cy.stub().as('onDismiss')}
         onStartGuide={cy.stub().as('onStartGuide')}
-        onRepairFiles={cy.stub().as('onRepairFiles').resolves(true)}
-        askNextTime={false}
+        doneSummary={null}
         onNextTimeAnswered={cy.stub().as('onNextTimeAnswered')}
         canAutomate
         epubOffer="create"
@@ -166,15 +165,9 @@ describe('<GuidedFixHint />', () => {
     cy.get('@onStartGuide').should('have.been.calledOnceWith', 'match')
   })
 
-  it('shows Repair files as the first guide step and moves on once the files are repaired, without the library setting', () => {
-    mountHint({ guide: guideAt('repair', 0, 5) })
-    cy.contains('button', 'Fix it for me').should('not.exist')
-    cy.get('[cy-id="guide-hint"]').should('contain.text', 'Step 1 of 5: Repair the audio files')
-    cy.contains('button', 'Repair files').click()
-    cy.get('[role="dialog"] input[type="checkbox"]').should('not.exist')
-    cy.get('[role="dialog"]').contains('button', 'Repair').click()
-    cy.get('@onRepairFiles').should('have.been.calledOnce')
-    cy.get('@advance').should('have.been.calledOnce')
+  it('stays out of the way while a guide step runs in the edit modal', () => {
+    mountHint({ guide: guideAt('repair', 1, 5) })
+    cy.get('[cy-id="guided-fix-hint"]').should('not.exist')
   })
 
   it('offers the read-along EPUB as a last step', () => {
@@ -193,8 +186,8 @@ describe('<GuidedFixHint />', () => {
   })
 
   it('asks how to handle such books next time, and can turn the automation on', () => {
-    mountHint({ props: { askNextTime: true, health: health(['chapters-unverified']) } })
-    cy.get('[cy-id="guided-fix-next-time"]').should('contain.text', 'All done. Next time a book needs this:')
+    mountHint({ props: { doneSummary: 'files repaired, 50 chapters saved', health: health(['chapters-unverified']) } })
+    cy.get('[cy-id="guided-fix-next-time"]').should('contain.text', 'All done: files repaired, 50 chapters saved. Next time a book needs this:')
     cy.get('[cy-id="guided-fix-next-time"] input[type="checkbox"]').should('have.length', 2).eq(1).click()
     cy.contains('button', 'Do all of this automatically').click()
     cy.get('@enableAutomation').should('have.been.calledOnceWith', { autoRepairSeekIndex: false, autoEpub: true })
@@ -204,7 +197,7 @@ describe('<GuidedFixHint />', () => {
   })
 
   it('can turn guidance off, and offers no automation without the pipeline', () => {
-    mountHint({ props: { askNextTime: true, canAutomate: false } })
+    mountHint({ props: { doneSummary: '50 chapters saved', canAutomate: false } })
     cy.contains('button', 'Do all of this automatically').should('not.exist')
     cy.get('[cy-id="guided-fix-next-time"] input[type="checkbox"]').should('not.exist')
     cy.contains('button', 'No guidance, no automation').click()

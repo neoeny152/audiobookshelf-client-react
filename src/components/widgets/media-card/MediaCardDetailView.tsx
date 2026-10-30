@@ -5,7 +5,7 @@ import TruncatingTooltipText from '@/components/ui/TruncatingTooltipText'
 import ExplicitIndicator from '@/components/widgets/ExplicitIndicator'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import type { LibraryItem } from '@/types/api'
-import { useId } from 'react'
+import { useId, type ReactNode } from 'react'
 import { formatSortLine } from './formatSortLine'
 
 interface MediaCardDetailViewProps {
@@ -23,6 +23,8 @@ interface MediaCardDetailViewProps {
   startedAt: number | null
   finishedAt: number | null
   isSkeleton?: boolean
+  /** A short line under the others (e.g. a warning), outside the measured height so card rows keep their size */
+  note?: ReactNode
 }
 
 export default function MediaCardDetailView({
@@ -39,7 +41,8 @@ export default function MediaCardDetailView({
   lastUpdated,
   startedAt,
   finishedAt,
-  isSkeleton = false
+  isSkeleton = false,
+  note
 }: MediaCardDetailViewProps) {
   const t = useTypeSafeTranslations()
   const descriptionId = useId()
@@ -109,6 +112,11 @@ export default function MediaCardDetailView({
             </p>
           ) : null
         })()}
+      {note && (
+        <div cy-id="footerNote" className="absolute inset-s-0 top-full w-full truncate leading-none" style={{ fontSize: `${0.7}em` }}>
+          {note}
+        </div>
+      )}
     </div>
   )
 }

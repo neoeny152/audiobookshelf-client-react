@@ -1,9 +1,7 @@
 'use client'
 
-import Tooltip from '@/components/ui/Tooltip'
+import NeedsWorkNote from '@/components/widgets/guided-fix/NeedsWorkNote'
 import { useNeedsWork } from '@/contexts/NeedsWorkContext'
-import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
-import { getIssueReason } from '@/lib/itemHealth'
 import { type BookMedia, isPersonalizedSeriesRef } from '@/types/api'
 import { useMemo } from 'react'
 import MediaCard, { type MediaCardProps } from './MediaCard'
@@ -16,7 +14,7 @@ export type BookMediaCardProps = MediaCardProps
 export default function BookMediaCard(props: BookMediaCardProps) {
   const { libraryItem } = props
   const media = libraryItem.media as BookMedia
-  const t = useTypeSafeTranslations()
+  // Fork only: the book needs work (see NeedsWorkContext)
   const needsWork = useNeedsWork().byId.get(libraryItem.id)
 
   // Sequence badge only when the server injects a shelf `PersonalizedSeriesRef`
@@ -30,14 +28,11 @@ export default function BookMediaCard(props: BookMediaCardProps) {
 
   const ebookFormat = useMemo(() => media.ebookFormat, [media])
 
-  // Fork only: the book needs work (see NeedsWorkContext)
-  const needsWorkReasons = useMemo(() => needsWork?.issues.map((issue) => getIssueReason(issue, needsWork, t)) ?? [], [needsWork, t])
-
   const renderBadges = useMemo(() => {
-    const BookBadges = ({ isHovering, isSelectionMode, processing }: { isHovering: boolean; isSelectionMode: boolean; processing: boolean }) => (
-      <>
-        {/* Series sequence badge (regular, when not hovering/selecting) */}
-        {seriesSequence && !isHovering && !isSelectionMode && !processing && (
+    const BookBadges = ({ isHovering, isSelectionMode, processing }: { isHovering: boolean; isSelectionMode: boolean; processing: boolean }) => {
+      // Series sequence badge (regular, when not hovering/selecting)
+      if (seriesSequence && !isHovering && !isSelectionMode && !processing) {
+        return (
           <div
             cy-id="seriesSequence"
             className="shadow-modal-content absolute inset-e-[0.375em] top-[0.375em] z-10 rounded-lg bg-black/90 text-white"
@@ -45,34 +40,14 @@ export default function BookMediaCard(props: BookMediaCardProps) {
           >
             <p style={{ fontSize: '0.8em' }}>#{seriesSequence}</p>
           </div>
-        )}
-        {/* Needs work badge (also while hovering, so its tooltip can be read) */}
-        {needsWorkReasons.length > 0 && !isSelectionMode && !processing && (
-          <div cy-id="needsWorkBadge" className="absolute inset-e-[0.375em] top-[2.125em] z-10">
-            <Tooltip
-              lazy
-              position="left"
-              text={
-                <ul>
-                  {needsWorkReasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
-                  ))}
-                </ul>
-              }
-            >
-              <div className="flex size-[1.5em] items-center justify-center rounded-full bg-black/60 shadow-sm" role="img" aria-label={t('LabelNeedsWork')}>
-                <span className="material-symbols text-warning" aria-hidden="true" style={{ fontSize: '1em' }}>
-                  build
-                </span>
-              </div>
-            </Tooltip>
-          </div>
-        )}
-      </>
-    )
+        )
+      }
+
+      return null
+    }
     BookBadges.displayName = 'BookBadges'
     return BookBadges
-  }, [needsWorkReasons, seriesSequence, t])
+  }, [seriesSequence])
 
   const renderOverlayBadges = useMemo(() => {
     const BookOverlayBadges = () => {
@@ -92,5 +67,7 @@ export default function BookMediaCard(props: BookMediaCardProps) {
     return BookOverlayBadges
   }, [ebookFormat])
 
-  return <MediaCard {...props} renderBadges={renderBadges} renderOverlayBadges={renderOverlayBadges} />
+  return (
+    <MediaCard {...props} renderBadges={renderBadges} renderOverlayBadges={renderOverlayBadges} footerNote={needsWork && <NeedsWorkNote item={needsWork} />} />
+  )
 }

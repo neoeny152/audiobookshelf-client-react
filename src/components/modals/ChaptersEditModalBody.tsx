@@ -228,6 +228,12 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     if (!seekResult || initialSeekResultRef.current === undefined || seekResult.finishedAt === initialSeekResultRef.current) return
     if (seekResult.files.some((f) => f.status !== 'failed')) void reloadForSeekResult(seekResult)
   }, [reloadForSeekResult, seekResult])
+  // Guide me's repair step is done once no file needs a repair, wherever the repair ran (the status reloads after each)
+  const seekStatus = seekIndex.status
+  useEffect(() => {
+    if (guide?.stepId !== 'repair' || !seekStatus || seekIndex.running || seekStatus.interrupted || seekStatus.needsRepairCount > 0) return
+    guide.advance()
+  }, [guide, seekIndex.running, seekStatus])
 
   const guardedSnap = useCallback(
     async (options: Parameters<typeof handleSnapToAudio>[0]) => {
@@ -382,7 +388,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
               </div>
             </div>
             <div className="border-border mt-3 border-t pt-3">
-              <GuideTarget step="snap">
+              <GuideTarget step="snap" hintAbove>
                 <SnapToAudioPanel
                   chapterCount={newChapters.length}
                   disabled={isPending}

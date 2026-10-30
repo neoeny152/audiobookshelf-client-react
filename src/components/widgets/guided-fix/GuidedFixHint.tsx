@@ -1,5 +1,6 @@
 'use client'
 
+import Btn from '@/components/ui/Btn'
 import Checkbox from '@/components/ui/Checkbox'
 import HelpTooltipIcon from '@/components/ui/HelpTooltipIcon'
 import IconBtn from '@/components/ui/IconBtn'
@@ -42,10 +43,9 @@ export interface GuidedFixHintProps {
   onDismiss: () => void
   /** Start Guide me at `from` (Pick the match after Fix it for me found no sure match) */
   onStartGuide: (from: GuideStepId) => void
-  /** Guide me step 1: repair the files (keeping chapter times); true when every file was repaired */
-  onRepairFiles: () => Promise<boolean>
-  /** A guide just ended and no guidance preference is set: ask what to do next time */
-  askNextTime: boolean
+  /** What the guide that just ended did ("files repaired, 50 chapters saved"), when no guidance preference is set: the
+   * hint says so and asks what to do next time */
+  doneSummary: string | null
   onNextTimeAnswered: () => void
   /** "Do all of this automatically" is offered (the auto pipeline runs on the server) */
   canAutomate: boolean
@@ -67,8 +67,8 @@ const LINK_CLASS = 'link-underline text-foreground cursor-pointer disabled:curso
  * One line of small text on the item page (fork only) for a book whose chapters are probably wrong: it says to start
  * with Edit (the pencil pulses and starts Guide me), lists the problems in a tooltip and offers Fix it for me, which
  * runs the pipeline on the book (repair, match, chapters with the speech check) and only stops to ask before MP3s are
- * rewritten. The line also hosts the guide steps that happen outside the edit modal (the repair, the optional EPUB)
- * and, when the guide ends, asks once how to handle such books next time. A book whose only issue is unverified
+ * rewritten. The line also hosts the guide's optional EPUB step (the others happen in the edit modal) and, when the
+ * guide ends, asks once how to handle such books next time. A book whose only issue is unverified
  * chapters gets no hint.
  */
 export default function GuidedFixHint({
@@ -81,8 +81,7 @@ export default function GuidedFixHint({
   dismissed,
   onDismiss,
   onStartGuide,
-  onRepairFiles,
-  askNextTime,
+  doneSummary,
   onNextTimeAnswered,
   canAutomate,
   epubOffer,
@@ -92,12 +91,12 @@ export default function GuidedFixHint({
   const guide = useGuidedFix()
   const [checking, setChecking] = useState(false)
   const [starting, setStarting] = useState(false)
-  const [repairing, setRepairing] = useState(false)
   const [startingEpub, setStartingEpub] = useState(false)
   const [savingAutomation, setSavingAutomation] = useState(false)
   const [automateRepair, setAutomateRepair] = useState(false)
   const [automateEpub, setAutomateEpub] = useState(false)
-  const [consent, setConsent] = useState<{ kind: 'fix' | 'guide'; files: number } | null>(null)
+  /** MP3 files Fix it for me would rewrite, while it asks */
+  const [consentFiles, setConsentFiles] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   /** The Fix it for me run started here, as the server first reported it */
   const [runState, setRunState] = useState<PipelineItemState | null>(null)
@@ -121,14 +120,12 @@ export default function GuidedFixHint({
     setChecking(false)
     const latest = (result.ok && result.data) || health
     const needsRepair = latest.issues.includes('seek-index')
-    if (needsRepair && !latest.autoFix.autoRepair) setConsent({ kind: 'fix', files: latest.seekIndex.needsRepairCount })
+    if (needsRepair && !latest.autoFix.autoRepair) setConsentFiles(latest.seekIndex.needsRepairCount)
     else void startRun(needsRepair)
   }
 
   const handleConsent = async (always: boolean) => {
-    const current = consent
-    setConsent(null)
-    if (!current) return
+    setConsentFiles(null)
     if (always) {
       const saved = await callStatusAction(actions.enableAutoRepair)
       if (!saved.ok) {
@@ -136,14 +133,7 @@ export default function GuidedFixHint({
         return
       }
     }
-    if (current.kind === 'fix') {
-      void startRun(true)
-      return
-    }
-    setRepairing(true)
-    const repaired = await onRepairFiles()
-    setRepairing(false)
-    if (repaired) guide?.advance()
+    void startRun(true)
   }
 
   const handleStartEpub = async () => {
@@ -187,8 +177,8 @@ export default function GuidedFixHint({
   // The pipeline is already on the book: its chip says so
   if (pipelineState && isPipelineActive(pipelineState.status) && !runState) return null
   const showResult = !!fixState && (fixRunning || fixState.status !== 'done' || relevant.length > 0)
-  const busy = checking || starting || repairing || !!consent
-  if (!askNextTime && !showResult && !guide && !busy && !error && (!relevant.length || dismissed)) return null
+  const busy = checking || starting || consentFiles !== null
+  if (doneSummary === null && !showResult && !guide && !busy && !error && (!relevant.length || dismissed)) return null
 
   let body: ReactNode
   if (fixState && fixRunning) {
@@ -213,11 +203,7 @@ export default function GuidedFixHint({
     } else if (fixState.status === 'needs-review' && fixState.chapters?.reason === 'needs-seek-index-repair') {
       text = t('MessageFixNeedsRepair')
       action = (
-        <button
-          type="button"
-          className={LINK_CLASS}
-          onClick={() => setConsent({ kind: 'fix', files: fixState.chapters?.seekIndex?.files ?? health.seekIndex.needsRepairCount })}
-        >
+        <button type="button" className={LINK_CLASS} onClick={() => setConsentFiles(fixState.chapters?.seekIndex?.files ?? health.seekIndex.needsRepairCount)}>
           {t('ButtonRepairAndFix')}
         </button>
       )
@@ -262,22 +248,22 @@ export default function GuidedFixHint({
         {action}
       </>
     )
-  } else if (askNextTime) {
+  } else if (doneSummary !== null) {
     body = (
-      <div className="flex flex-col gap-1" cy-id="guided-fix-next-time">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span>{t('MessageGuideNextTime')}</span>
+      <div className="flex flex-col gap-2" cy-id="guided-fix-next-time">
+        <p>{t('MessageGuideNextTime', { summary: doneSummary })}</p>
+        <div className="flex flex-wrap items-center gap-2">
           {canAutomate && (
-            <button type="button" className={LINK_CLASS} disabled={savingAutomation} onClick={() => void handleNextTime('auto')}>
+            <Btn size="small" disabled={savingAutomation} onClick={() => void handleNextTime('auto')}>
               {t('ButtonGuideAutomate')}
-            </button>
+            </Btn>
           )}
-          <button type="button" className={LINK_CLASS} disabled={savingAutomation} onClick={() => void handleNextTime('guide')}>
+          <Btn size="small" color="bg-primary" disabled={savingAutomation} onClick={() => void handleNextTime('guide')}>
             {t('ButtonGuideKeepGuiding')}
-          </button>
-          <button type="button" className={LINK_CLASS} disabled={savingAutomation} onClick={() => void handleNextTime('off')}>
+          </Btn>
+          <Btn size="small" disabled={savingAutomation} onClick={() => void handleNextTime('off')}>
             {t('ButtonGuideNoGuidance')}
-          </button>
+          </Btn>
         </div>
         {canAutomate && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -302,35 +288,21 @@ export default function GuidedFixHint({
         </button>
       </>
     )
-  } else if (guide?.stepId === 'repair') {
-    body = (
-      <>
-        <GuideTarget step="repair">
-          <button
-            type="button"
-            className={LINK_CLASS}
-            disabled={repairing}
-            onClick={() => setConsent({ kind: 'guide', files: health.seekIndex.needsRepairCount })}
-          >
-            {t('ButtonRepairFiles')}
-          </button>
-        </GuideTarget>
-        {repairing && repairProgress && <span className="text-xs">{repairProgress}</span>}
-      </>
-    )
   } else if (guide?.stepId === 'epub') {
     body = (
       <>
-        {epubOffer === 'create' && (
-          <GuideTarget step="epub">
-            <button type="button" className={LINK_CLASS} disabled={startingEpub} onClick={() => void handleStartEpub()}>
-              {t('ButtonCreateReadAlongEpub')}
+        <GuideTarget step="epub">
+          <div className="flex flex-wrap items-center gap-3">
+            {epubOffer === 'create' && (
+              <Btn size="small" color="bg-primary" loading={startingEpub} onClick={() => void handleStartEpub()}>
+                {t('ButtonCreateReadAlongEpub')}
+              </Btn>
+            )}
+            <button type="button" className={LINK_CLASS} disabled={startingEpub} onClick={guide.advance}>
+              {t('ButtonSkip')}
             </button>
-          </GuideTarget>
-        )}
-        <button type="button" className={LINK_CLASS} disabled={startingEpub} onClick={guide.advance}>
-          {t('ButtonSkip')}
-        </button>
+          </div>
+        </GuideTarget>
       </>
     )
   } else if (guide) {
@@ -340,9 +312,6 @@ export default function GuidedFixHint({
     body = (
       <>
         <span className="inline-flex items-center gap-1" cy-id="guided-fix-start">
-          <span className="material-symbols text-warning text-base" aria-hidden="true">
-            build
-          </span>
           {t('MessageGuidedFixHint')}
           <HelpTooltipIcon
             size="sm"
@@ -373,17 +342,16 @@ export default function GuidedFixHint({
           {t('MessageFixFailed', { reason: error })}
         </span>
       )}
-      {!fixRunning && !guide && !askNextTime && (
+      {!fixRunning && !guide && doneSummary === null && (
         <IconBtn borderless size="small" variant="muted" ariaLabel={t('ButtonAutoPipelineDismiss')} onClick={handleDismiss}>
           close
         </IconBtn>
       )}
       <RepairConsentDialog
-        isOpen={!!consent}
-        fileCount={consent?.files ?? 0}
-        yesButtonText={consent?.kind === 'guide' ? t('ButtonRepairSeekIndex') : t('ButtonRepairAndFix')}
-        offerAutomatic={consent?.kind !== 'guide'}
-        onClose={() => setConsent(null)}
+        isOpen={consentFiles !== null}
+        fileCount={consentFiles ?? 0}
+        yesButtonText={t('ButtonRepairAndFix')}
+        onClose={() => setConsentFiles(null)}
         onConfirm={(always) => void handleConsent(always)}
       />
     </div>

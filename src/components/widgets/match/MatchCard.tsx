@@ -1,5 +1,6 @@
 'use client'
 
+import { GUIDE_RING_CLASS } from '@/components/widgets/guided-fix/GuideTarget'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { formatDuration } from '@/lib/formatDuration'
 import { mergeClasses } from '@/lib/merge-classes'
@@ -146,7 +147,7 @@ export default function MatchCard({
       onClick={handleSelect}
       onKeyDown={handleKeyDown}
     >
-      {guideHintId && <span aria-hidden="true" className="ring-primary pointer-events-none absolute inset-0 rounded ring-2 motion-safe:animate-pulse" />}
+      {guideHintId && <span aria-hidden="true" className={mergeClasses(GUIDE_RING_CLASS, 'inset-0')} />}
       <div className="flex flex-col py-1 md:flex-row">
         {/* Mobile: cover image with published year and confidence on the right */}
         {/* Desktop: cover image on the left */}

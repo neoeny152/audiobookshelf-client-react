@@ -50,8 +50,8 @@ describe('toNeedsWorkItems', () => {
 })
 
 describe('getGuideSteps', () => {
-  it('starts with the repair and the match only when the book needs them', () => {
-    expect(getGuideSteps({ issues: ['seek-index', 'unmatched', 'chapters-from-files'] })).to.deep.equal(['repair', 'match', 'lookup', 'snap', 'save'])
+  it('starts with the match and the repair only when the book needs them', () => {
+    expect(getGuideSteps({ issues: ['seek-index', 'unmatched', 'chapters-from-files'] })).to.deep.equal(['match', 'repair', 'lookup', 'snap', 'save'])
     expect(getGuideSteps({ issues: ['low-confidence'] })).to.deep.equal(['match', 'lookup', 'snap', 'save'])
     expect(getGuideSteps({ issues: ['chapters-count'] })).to.deep.equal(['lookup', 'snap', 'save'])
     expect(getGuideSteps({ issues: ['chapters-count'] }, { epub: true })).to.deep.equal(['lookup', 'snap', 'save', 'epub'])

@@ -4,6 +4,7 @@ import { applyMatchAction } from '@/app/actions/matchActions'
 import Btn from '@/components/ui/Btn'
 import Checkbox from '@/components/ui/Checkbox'
 import IconBtn from '@/components/ui/IconBtn'
+import GuideTarget from '@/components/widgets/guided-fix/GuideTarget'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
@@ -176,9 +177,11 @@ export default function BaseMatchView<TUsage extends { [key: string]: boolean },
       <div
         className={`border-border flex shrink-0 items-center justify-end border-t px-4 py-3 transition-shadow duration-200 ${showShadow ? 'box-shadow-md-up' : ''}`}
       >
-        <Btn type="submit" disabled={isPendingApply} loading={isPendingApply} onClick={handleSubmitMatchUpdate}>
-          {t('ButtonSubmit')}
-        </Btn>
+        <GuideTarget step="match" text="LabelGuideStepMatchSubmit">
+          <Btn type="submit" disabled={isPendingApply} loading={isPendingApply} onClick={handleSubmitMatchUpdate}>
+            {t('ButtonSubmit')}
+          </Btn>
+        </GuideTarget>
       </div>
     </div>
   )
