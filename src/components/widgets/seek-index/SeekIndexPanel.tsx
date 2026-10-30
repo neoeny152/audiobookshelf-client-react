@@ -5,9 +5,10 @@ import Checkbox from '@/components/ui/Checkbox'
 import Alert from '@/components/widgets/Alert'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
-import { secondsToTimestamp } from '@/lib/datefns'
-import type { SeekIndexRepairOptions, SeekIndexRepairResult, SeekIndexStatus } from '@/types/api'
-import { useState } from 'react'
+import { formatJsDatetime, secondsToTimestamp } from '@/lib/datefns'
+import { bytesPretty } from '@/lib/string'
+import type { SeekIndexBackup, SeekIndexRepairOptions, SeekIndexRepairResult, SeekIndexStatus } from '@/types/api'
+import { useState, type ReactNode } from 'react'
 
 export interface SeekIndexPanelProps {
   status: SeekIndexStatus | null
@@ -15,49 +16,85 @@ export interface SeekIndexPanelProps {
   chapterCount: number
   running: boolean
   progress: string
-  measuring: boolean
   starting: boolean
   error: string | null
   result: SeekIndexRepairResult | null
   taskError: string | null
-  onMeasure: () => void
   onRepair: (options: SeekIndexRepairOptions) => void
+  onRestore: (backupId: string) => void
+  onDeleteBackup: (backupId: string) => void
   onDismissResult: () => void
 }
 
-/** Drift below this is shown as "no drift" (ffprobe's estimate is exact for true CBR files). */
-const NO_DRIFT_SEC = 0.5
+type Confirm = { kind: 'repair' } | { kind: 'restore'; backup: SeekIndexBackup } | { kind: 'delete'; backup: SeekIndexBackup }
 
 function signed(sec: number) {
   return `${sec >= 0 ? '+' : '−'}${Math.abs(sec).toFixed(1)}`
 }
 
+/** Checkbox for moving saved chapters with the files, with what it is for. Shared by the repair confirms. */
+export function SeekIndexShiftChaptersOption({ chapterCount, value, onChange }: { chapterCount: number; value: boolean; onChange: (value: boolean) => void }) {
+  const t = useTypeSafeTranslations()
+  return (
+    <div>
+      <Checkbox value={value} size="small" label={t('LabelSeekIndexShiftChapters', { 0: chapterCount })} onChange={onChange} />
+      <p className="text-foreground-muted mt-1 ps-7 text-xs">{t('LabelSeekIndexShiftChaptersHelp')}</p>
+    </div>
+  )
+}
+
 /**
- * Warning for MP3 files without a Xing/Info/VBRI header, with an on-demand drift measurement and the repair action
- * (confirm dialog, progress, result with old vs new durations).
+ * MP3 files whose duration was estimated and is off (no Xing/Info/VBRI header, measured drift over 1 s): the warning
+ * with the repair action (confirm, progress, result with old vs new durations), and the repair backups with
+ * restore and delete.
  */
 export default function SeekIndexPanel({
   status,
   chapterCount,
   running,
   progress,
-  measuring,
   starting,
   error,
   result,
   taskError,
-  onMeasure,
   onRepair,
+  onRestore,
+  onDeleteBackup,
   onDismissResult
 }: SeekIndexPanelProps) {
   const t = useTypeSafeTranslations()
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [shiftChapters, setShiftChapters] = useState(false)
+  const [confirm, setConfirm] = useState<Confirm | null>(null)
+  const [shiftChapters, setShiftChapters] = useState(true)
 
   const flagged = status?.files.filter((f) => f.needsRepair) ?? []
+  const backups = status?.backups ?? []
   const showWarning = !running && flagged.length > 0
 
-  if (!running && !result && !showWarning && !error) return null
+  if (!running && !result && !showWarning && !error && !backups.length) return null
+
+  const backupDate = (backup: SeekIndexBackup) => formatJsDatetime(new Date(backup.createdAt))
+  const resultFailed = !!taskError || !!result?.files.some((f) => f.status === 'failed')
+  const doneCount = result?.files.filter((f) => f.status !== 'failed').length ?? 0
+
+  let confirmMessage: ReactNode = null
+  if (confirm?.kind === 'repair') {
+    confirmMessage = (
+      <div className="flex flex-col gap-3" cy-id="seek-index-confirm">
+        <p>{t('MessageConfirmRepairSeekIndex', { 0: flagged.length })}</p>
+        {chapterCount > 0 && <SeekIndexShiftChaptersOption chapterCount={chapterCount} value={shiftChapters} onChange={setShiftChapters} />}
+      </div>
+    )
+  } else if (confirm?.kind === 'restore') {
+    confirmMessage = (
+      <p cy-id="seek-index-confirm">{t('MessageConfirmRestoreSeekIndexBackup', { 0: confirm.backup.files.length, 1: backupDate(confirm.backup) })}</p>
+    )
+  } else if (confirm?.kind === 'delete') {
+    confirmMessage = (
+      <p cy-id="seek-index-confirm">
+        {t('MessageConfirmDeleteSeekIndexBackup', { 0: confirm.backup.files.length, 1: backupDate(confirm.backup), 2: bytesPretty(confirm.backup.size) })}
+      </p>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-2" cy-id="seek-index-panel">
@@ -70,24 +107,24 @@ export default function SeekIndexPanel({
       )}
 
       {result && !running && (
-        <Alert type={taskError || result.files.some((f) => f.status === 'failed') ? 'error' : 'success'} autoFocus={false}>
+        <Alert type={resultFailed ? 'error' : 'success'} autoFocus={false}>
           <div className="flex items-start gap-3 text-sm" cy-id="seek-index-result">
             <div className="min-w-0 flex-1">
-              {result.files.some((f) => f.status === 'repaired') && (
+              {doneCount > 0 && (
                 <p>
-                  {t('MessageSeekIndexRepairDone', {
-                    0: result.files.filter((f) => f.status === 'repaired').length,
+                  {t(result.type === 'restore' ? 'MessageSeekIndexRestoreDone' : 'MessageSeekIndexRepairDone', {
+                    0: doneCount,
                     1: secondsToTimestamp(result.oldTotalDuration),
                     2: secondsToTimestamp(result.newTotalDuration),
                     3: signed(result.newTotalDuration - result.oldTotalDuration)
                   })}
                 </p>
               )}
-              {taskError && <p>{t('MessageSeekIndexRepairFailed', { 0: taskError })}</p>}
+              {taskError && <p>{t(result.type === 'restore' ? 'MessageSeekIndexRestoreFailed' : 'MessageSeekIndexRepairFailed', { 0: taskError })}</p>}
               <ul className="text-foreground-muted mt-1 list-none text-xs">
                 {result.files.map((f) => (
-                  <li key={f.ino} cy-id="seek-index-result-file">
-                    {f.status === 'repaired' && f.newDuration != null
+                  <li key={`${f.ino}-${f.filename}`} cy-id="seek-index-result-file">
+                    {f.status !== 'failed' && f.newDuration != null
                       ? t('MessageSeekIndexFileDuration', {
                           0: f.filename,
                           1: secondsToTimestamp(f.oldDuration),
@@ -98,15 +135,20 @@ export default function SeekIndexPanel({
                   </li>
                 ))}
               </ul>
-              {result.chapters.count > 0 && result.files.some((f) => f.status === 'repaired') && (
+              {result.chapters.count > 0 && doneCount > 0 && (
                 <p className="mt-1" cy-id="seek-index-result-chapters">
-                  {result.chapters.shifted
-                    ? t('MessageSeekIndexChaptersShifted', { 0: result.chapters.maxShift.toFixed(1) })
-                    : result.chapters.endExtended
-                      ? t('MessageSeekIndexChaptersKeptEndExtended')
-                      : t('MessageSeekIndexChaptersKept')}
+                  {result.type === 'restore'
+                    ? result.chapters.restored
+                      ? t('MessageSeekIndexChaptersRestored')
+                      : t('MessageSeekIndexChaptersLeft')
+                    : result.chapters.shifted
+                      ? t('MessageSeekIndexChaptersShifted', { 0: result.chapters.maxShift.toFixed(1) })
+                      : result.chapters.endExtended
+                        ? t('MessageSeekIndexChaptersKeptEndExtended')
+                        : t('MessageSeekIndexChaptersKept')}
                 </p>
               )}
+              {result.type === 'repair' && result.backupId && <p className="mt-1">{t('MessageSeekIndexBackupKept')}</p>}
             </div>
             <button
               type="button"
@@ -124,34 +166,23 @@ export default function SeekIndexPanel({
         <Alert type="warning" autoFocus={false}>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" cy-id="seek-index-warning">
             <div className="min-w-0 flex-1 basis-64">
-              <p>{t('MessageSeekIndexMissing', { 0: flagged.length })}</p>
-              {flagged.some((f) => f.measuredDuration != null) && (
-                <ul className="text-foreground-muted mt-1 list-none text-xs">
-                  {flagged.map((f) =>
-                    f.measuredDuration == null ? null : (
-                      <li key={f.ino} cy-id="seek-index-measured">
-                        {Math.abs(f.durationError ?? 0) < NO_DRIFT_SEC
-                          ? t('MessageSeekIndexNoDrift', { 0: f.filename })
-                          : t('MessageSeekIndexFileDuration', {
-                              0: f.filename,
-                              1: secondsToTimestamp(f.duration),
-                              2: secondsToTimestamp(f.measuredDuration),
-                              3: signed(f.durationError ?? 0)
-                            })}
-                      </li>
-                    )
-                  )}
-                </ul>
-              )}
+              <p>{t('MessageSeekIndexMissing', { 0: flagged.length, 1: (status?.maxDrift ?? 0).toFixed(1) })}</p>
+              <ul className="text-foreground-muted mt-1 list-none text-xs">
+                {flagged.map((f) => (
+                  <li key={f.ino} cy-id="seek-index-measured">
+                    {t('MessageSeekIndexFileDuration', {
+                      0: f.filename,
+                      1: secondsToTimestamp(f.duration),
+                      2: secondsToTimestamp(f.measuredDuration ?? f.duration),
+                      3: signed(f.durationError ?? 0)
+                    })}
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="flex shrink-0 gap-2">
-              <Btn size="small" loading={measuring} disabled={starting} onClick={onMeasure}>
-                {t('ButtonMeasureSeekDrift')}
-              </Btn>
-              <Btn size="small" loading={starting} disabled={measuring} onClick={() => setConfirmOpen(true)}>
-                {t('ButtonRepairSeekIndex')}
-              </Btn>
-            </div>
+            <Btn size="small" loading={starting} onClick={() => setConfirm({ kind: 'repair' })}>
+              {t('ButtonRepairSeekIndex')}
+            </Btn>
           </div>
         </Alert>
       )}
@@ -164,25 +195,45 @@ export default function SeekIndexPanel({
         </Alert>
       )}
 
+      {backups.length > 0 && !running && (
+        <div className="border-border rounded-md border px-3 py-2 text-sm" cy-id="seek-index-backups">
+          {backups.map((backup) => (
+            <div key={backup.id} className="flex flex-wrap items-center gap-2 py-1" cy-id="seek-index-backup">
+              <p className="min-w-0 flex-1 basis-48">
+                {t('LabelSeekIndexBackup', { 0: backupDate(backup), 1: backup.files.length, 2: bytesPretty(backup.size) })}
+              </p>
+              <Btn size="small" disabled={starting} onClick={() => setConfirm({ kind: 'restore', backup })}>
+                {t('ButtonRestoreSeekIndexBackup')}
+              </Btn>
+              <Btn size="small" color="bg-error text-error-foreground" disabled={starting} onClick={() => setConfirm({ kind: 'delete', backup })}>
+                {t('ButtonDeleteSeekIndexBackup')}
+              </Btn>
+            </div>
+          ))}
+          <p className="text-foreground-muted text-xs" cy-id="seek-index-backups-total">
+            {t('MessageSeekIndexBackupsTotal', { 0: bytesPretty(status?.backupsTotalSize ?? 0) })}
+          </p>
+        </div>
+      )}
+
       <ConfirmDialog
-        isOpen={confirmOpen}
-        message={
-          <div className="flex flex-col gap-3" cy-id="seek-index-confirm">
-            <p>{t('MessageConfirmRepairSeekIndex', { 0: flagged.length })}</p>
-            {chapterCount > 0 && (
-              <div>
-                <Checkbox value={shiftChapters} size="small" label={t('LabelSeekIndexShiftChapters', { 0: chapterCount })} onChange={setShiftChapters} />
-                <p className="text-foreground-muted mt-1 ps-7 text-xs">{t('LabelSeekIndexShiftChaptersHelp')}</p>
-              </div>
-            )}
-          </div>
+        isOpen={!!confirm}
+        message={confirmMessage}
+        yesButtonText={
+          confirm?.kind === 'restore'
+            ? t('ButtonRestoreSeekIndexBackup')
+            : confirm?.kind === 'delete'
+              ? t('ButtonDeleteSeekIndexBackup')
+              : t('ButtonRepairSeekIndex')
         }
-        yesButtonText={t('ButtonRepairSeekIndex')}
-        yesButtonClassName="bg-primary"
-        onClose={() => setConfirmOpen(false)}
+        yesButtonClassName={confirm?.kind === 'delete' ? 'bg-error text-error-foreground' : 'bg-primary'}
+        onClose={() => setConfirm(null)}
         onConfirm={() => {
-          setConfirmOpen(false)
-          onRepair({ chapters: chapterCount > 0 && shiftChapters ? 'shift' : 'keep' })
+          const current = confirm
+          setConfirm(null)
+          if (current?.kind === 'repair') onRepair({ chapters: chapterCount > 0 && shiftChapters ? 'shift' : 'keep' })
+          else if (current?.kind === 'restore') onRestore(current.backup.id)
+          else if (current?.kind === 'delete') onDeleteBackup(current.backup.id)
         }}
       />
     </div>

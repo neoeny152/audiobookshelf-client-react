@@ -10,7 +10,9 @@ import ChaptersModalTable from '@/components/widgets/chapters-edit/ChaptersModal
 import FindChaptersPanel from '@/components/widgets/chapters-edit/FindChaptersPanel'
 import { ShiftTimesFields } from '@/components/widgets/chapters-edit/ShiftTimesPanel'
 import SnapToAudioPanel from '@/components/widgets/chapters-edit/SnapToAudioPanel'
-import SeekIndexWarning from '@/components/widgets/seek-index/SeekIndexWarning'
+import SeekIndexSnapDialog, { type SeekIndexSnapChoice } from '@/components/widgets/seek-index/SeekIndexSnapDialog'
+import { SeekIndexPanelForState, useSeekIndexEnabled } from '@/components/widgets/seek-index/SeekIndexWarning'
+import { useSeekIndex } from '@/hooks/useSeekIndex'
 import { usePipelineProposalTarget } from '@/contexts/PipelineProposalContext'
 import { useChapterEditor, type PipelineProposalReview } from '@/hooks/useChapterEditor'
 import { getPipelineWhyLabel } from '@/lib/autoPipeline'
@@ -21,7 +23,7 @@ import { blurActiveChapterEditorField } from '@/lib/chapterEditorFocus'
 import { secondsToTimestamp } from '@/lib/datefns'
 import { formatDuration } from '@/lib/formatDuration'
 import { mergeClasses } from '@/lib/merge-classes'
-import { isBookMediaWithTracks, type AudibleChapterSearchResult, type BookLibraryItem } from '@/types/api'
+import { isBookMediaWithTracks, type AudibleChapterSearchResult, type BookLibraryItem, type SeekIndexRepairResult, type SeekIndexStatus } from '@/types/api'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react'
 
 interface ChaptersEditModalBodyProps {
@@ -191,8 +193,58 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
     handleChapterRemove,
     handleChapterInsertBelow,
     resetEditorChapters,
-    discardFocusedChapterFields
+    discardFocusedChapterFields,
+    reloadAfterSeekIndexChange
   } = editor
+
+  // MP3 seek index: the banner, and the check before a snap (snapping a drifting timeline cannot line up)
+  const seekIndexEnabled = useSeekIndexEnabled()
+  const seekIndex = useSeekIndex({ libraryItemId: libraryItem.id, enabled: seekIndexEnabled })
+  const [snapGuard, setSnapGuard] = useState<{ status: SeekIndexStatus; resolve: (choice: SeekIndexSnapChoice) => void } | null>(null)
+  const tracksRef = useRef(tracks)
+  tracksRef.current = tracks
+  /** One reload per finished repair/restore, whichever of the banner and the snap guard sees it first */
+  const seekReloadsRef = useRef<Map<number, Promise<void>>>(new Map())
+  const reloadForSeekResult = useCallback(
+    (result: SeekIndexRepairResult) => {
+      const pending = seekReloadsRef.current.get(result.finishedAt)
+      if (pending) return pending
+      const oldDurations = tracksRef.current.map((track) => track.duration)
+      const promise = reloadAfterSeekIndexChange(oldDurations, result.type === 'repair' && result.chapters.mode === 'shift')
+      seekReloadsRef.current.set(result.finishedAt, promise)
+      return promise
+    },
+    [reloadAfterSeekIndexChange]
+  )
+  // A result already there when the editor opened is from before it: the item loaded with it applied
+  const initialSeekResultRef = useRef<number | null | undefined>(undefined)
+  if (initialSeekResultRef.current === undefined && seekIndex.status) initialSeekResultRef.current = seekIndex.status.lastResult?.finishedAt ?? null
+  const seekResult = seekIndex.result
+  useEffect(() => {
+    if (!seekResult || initialSeekResultRef.current === undefined || seekResult.finishedAt === initialSeekResultRef.current) return
+    if (seekResult.files.some((f) => f.status !== 'failed')) void reloadForSeekResult(seekResult)
+  }, [reloadForSeekResult, seekResult])
+
+  const guardedSnap = useCallback(
+    async (options: Parameters<typeof handleSnapToAudio>[0]) => {
+      if (seekIndexEnabled) {
+        const status = await seekIndex.ensureStatus()
+        if (status?.needsRepairCount) {
+          const choice = await new Promise<SeekIndexSnapChoice>((resolve) => setSnapGuard({ status, resolve }))
+          setSnapGuard(null)
+          if (choice.choice === 'cancel') return null
+          if (choice.choice === 'repair') {
+            const result = await seekIndex.repairAndWait({ chapters: choice.shiftChapters ? 'shift' : 'keep' })
+            // Failed or not started: the banner says why; nothing is snapped on the old timeline
+            if (!result || !result.files.some((f) => f.status === 'repaired')) return null
+            await reloadForSeekResult(result)
+          }
+        }
+      }
+      return handleSnapToAudio(options)
+    },
+    [handleSnapToAudio, reloadForSeekResult, seekIndex, seekIndexEnabled]
+  )
 
   /** The Audible lookup the "Snap these to the audio" hint was dismissed for (a new lookup brings it back). */
   const [snapHintDismissedFor, setSnapHintDismissedFor] = useState<typeof lookupResult>(null)
@@ -281,7 +333,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
         {/* Below md (incl. phone landscape) the tools and table scroll together here; from md up only the table scrolls. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" inert={isPending || proposalLoading || undefined}>
           <div className="bg-bg border-border shrink-0 border-b px-4 py-3">
-            <SeekIndexWarning libraryItemId={libraryItem.id} chapterCount={media.chapters?.length ?? 0} className="mb-3" />
+            {seekIndexEnabled && <SeekIndexPanelForState seekIndex={seekIndex} chapterCount={media.chapters?.length ?? 0} className="mb-3" />}
             {proposalReview && (
               <div className="mb-3">
                 <PipelineProposalBanner review={proposalReview} disabled={isPending} onReject={handleRejectProposal} />
@@ -310,7 +362,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
               <SnapToAudioPanel
                 chapterCount={newChapters.length}
                 disabled={isPending}
-                onSnap={handleSnapToAudio}
+                onSnap={guardedSnap}
                 onRetry={handleSnapRetry}
                 onCheckSpeech={handleSnapSpeechBatch}
                 onApply={handleApplySnap}
@@ -408,6 +460,16 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
           </div>
         </div>
       </div>
+
+      <SeekIndexSnapDialog
+        isOpen={!!snapGuard}
+        fileCount={snapGuard?.status.needsRepairCount ?? 0}
+        maxDrift={snapGuard?.status.maxDrift ?? 0}
+        chapterCount={newChapters.length}
+        // Rows just taken from Audible already use the real times; anything else was set on this timeline
+        shiftDefault={!lookupResult}
+        onChoose={(choice) => snapGuard?.resolve(choice)}
+      />
 
       {confirmState && <ConfirmDialog isOpen message={confirmState.message} onClose={() => setConfirmState(null)} onConfirm={() => confirmState.onConfirm()} />}
 

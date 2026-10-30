@@ -40,10 +40,24 @@ export async function cancelM4bEncodeAction(libraryItemId: string) {
 }
 
 /**
- * Server Action: Which MP3 files have no seek index; `measure` also reports their real duration
+ * Server Action: Which MP3 files need a seek index repair, and the item's repair backups
  */
-export async function getSeekIndexStatusAction(libraryItemId: string, measure = false): Promise<ActionResult<SeekIndexStatus>> {
-  return toActionResult(() => api.getSeekIndexStatus(libraryItemId, measure))
+export async function getSeekIndexStatusAction(libraryItemId: string): Promise<ActionResult<SeekIndexStatus>> {
+  return toActionResult(() => api.getSeekIndexStatus(libraryItemId))
+}
+
+/**
+ * Server Action: Start putting a repair backup's originals back
+ */
+export async function restoreSeekIndexBackupAction(libraryItemId: string, backupId: string): Promise<ActionResult<{ taskId: string }>> {
+  return toActionResult(() => api.restoreSeekIndexBackup(libraryItemId, backupId))
+}
+
+/**
+ * Server Action: Delete a seek index repair backup
+ */
+export async function deleteSeekIndexBackupAction(libraryItemId: string, backupId: string): Promise<ActionResult<void>> {
+  return toActionResult(() => api.deleteSeekIndexBackup(libraryItemId, backupId))
 }
 
 /**

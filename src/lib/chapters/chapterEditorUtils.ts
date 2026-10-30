@@ -777,3 +777,34 @@ export function getChapterTimeOverflow(start: number, end: number, mediaDuration
   if (end > mediaDuration) return 'end'
   return null
 }
+
+/**
+ * Move chapter times from the timeline before a seek index repair to the repaired one (same as the server's
+ * shiftChapters): each time keeps its place in the file it falls in and moves by how much the files before it grew.
+ * Durations are the book's tracks in order, before and after. Ends belong to the file they close.
+ */
+export function rebaseChaptersForRepairedFiles<T extends Chapter>(chapters: T[], oldDurations: number[], newDurations: number[]): T[] {
+  if (oldDurations.length !== newDurations.length || !oldDurations.length) return chapters
+  const oldStarts: number[] = []
+  const newStarts: number[] = []
+  let oldTotal = 0
+  let newTotal = 0
+  oldDurations.forEach((duration, i) => {
+    oldStarts.push(oldTotal)
+    newStarts.push(newTotal)
+    oldTotal += duration
+    newTotal += newDurations[i]
+  })
+  const mapTime = (time: number, isEnd: boolean) => {
+    const probe = isEnd ? time - 1e-6 : time
+    let i = oldStarts.length - 1
+    while (i > 0 && oldStarts[i] > probe) i--
+    const mapped = Math.min(newStarts[i] + (time - oldStarts[i]), newStarts[i] + newDurations[i], newTotal)
+    return Math.round(mapped * 1000) / 1000
+  }
+  return chapters.map((chapter, index) => ({
+    ...chapter,
+    start: mapTime(chapter.start, false),
+    end: index === chapters.length - 1 && chapter.end >= oldTotal - 0.5 ? Math.round(newTotal * 1000) / 1000 : mapTime(chapter.end, true)
+  }))
+}

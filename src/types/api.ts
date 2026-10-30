@@ -653,9 +653,11 @@ export interface AudioFile {
   mimeType: string
   /** MP3 only (server feature mp3SeekIndex): seek header found, or 'none' when ffprobe had to estimate the duration */
   mp3SeekIndex?: Mp3SeekIndexStatus | null
+  /** MP3 without a seek header: frame count duration, for the file at that size/mtime */
+  mp3Measured?: { duration: number; size: number; mtimeMs: number } | null
 }
 
-/** xing/info/vbri: header present. none: no header, the duration is estimated (repairable). unknown: no frames found. */
+/** xing/info/vbri: header present. none: no header, the duration is estimated. unknown: no frames found. */
 export type Mp3SeekIndexStatus = 'xing' | 'info' | 'vbri' | 'none' | 'unknown'
 
 export interface SeekIndexFileStatus {
@@ -665,8 +667,9 @@ export interface SeekIndexFileStatus {
   /** stored (probed) duration in seconds */
   duration: number
   mp3SeekIndex: Mp3SeekIndexStatus | null
+  /** no seek header and the measured duration is off by more than 1 s */
   needsRepair: boolean
-  /** frame count duration, only with ?measure=1 */
+  /** frame count duration (files without a seek header) */
   measuredDuration?: number
   /** measuredDuration - duration */
   durationError?: number
@@ -675,35 +678,55 @@ export interface SeekIndexFileStatus {
 export interface SeekIndexRepairFileResult {
   filename: string
   ino: string
-  status: 'repaired' | 'failed'
+  status: 'repaired' | 'restored' | 'failed'
   oldDuration: number
   newDuration: number | null
   error?: string
 }
 
 export interface SeekIndexRepairResult {
+  type: 'repair' | 'restore'
   libraryItemId: string
   finishedAt: number
   files: SeekIndexRepairFileResult[]
   oldTotalDuration: number
   newTotalDuration: number
-  /** shifted: times moved with the files (mode shift). endExtended: mode keep, only the last chapter's end moved to the new total */
-  chapters: { count: number; mode: 'keep' | 'shift'; shifted: boolean; endExtended?: boolean; maxShift: number }
+  /**
+   * repair: shifted = times moved with the files (mode shift); endExtended = mode keep, only the last end moved to the new total.
+   * restore: restored = saved chapters put back as they were before the repair.
+   */
+  chapters: { count: number; mode: 'keep' | 'shift'; shifted: boolean; endExtended?: boolean; restored?: boolean; maxShift: number }
+  /** repair: the backup holding the originals */
+  backupId?: string | null
+}
+
+export interface SeekIndexBackup {
+  id: string
+  libraryItemId: string
+  title: string
+  createdAt: number
+  files: { relPath: string; filename: string; size: number; oldDuration: number; newDuration: number | null }[]
+  /** bytes */
+  size: number
 }
 
 /** GET /api/tools/item/:id/seek-index */
 export interface SeekIndexStatus {
   files: SeekIndexFileStatus[]
   needsRepairCount: number
+  /** largest |measured - stored| among the files that need repair, seconds */
+  maxDrift: number
   processing: boolean
   lastResult: SeekIndexRepairResult | null
+  /** newest first */
+  backups: SeekIndexBackup[]
+  /** bytes used by the seek repair backups of every item */
+  backupsTotalSize: number
 }
 
 export interface SeekIndexRepairOptions {
   /** shift: move saved chapter times by the duration change of earlier files */
   chapters?: 'keep' | 'shift'
-  /** copy each original to the item's metadata cache first */
-  backup?: boolean
 }
 
 export interface AudioTrack extends AudioFile {
@@ -1887,7 +1910,7 @@ export interface M4bEncodeOptions {
 
 export interface Task {
   id: string
-  action: string // 'embed-metadata' | 'encode-m4b' | 'repair-seek-index'
+  action: string // 'embed-metadata' | 'encode-m4b' | 'repair-seek-index' | 'restore-seek-index'
   data?: {
     libraryId?: string
     libraryItemId?: string

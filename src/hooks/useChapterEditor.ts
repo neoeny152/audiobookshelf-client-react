@@ -42,6 +42,7 @@ import {
   updateChapterStart,
   updateChapterTitle,
   validateChapters,
+  rebaseChaptersForRepairedFiles,
   type EditableChapter,
   type ChapterMatchDebug,
   type SnapTitlePick
@@ -231,6 +232,46 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated, pipelinePr
   const resetEditorChapters = useCallback(() => {
     loadSavedChapters(savedChapters, mediaDuration)
   }, [loadSavedChapters, mediaDuration, savedChapters])
+
+  /**
+   * After a seek index repair (or restore) changed the files' durations: load the item again so tracks and duration
+   * match the files. Unsaved rows are moved with the files when `shift` (the same move the server made on the saved
+   * chapters), otherwise kept; without unsaved changes the saved chapters are reloaded. Updates the refs right away so
+   * a snap started next uses the new rows.
+   *
+   * @param oldDurations - track durations before the repair, in order
+   */
+  const reloadAfterSeekIndexChange = useCallback(
+    async (oldDurations: number[], shift: boolean) => {
+      const refreshed = await getExpandedLibraryItemAction(libraryItem.id)
+      if (refreshed.mediaType !== 'book') return
+      const book = refreshed as BookLibraryItem
+      const nextSaved = book.media.chapters || []
+      const nextDuration = book.media.duration ?? 0
+      const newDurations = (book.media.tracks ?? []).map((track) => track.duration)
+
+      preview.destroyAudioEl()
+      let rows: EditableChapter[]
+      if (hasChangesRef.current) {
+        const current = applyChapterTitleDrafts(newChaptersRef.current, titleDraftsRef.current)
+        rows = shift ? rebaseChaptersForRepairedFiles(current, oldDurations, newDurations) : current
+      } else {
+        rows = initChapters(nextSaved, nextDuration)
+      }
+      clearTitleDrafts()
+      const result = validateChapters(rows, nextSaved, nextDuration, validationMessages)
+      newChaptersRef.current = result.chapters
+      hasChangesRef.current = result.hasChanges
+      shiftBaseChaptersRef.current = result.chapters.map((chapter) => ({ ...chapter }))
+      setLibraryItem(book)
+      setNewChapters(result.chapters)
+      setHasChanges(result.hasChanges)
+      setShiftAmount(0)
+      setTitleResetKey((key) => key + 1)
+      onItemUpdated?.(book)
+    },
+    [clearTitleDrafts, libraryItem.id, onItemUpdated, preview, validationMessages]
+  )
 
   const refreshAfterChapterUpdate = useCallback(
     async (successToast: string) => {
@@ -761,6 +802,7 @@ export function useChapterEditor({ initialLibraryItem, onItemUpdated, pipelinePr
     handleChapterRemove,
     handleChapterInsertBelow,
     resetEditorChapters,
-    discardFocusedChapterFields
+    discardFocusedChapterFields,
+    reloadAfterSeekIndexChange
   }
 }

@@ -10,6 +10,7 @@ import {
   initChapters,
   insertChapterBelow,
   mergeAudibleChapterData,
+  rebaseChaptersForRepairedFiles,
   mergeAudibleChapterTitles,
   removeBrandingFromAudibleData,
   removeChapterAt,
@@ -621,5 +622,29 @@ describe('sub-second chapter starts', () => {
     const { chapters } = mergeAudibleChapterData(audibleData, mediaDuration)
 
     expect(chapters.map((chapter) => chapter.start)).to.deep.eq([0, 16.09, 120.257])
+  })
+})
+
+describe('rebaseChaptersForRepairedFiles', () => {
+  // Red Rising parts: estimated vs real durations
+  const oldD = [7571.36475, 13280.172938]
+  const newD = [7588.78, 13310.72]
+
+  it('moves each time by the growth of the files before it and keeps its place in its file', () => {
+    const chapters = [
+      { id: 0, start: 0, end: 100, title: 'Opening' },
+      { id: 1, start: 100, end: 8000, title: 'Ch 1' },
+      { id: 2, start: 8000, end: oldD[0] + oldD[1], title: 'Ch 2' }
+    ]
+    const out = rebaseChaptersForRepairedFiles(chapters, oldD, newD)
+    expect(out.map((c) => c.start)).to.deep.eq([0, 100, Math.round((8000 + newD[0] - oldD[0]) * 1000) / 1000])
+    expect(out[0].end).to.eq(100)
+    expect(out[2].end).to.eq(Math.round((newD[0] + newD[1]) * 1000) / 1000)
+    expect(out[1].title).to.eq('Ch 1')
+  })
+
+  it('keeps the chapters when the track lists do not line up', () => {
+    const chapters = [{ id: 0, start: 0, end: 10, title: 'a' }]
+    expect(rebaseChaptersForRepairedFiles(chapters, [10], [10, 5])).to.eq(chapters)
   })
 })

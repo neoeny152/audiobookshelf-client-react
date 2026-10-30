@@ -1537,18 +1537,36 @@ export async function embedMetadata(libraryItemId: string, backup: boolean): Pro
 }
 
 /**
- * Which MP3 files of a book have no seek index (server feature mp3SeekIndex).
+ * Which MP3 files of a book need a seek index repair, and the item's repair backups (server feature mp3SeekIndex).
+ * The first call for a file without a seek header reads the whole file to measure it.
  * @param libraryItemId - Library item ID
- * @param measure - Also walk those files frame by frame for their real duration (reads each file)
  */
-export async function getSeekIndexStatus(libraryItemId: string, measure = false): Promise<SeekIndexStatus> {
-  return apiRequest<SeekIndexStatus>(`/api/tools/item/${libraryItemId}/seek-index${measure ? '?measure=1' : ''}`)
+export async function getSeekIndexStatus(libraryItemId: string): Promise<SeekIndexStatus> {
+  return apiRequest<SeekIndexStatus>(`/api/tools/item/${libraryItemId}/seek-index`)
+}
+
+/**
+ * Start a task that puts a repair backup's original files back and rescans the item
+ * @param libraryItemId - Library item ID
+ * @param backupId - Backup ID from the seek index status
+ */
+export async function restoreSeekIndexBackup(libraryItemId: string, backupId: string): Promise<{ taskId: string }> {
+  return apiRequest<{ taskId: string }>(`/api/tools/item/${libraryItemId}/seek-index/backups/${encodeURIComponent(backupId)}/restore`, { method: 'POST' })
+}
+
+/**
+ * Delete a seek index repair backup
+ * @param libraryItemId - Library item ID
+ * @param backupId - Backup ID from the seek index status
+ */
+export async function deleteSeekIndexBackup(libraryItemId: string, backupId: string): Promise<void> {
+  return apiRequest<void>(`/api/tools/item/${libraryItemId}/seek-index/backups/${encodeURIComponent(backupId)}`, { method: 'DELETE' })
 }
 
 /**
  * Start a task that rewrites the MP3 files without a seek index (stream copy, Xing header) and rescans the item
  * @param libraryItemId - Library item ID
- * @param options - What to do with saved chapters, whether to back up the originals
+ * @param options - What to do with saved chapters
  */
 export async function repairSeekIndex(libraryItemId: string, options: SeekIndexRepairOptions): Promise<{ taskId: string }> {
   return apiRequest<{ taskId: string }>(`/api/tools/item/${libraryItemId}/repair-seek-index`, {
