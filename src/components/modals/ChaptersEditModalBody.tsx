@@ -10,6 +10,7 @@ import ChaptersModalTable from '@/components/widgets/chapters-edit/ChaptersModal
 import FindChaptersPanel from '@/components/widgets/chapters-edit/FindChaptersPanel'
 import { ShiftTimesFields } from '@/components/widgets/chapters-edit/ShiftTimesPanel'
 import SnapToAudioPanel from '@/components/widgets/chapters-edit/SnapToAudioPanel'
+import SeekIndexWarning from '@/components/widgets/seek-index/SeekIndexWarning'
 import { usePipelineProposalTarget } from '@/contexts/PipelineProposalContext'
 import { useChapterEditor, type PipelineProposalReview } from '@/hooks/useChapterEditor'
 import { getPipelineWhyLabel } from '@/lib/autoPipeline'
@@ -280,6 +281,7 @@ function ChaptersEditContent({ libraryItem, closeRequestRef, onPendingChange, on
         {/* Below md (incl. phone landscape) the tools and table scroll together here; from md up only the table scrolls. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" inert={isPending || proposalLoading || undefined}>
           <div className="bg-bg border-border shrink-0 border-b px-4 py-3">
+            <SeekIndexWarning libraryItemId={libraryItem.id} chapterCount={media.chapters?.length ?? 0} className="mb-3" />
             {proposalReview && (
               <div className="mb-3">
                 <PipelineProposalBanner review={proposalReview} disabled={isPending} onReject={handleRejectProposal} />

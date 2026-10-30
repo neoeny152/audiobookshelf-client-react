@@ -10,6 +10,7 @@ import EmbedMetadataPanel from '@/components/widgets/audiobook-tools/EmbedMetada
 import M4bEncodePanel from '@/components/widgets/audiobook-tools/M4bEncodePanel'
 import MetadataPreviewTable from '@/components/widgets/audiobook-tools/MetadataPreviewTable'
 import ToolsInfoNotes from '@/components/widgets/audiobook-tools/ToolsInfoNotes'
+import SeekIndexWarning from '@/components/widgets/seek-index/SeekIndexWarning'
 import { useAudiobookTools } from '@/hooks/useAudiobookTools'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import type { BookLibraryItem } from '@/types/api'
@@ -43,6 +44,8 @@ export default function AudiobookTools({ libraryItem: initialLibraryItem }: Audi
           </div>
         }
       />
+
+      <SeekIndexWarning libraryItemId={tools.libraryItem.id} chapterCount={tools.metadataChapters.length} className="mx-auto mb-6 w-full max-w-4xl" />
 
       <div className="mb-2 flex justify-center">
         <div className="w-full max-w-2xl">

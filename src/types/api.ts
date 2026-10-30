@@ -593,6 +593,58 @@ export interface AudioFile {
   embeddedCoverArt?: string
   metaTags: Record<string, string>
   mimeType: string
+  /** MP3 only (server feature mp3SeekIndex): seek header found, or 'none' when ffprobe had to estimate the duration */
+  mp3SeekIndex?: Mp3SeekIndexStatus | null
+}
+
+/** xing/info/vbri: header present. none: no header, the duration is estimated (repairable). unknown: no frames found. */
+export type Mp3SeekIndexStatus = 'xing' | 'info' | 'vbri' | 'none' | 'unknown'
+
+export interface SeekIndexFileStatus {
+  index: number
+  ino: string
+  filename: string
+  /** stored (probed) duration in seconds */
+  duration: number
+  mp3SeekIndex: Mp3SeekIndexStatus | null
+  needsRepair: boolean
+  /** frame count duration, only with ?measure=1 */
+  measuredDuration?: number
+  /** measuredDuration - duration */
+  durationError?: number
+}
+
+export interface SeekIndexRepairFileResult {
+  filename: string
+  ino: string
+  status: 'repaired' | 'failed'
+  oldDuration: number
+  newDuration: number | null
+  error?: string
+}
+
+export interface SeekIndexRepairResult {
+  libraryItemId: string
+  finishedAt: number
+  files: SeekIndexRepairFileResult[]
+  oldTotalDuration: number
+  newTotalDuration: number
+  chapters: { count: number; mode: 'keep' | 'shift'; shifted: boolean; maxShift: number }
+}
+
+/** GET /api/tools/item/:id/seek-index */
+export interface SeekIndexStatus {
+  files: SeekIndexFileStatus[]
+  needsRepairCount: number
+  processing: boolean
+  lastResult: SeekIndexRepairResult | null
+}
+
+export interface SeekIndexRepairOptions {
+  /** shift: move saved chapter times by the duration change of earlier files */
+  chapters?: 'keep' | 'shift'
+  /** copy each original to the item's metadata cache first */
+  backup?: boolean
 }
 
 export interface AudioTrack extends AudioFile {
@@ -1766,7 +1818,7 @@ export interface M4bEncodeOptions {
 
 export interface Task {
   id: string
-  action: string // 'embed-metadata' | 'encode-m4b'
+  action: string // 'embed-metadata' | 'encode-m4b' | 'repair-seek-index'
   data?: {
     libraryId?: string
     libraryItemId?: string

@@ -64,6 +64,8 @@ import {
   PipelineProposal,
   PipelineItemStatus,
   M4bEncodeOptions,
+  SeekIndexRepairOptions,
+  SeekIndexStatus,
   MediaItemShare,
   MetadataObject,
   MetadataProvidersResponse,
@@ -1494,6 +1496,27 @@ export async function getMetadataObject(libraryItemId: string): Promise<Metadata
 export async function embedMetadata(libraryItemId: string, backup: boolean): Promise<void> {
   return apiRequest<void>(`/api/tools/item/${libraryItemId}/embed-metadata?backup=${backup ? 1 : 0}`, {
     method: 'POST'
+  })
+}
+
+/**
+ * Which MP3 files of a book have no seek index (server feature mp3SeekIndex).
+ * @param libraryItemId - Library item ID
+ * @param measure - Also walk those files frame by frame for their real duration (reads each file)
+ */
+export async function getSeekIndexStatus(libraryItemId: string, measure = false): Promise<SeekIndexStatus> {
+  return apiRequest<SeekIndexStatus>(`/api/tools/item/${libraryItemId}/seek-index${measure ? '?measure=1' : ''}`)
+}
+
+/**
+ * Start a task that rewrites the MP3 files without a seek index (stream copy, Xing header) and rescans the item
+ * @param libraryItemId - Library item ID
+ * @param options - What to do with saved chapters, whether to back up the originals
+ */
+export async function repairSeekIndex(libraryItemId: string, options: SeekIndexRepairOptions): Promise<{ taskId: string }> {
+  return apiRequest<{ taskId: string }>(`/api/tools/item/${libraryItemId}/repair-seek-index`, {
+    method: 'POST',
+    body: JSON.stringify(options)
   })
 }
 

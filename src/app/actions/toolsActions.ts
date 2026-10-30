@@ -1,7 +1,8 @@
 'use server'
 
-import type { M4bEncodeOptions, MetadataObject } from '@/types/api'
+import type { M4bEncodeOptions, MetadataObject, SeekIndexRepairOptions, SeekIndexStatus } from '@/types/api'
 import * as api from '@/lib/api'
+import { toActionResult, type ActionResult } from '@/lib/actionResult'
 
 /**
  * Server Action: Get all tasks with queue data
@@ -36,4 +37,18 @@ export async function encodeM4bAction(libraryItemId: string, options: M4bEncodeO
  */
 export async function cancelM4bEncodeAction(libraryItemId: string) {
   return api.cancelM4bEncode(libraryItemId)
+}
+
+/**
+ * Server Action: Which MP3 files have no seek index; `measure` also reports their real duration
+ */
+export async function getSeekIndexStatusAction(libraryItemId: string, measure = false): Promise<ActionResult<SeekIndexStatus>> {
+  return toActionResult(() => api.getSeekIndexStatus(libraryItemId, measure))
+}
+
+/**
+ * Server Action: Start the seek index repair task
+ */
+export async function repairSeekIndexAction(libraryItemId: string, options: SeekIndexRepairOptions): Promise<ActionResult<{ taskId: string }>> {
+  return toActionResult(() => api.repairSeekIndex(libraryItemId, options))
 }
