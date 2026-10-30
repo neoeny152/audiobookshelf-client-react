@@ -102,7 +102,9 @@ export default function SeekIndexPanel({
                 <p className="mt-1" cy-id="seek-index-result-chapters">
                   {result.chapters.shifted
                     ? t('MessageSeekIndexChaptersShifted', { 0: result.chapters.maxShift.toFixed(1) })
-                    : t('MessageSeekIndexChaptersKept')}
+                    : result.chapters.endExtended
+                      ? t('MessageSeekIndexChaptersKeptEndExtended')
+                      : t('MessageSeekIndexChaptersKept')}
                 </p>
               )}
             </div>

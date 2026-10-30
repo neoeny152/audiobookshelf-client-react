@@ -1201,6 +1201,7 @@
   "MessageScheduleLibraryScanNote": "For most users, it is recommended to leave this feature disabled and keep the folder watcher setting enabled. The folder watcher will automatically detect changes in your library folders. The folder watcher doesn't work for every file system (like NFS) so scheduled library scans can be used instead.",
   "MessageSearchResultsFor": "Search results for",
   "MessageSeekIndexChaptersKept": "Saved chapter times were not changed. If they were set before the repair, re-run chapter lookup or snap to line them up with the files.",
+  "MessageSeekIndexChaptersKeptEndExtended": "Saved chapter times were not changed; the last chapter now runs to the new end. If they were set before the repair, re-run chapter lookup or snap to line them up with the files.",
   "MessageSeekIndexChaptersShifted": "Saved chapter times were shifted by up to {0} s.",
   "MessageSeekIndexFileDuration": "{0}: {1} → {2} ({3} s)",
   "MessageSeekIndexFileFailed": "{0}: {1}",

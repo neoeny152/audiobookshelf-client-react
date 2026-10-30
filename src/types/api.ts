@@ -629,7 +629,8 @@ export interface SeekIndexRepairResult {
   files: SeekIndexRepairFileResult[]
   oldTotalDuration: number
   newTotalDuration: number
-  chapters: { count: number; mode: 'keep' | 'shift'; shifted: boolean; maxShift: number }
+  /** shifted: times moved with the files (mode shift). endExtended: mode keep, only the last chapter's end moved to the new total */
+  chapters: { count: number; mode: 'keep' | 'shift'; shifted: boolean; endExtended?: boolean; maxShift: number }
 }
 
 /** GET /api/tools/item/:id/seek-index */

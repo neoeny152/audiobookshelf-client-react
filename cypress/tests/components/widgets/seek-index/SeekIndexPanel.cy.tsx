@@ -111,6 +111,11 @@ describe('<SeekIndexPanel />', () => {
     cy.get('@onDismissResult').should('have.been.calledOnce')
   })
 
+  it('says when only the last chapter end was moved', () => {
+    mountPanel({ result: { ...result, chapters: { ...result.chapters, endExtended: true } } })
+    cy.get('[cy-id="seek-index-result-chapters"]').should('contain.text', 'the last chapter now runs to the new end')
+  })
+
   it('reports shifted chapters and failed files', () => {
     const mixed: SeekIndexRepairResult = {
       ...result,
