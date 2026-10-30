@@ -1,9 +1,10 @@
 'use client'
 
 import { useLibrary } from '@/contexts/LibraryContext'
+import { shouldLeaveIssuesPage } from '@/lib/libraryIssues'
 import type { Library } from '@/types/api'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 export function isLibraryIssuesPage(pathname: string): boolean {
   return pathname.endsWith('/issues')
@@ -27,6 +28,8 @@ export function useLibraryRouteGuard() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { library, filterData, filterDataLoading } = useLibrary()
+  // Pathname of the Issues page visit on which possible duplicates were listed
+  const duplicatesShownOnRef = useRef<string | null>(null)
 
   useEffect(() => {
     const segments = pathname.split('/').filter(Boolean)
@@ -47,10 +50,12 @@ export function useLibraryRouteGuard() {
 
     if (isLibraryIssuesPage(pathname)) {
       if (filterDataLoading || filterData === null) return
-      // The Issues page also lists possible duplicates (fork server feature duplicateItems)
-      if ((filterData.numIssues ?? 0) === 0 && (filterData.numDuplicateGroups ?? 0) === 0) {
+      if ((filterData.numDuplicateGroups ?? 0) > 0) duplicatesShownOnRef.current = pathname
+      if (shouldLeaveIssuesPage(filterData, duplicatesShownOnRef.current === pathname)) {
         router.replace(`/library/${library.id}`)
       }
+    } else {
+      duplicatesShownOnRef.current = null
     }
   }, [pathname, library, filterData, filterDataLoading, router, searchParams])
 }
