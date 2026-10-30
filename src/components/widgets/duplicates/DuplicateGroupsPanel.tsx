@@ -30,7 +30,7 @@ export interface DuplicateGroupsPanelProps {
 const MATCH_TYPE_LABELS: Record<DuplicateMatchType, TranslationKey> = {
   asin: 'LabelDuplicateMatchAsin',
   isbn: 'LabelDuplicateMatchIsbn',
-  title: 'LabelDuplicateMatchTitle',
+  title: 'LabelDuplicateMatchTitle', // i18n-ignore: a translation key, not display text
   feed: 'LabelDuplicateMatchFeed'
 }
 
