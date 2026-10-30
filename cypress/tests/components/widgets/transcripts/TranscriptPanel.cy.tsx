@@ -58,7 +58,6 @@ function mountPanel(overrides: Partial<TranscriptPanelProps> = {}) {
     status: 'ready',
     isPodcast: false,
     isAdmin: true,
-    generateAvailable: true,
     onGenerate: cy.stub().as('onGenerate'),
     onCancel: cy.stub().as('onCancel'),
     onDelete: cy.stub().as('onDelete'),
@@ -128,10 +127,8 @@ describe('<TranscriptPanel />', () => {
   })
 
   it('offers no Generate when the server cannot generate', () => {
-    mountPanel({ generateAvailable: false })
-    cy.get('[cy-id="transcript-empty"]').should('exist')
-    cy.contains('button', 'Generate').should('not.exist')
     mountPanel({ list: list([], { canGenerate: false }) })
+    cy.get('[cy-id="transcript-empty"]').should('exist')
     cy.contains('button', 'Generate').should('not.exist')
   })
 })

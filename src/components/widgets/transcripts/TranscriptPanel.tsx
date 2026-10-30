@@ -17,8 +17,6 @@ export interface TranscriptPanelProps {
   isPodcast: boolean
   /** The viewer is an admin (generate, cancel, delete, check the feed) */
   isAdmin: boolean
-  /** The server can generate transcripts right now (`transcriptsGenerate`) */
-  generateAvailable: boolean
   /** The latest job state (socket event or action result); falls back to the list's */
   job?: TranscriptJob | null
   busy?: boolean
@@ -78,7 +76,6 @@ export default function TranscriptPanel({
   status,
   isPodcast,
   isAdmin,
-  generateAvailable,
   job: jobProp,
   busy = false,
   onGenerate,
@@ -92,7 +89,8 @@ export default function TranscriptPanel({
   const job = jobProp ?? list?.job ?? null
   const running = isTranscriptJobActive(job)
   const hasGenerated = transcripts.some((tr) => tr.source === 'generated')
-  const canGenerate = isAdmin && generateAvailable && !!list?.canGenerate
+  // the server decides: chapterbot is configured, or a book's EPUB made from the audio has read-along data to reuse
+  const canGenerate = isAdmin && !!list?.canGenerate
 
   return (
     <div className="flex flex-col gap-2 text-sm" cy-id="transcript-panel">

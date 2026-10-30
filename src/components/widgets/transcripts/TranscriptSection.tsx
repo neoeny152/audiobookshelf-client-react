@@ -45,15 +45,17 @@ function TranscriptReader({
   onClose: () => void
 }) {
   const t = useTypeSafeTranslations()
-  const { isStreaming, playItem } = useMediaContext()
+  const { isStreaming, playItem, playerControls } = useMediaContext()
   const streaming = isStreaming(libraryItem.id, episodeId)
   const progress = usePlayerProgress()
   const { content, status } = useTranscriptContent(libraryItem.id, episodeId, transcript.id, transcript.updatedAt)
   const handleSeek = useCallback(
     (time: number) => {
-      void playItem({ libraryItem, episodeId, startTime: time, queueItems: [] })
+      // already playing this book or episode: seek, keeping the session and the queue
+      if (streaming) playerControls.seek(time)
+      else void playItem({ libraryItem, episodeId, startTime: time, queueItems: [] })
     },
-    [episodeId, libraryItem, playItem]
+    [episodeId, libraryItem, playItem, playerControls, streaming]
   )
   return (
     <Modal
@@ -75,7 +77,7 @@ function TranscriptReader({
 
 /**
  * Transcripts of a book or podcast episode on its detail page (fork feature `transcripts`). Hidden on servers without
- * the feature. Admins can generate one from the audio (`transcriptsGenerate`), cancel it, delete it, and check a
+ * the feature. Admins can generate one from the audio (when the list says `canGenerate`), cancel it, delete it, and check a
  * podcast's feed for creator transcripts.
  */
 export default function TranscriptSection({ libraryItem, episodeId = null, title, variant = 'section' }: TranscriptSectionProps) {
@@ -83,7 +85,6 @@ export default function TranscriptSection({ libraryItem, episodeId = null, title
   const { showToast } = useGlobalToast()
   const { userIsAdminOrUp } = useUser()
   const transcriptsFeature = useServerFeature('transcripts')
-  const generateFeature = useServerFeature('transcriptsGenerate')
   const isPodcast = libraryItem.mediaType === 'podcast'
   const { list, status, reload, jobEvent } = useTranscripts(libraryItem.id, episodeId, transcriptsFeature)
   const [job, setJob] = useState<TranscriptJob | null>(null)
@@ -172,7 +173,6 @@ export default function TranscriptSection({ libraryItem, episodeId = null, title
       status={status}
       isPodcast={isPodcast}
       isAdmin={userIsAdminOrUp}
-      generateAvailable={generateFeature}
       job={job}
       busy={busy}
       onGenerate={() => setConfirmGenerate(true)}
