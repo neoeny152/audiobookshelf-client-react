@@ -75,7 +75,7 @@ describe('<SnapToAudioPanel /> settings', () => {
     cy.get('[cy-id="snap-settings"] input').eq(0).should('have.value', '25')
     cy.get('[cy-id="snap-settings"] input').eq(1).should('have.value', '0.7')
     cy.get('[cy-id="snap-settings"] input').eq(2).should('have.value', '-38')
-    cy.get('[cy-id="snap-settings"] input').eq(3).should('have.value', '3')
+    cy.get('[cy-id="snap-settings"] input').eq(3).should('have.value', '10')
   })
 
   it('sends the edited settings, clamped to the server ranges', () => {
@@ -551,8 +551,11 @@ describe('<SnapToAudioPanel /> whole-book speech check', () => {
     const { stub, release, state } = deferredCheck()
     mountBook({ onCheckSpeech: stub })
 
-    cy.get('[cy-id="snap-speech-progress-label"]').should('have.text', 'Checking speech 15/39')
+    cy.get('[cy-id="snap-speech-progress-label"]').should('have.text', 'Checking speech… 15 of 39 chapters')
     cy.get('[cy-id="snap-speech-progress"] [role="progressbar"]').should('have.attr', 'aria-valuenow', '15').and('have.attr', 'aria-valuemax', '39')
+    cy.get('[cy-id="snap-speech-spinner"]').should('exist')
+    // while the batches run the summary says the rest is being checked, not that it was left unchecked
+    cy.get('[cy-id="snap-summary"]').should('contain.text', 'checking 24 more…').and('not.contain.text', 'not checked')
     cy.get('@onCheckSpeech').should('have.been.calledOnce')
     cy.get('@onCheckSpeech').its('firstCall.args.1').should('deep.equal', range(16, 30))
     // the batch goes out for the session that was snapped
@@ -567,7 +570,7 @@ describe('<SnapToAudioPanel /> whole-book speech check', () => {
     cy.get('[cy-id="snap-row"][data-index="25"] input[type="checkbox"]').click()
 
     release()
-    cy.get('[cy-id="snap-speech-progress-label"]').should('have.text', 'Checking speech 30/39')
+    cy.get('[cy-id="snap-speech-progress-label"]').should('have.text', 'Checking speech… 30 of 39 chapters')
     cy.get('@onCheckSpeech').should('have.been.calledTwice')
     cy.get('@onCheckSpeech').its('secondCall.args.1').should('deep.equal', range(31, 39))
 
@@ -588,7 +591,7 @@ describe('<SnapToAudioPanel /> whole-book speech check', () => {
   it('cancels between batches, keeps what the last request checked and offers to check the rest', () => {
     const { stub, release } = deferredCheck()
     mountBook({ onCheckSpeech: stub })
-    cy.get('[cy-id="snap-speech-progress-label"]').should('have.text', 'Checking speech 15/39')
+    cy.get('[cy-id="snap-speech-progress-label"]').should('have.text', 'Checking speech… 15 of 39 chapters')
     cy.get('[cy-id="snap-speech-progress"]').contains('button', 'Cancel').click()
 
     cy.get('[cy-id="snap-speech-progress"]').should('not.exist')

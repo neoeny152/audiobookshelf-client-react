@@ -601,7 +601,9 @@ export default function SnapToAudioPanel({
         summary.moved > 0 ? t('MessageSnapSummaryMoved', { count: summary.moved }) : t('MessageSnapNoChanges'),
         showSpeech && summary.headingHeard > 0 ? t('MessageSnapSummaryHeard', { count: summary.headingHeard }) : null,
         summary.flagged > 0 ? t('MessageSnapSummaryFlagged', { count: summary.flagged }) : null,
-        showSpeech && summary.notChecked > 0 ? t('MessageSnapSummaryNotChecked', { count: summary.notChecked }) : null
+        showSpeech && summary.notChecked > 0
+          ? t(speechRunning ? 'MessageSnapSummaryChecking' : 'MessageSnapSummaryNotChecked', { count: summary.notChecked })
+          : null
       ].filter((part): part is string => !!part)
     : []
 
@@ -659,8 +661,11 @@ export default function SnapToAudioPanel({
       </div>
 
       {speechProgress && (
-        <div className="mt-2 flex items-center gap-3 text-sm" cy-id="snap-speech-progress">
-          <span role="status" className="shrink-0 tabular-nums" cy-id="snap-speech-progress-label">
+        <div className="border-primary/40 bg-primary/10 mt-2 flex items-center gap-3 rounded-md border px-3 py-2 text-sm" cy-id="snap-speech-progress">
+          <svg className="text-primary h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" aria-hidden="true" cy-id="snap-speech-spinner">
+            <path fill="currentColor" d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z" />
+          </svg>
+          <span role="status" className="shrink-0 font-medium tabular-nums" cy-id="snap-speech-progress-label">
             {t('MessageSnapCheckingSpeech', { checked: speechProgress.checked, total: speechProgress.total })}
           </span>
           <div

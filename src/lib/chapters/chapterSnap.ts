@@ -28,7 +28,7 @@ export const SNAP_DEFAULT_OPTIONS: Readonly<SnapAdvancedOptions> = Object.freeze
   windowSec: 25,
   minSilenceSec: 0.7,
   noiseDb: -38,
-  headingLookbackSec: 3
+  headingLookbackSec: 10
 })
 
 /** Server clamp ranges (`chapterSnap.js` NUMERIC_OPTION_BOUNDS). */
@@ -36,7 +36,7 @@ export const SNAP_OPTION_BOUNDS: Readonly<Record<keyof SnapAdvancedOptions, read
   windowSec: [2, 60],
   minSilenceSec: [0.2, 5],
   noiseDb: [-80, -20],
-  headingLookbackSec: [0, 6]
+  headingLookbackSec: [0, 15]
 })
 
 /** The server rejects longer titles; they are only echoed back, so trimming them is harmless. */
