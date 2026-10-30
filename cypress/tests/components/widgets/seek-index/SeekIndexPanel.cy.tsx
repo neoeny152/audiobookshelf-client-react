@@ -146,12 +146,12 @@ describe('<SeekIndexPanel />', () => {
   })
 
   it('shows old vs new durations, the chapter note and the backup after the repair', () => {
-    mountPanel({ status: repaired(), result })
+    mountPanel({ status: status(repaired().files, [backup]), result })
     cy.get('[cy-id="seek-index-warning"]').should('not.exist')
     cy.get('[cy-id="seek-index-result"]').should('contain.text', 'Seek index added to 2 files. Total duration 10:54:28 → 10:55:15 (+47.3 s).')
     cy.get('[cy-id="seek-index-result-file"]').eq(1).should('have.text', 'Part  II  Reborn.mp3: 03:41:20 → 03:41:50 (+30.5 s)')
     cy.get('[cy-id="seek-index-result-chapters"]').should('contain.text', 're-run chapter lookup or snap')
-    cy.get('[cy-id="seek-index-result"]').should('contain.text', 'kept as a backup you can restore')
+    cy.get('[cy-id="seek-index-result-backup"]').should('contain.text', 'Backup kept (333.62 MB)')
     cy.get('button[aria-label="Close"]').click()
     cy.get('@onDismissResult').should('have.been.calledOnce')
   })

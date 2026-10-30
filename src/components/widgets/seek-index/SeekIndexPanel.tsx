@@ -148,7 +148,11 @@ export default function SeekIndexPanel({
                         : t('MessageSeekIndexChaptersKept')}
                 </p>
               )}
-              {result.type === 'repair' && result.backupId && <p className="mt-1">{t('MessageSeekIndexBackupKept')}</p>}
+              {result.type === 'repair' && result.backupId && (
+                <p className="mt-1" cy-id="seek-index-result-backup">
+                  {t('MessageSeekIndexBackupKept', { 0: bytesPretty(backups.find((b) => b.id === result.backupId)?.size ?? 0) })}
+                </p>
+              )}
             </div>
             <button
               type="button"

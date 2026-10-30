@@ -19,8 +19,8 @@ describe('<SeekIndexSnapDialog />', () => {
     cy.get('[cy-id="seek-index-snap-dialog"]')
       .should('contain.text', 'Repair audio files before snapping?')
       .and('contain.text', '4 of this book')
-      .and('contain.text', 'by 43.4 s near the end of the worst file')
-      .and('contain.text', 'no re-encoding, no quality loss')
+      .and('contain.text', 'by up to 43.4 s near the end of the worst file')
+      .and('contain.text', 'copied bit-for-bit (no re-encoding, no quality loss)')
       .and('contain.text', 'kept as a backup you can restore')
   })
 
