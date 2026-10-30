@@ -2,6 +2,7 @@
 
 import Dropdown, { type DropdownItem } from '@/components/ui/Dropdown'
 import TextInput from '@/components/ui/TextInput'
+import ConfirmDialog from '@/components/widgets/ConfirmDialog'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import {
   clampMinConfidence,
@@ -102,6 +103,7 @@ function NumberSetting({
 export default function AutoPipelineSettingsSection({ value, libraryProvider, audibleProviders = [], features, onChange }: AutoPipelineSettingsSectionProps) {
   const t = useTypeSafeTranslations()
   const headingId = useId()
+  const [confirmAutoRepair, setConfirmAutoRepair] = useState(false)
   if (!features.autoPipeline) return null
 
   const settings = withAutoPipelineDefaults(value)
@@ -208,11 +210,59 @@ export default function AutoPipelineSettingsSection({ value, libraryProvider, au
         </div>
       </div>
 
+      <div className="flex min-w-0 flex-col gap-2" cy-id="auto-pipeline-repair-sweep">
+        {/* Not tied to the mode: Fix automatically on the item page uses it too, and it can always be turned off */}
+        <SettingsToggleSwitch
+          label={t('LabelAutoPipelineAutoRepair')}
+          value={settings.autoRepairSeekIndex}
+          onChange={(on) => (on ? setConfirmAutoRepair(true) : update({ autoRepairSeekIndex: false }))}
+          tooltip={t('LabelAutoPipelineAutoRepairHelp')}
+        />
+        <SettingsToggleSwitch
+          label={t('LabelAutoPipelineNightlySweep')}
+          value={settings.nightlySweep}
+          disabled={off}
+          onChange={(nightlySweep) => update({ nightlySweep })}
+          tooltip={t('LabelAutoPipelineNightlySweepHelp')}
+        />
+        {settings.nightlySweep && (
+          <div className="flex flex-wrap items-end gap-2" cy-id="auto-pipeline-sweep-window">
+            <TextInput
+              type="time"
+              label={t('LabelAutoPipelineSweepFrom')}
+              value={settings.sweepStart}
+              disabled={off}
+              className="w-32"
+              onChange={(sweepStart) => sweepStart && update({ sweepStart })}
+            />
+            <TextInput
+              type="time"
+              label={t('LabelAutoPipelineSweepTo')}
+              value={settings.sweepEnd}
+              disabled={off}
+              className="w-32"
+              onChange={(sweepEnd) => sweepEnd && update({ sweepEnd })}
+            />
+          </div>
+        )}
+      </div>
+
       {!audible && (
         <p className="bg-warning/15 border-warning/60 rounded-md border px-3 py-2 text-sm" role="note" cy-id="auto-pipeline-provider-warning">
           {t('MessageAutoPipelineNotAudible')}
         </p>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmAutoRepair}
+        message={t('MessageConfirmAutoRepairSeekIndex')}
+        yesButtonClassName="bg-primary"
+        onClose={() => setConfirmAutoRepair(false)}
+        onConfirm={() => {
+          setConfirmAutoRepair(false)
+          update({ autoRepairSeekIndex: true })
+        }}
+      />
     </section>
   )
 }

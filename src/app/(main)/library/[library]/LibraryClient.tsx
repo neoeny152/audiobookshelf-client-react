@@ -6,12 +6,15 @@ import ItemSlider from '@/components/widgets/ItemSlider'
 import { AuthorCard } from '@/components/widgets/media-card/AuthorCard'
 import SelectableShelfMediaCard from '@/components/widgets/media-card/SelectableShelfMediaCard'
 import { SeriesCard } from '@/components/widgets/media-card/SeriesCard'
+import NeedsRepairList from '@/components/widgets/pipeline/NeedsRepairList'
 import { useCardSize } from '@/contexts/CardSizeContext'
 import { useLibrary } from '@/contexts/LibraryContext'
 import { useSocketEvent } from '@/contexts/SocketContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
 import { useUser } from '@/contexts/UserContext'
 import { useLibraryItemUpdated } from '@/hooks/useLibraryItemUpdated'
+import { useNeedsRepairItems } from '@/hooks/useNeedsRepairItems'
+import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
 import { applyLibraryItemUpdateToShelves } from '@/lib/libraryItemUpdatedUtils'
 import {
@@ -121,6 +124,10 @@ export default function LibraryClient({ personalized, libraryItemCount: libraryI
   const [libraryItemCount, setLibraryItemCount] = useState(libraryItemCountProp)
 
   const visibleShelves = useMemo(() => prunePersonalizedShelves(shelves), [shelves])
+
+  // Books whose MP3s the pipeline would rewrite once an admin says so (fork only)
+  const autoPipelineAvailable = useServerFeature('autoPipeline')
+  const needsRepair = useNeedsRepairItems(library.id, autoPipelineAvailable && userIsAdminOrUp && library.mediaType === 'book')
 
   useEffect(() => {
     setShelves(personalized)
@@ -392,6 +399,14 @@ export default function LibraryClient({ personalized, libraryItemCount: libraryI
 
   return (
     <div className="pb-20" style={{ fontSize: sizeMultiplier + 'rem' }}>
+      <NeedsRepairList
+        libraryId={library.id}
+        items={needsRepair.items}
+        busyItemIds={needsRepair.busyItemIds}
+        onRepair={(item, always) => void needsRepair.repair(item, always)}
+        onNotNow={(item) => void needsRepair.notNow(item)}
+      />
+
       {/* empty state with scan button if user is admin or root */}
       {visibleShelves.length === 0 && (
         <div className="py-8">

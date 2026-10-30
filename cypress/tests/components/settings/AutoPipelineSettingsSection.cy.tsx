@@ -9,7 +9,11 @@ import { useState } from 'react'
 const ALL_FEATURES: AutoPipelineFeatures = { autoPipeline: true, chapterbotEpub: true, chapterbotVerify: true }
 
 /** Hosts the section like LibrarySettingsTab: the value round-trips through state. */
-function Harness({ initial, onChangeSpy, ...props }: Omit<AutoPipelineSettingsSectionProps, 'value' | 'onChange'> & {
+function Harness({
+  initial,
+  onChangeSpy,
+  ...props
+}: Omit<AutoPipelineSettingsSectionProps, 'value' | 'onChange'> & {
   initial?: AutoPipelineSettings
   onChangeSpy: (next: AutoPipelineSettings) => void
 }) {
@@ -58,8 +62,10 @@ describe('<AutoPipelineSettingsSection />', () => {
     cy.get('[cy-id="auto-pipeline-min-confidence"] input').should('have.value', '95')
     cy.get('[cy-id="auto-pipeline-settle"] input').should('have.value', '5')
     cy.get('[cy-id="auto-pipeline-provider-warning"]').should('not.exist')
-    cy.get('[cy-id="auto-pipeline-settings"] [role="switch"]').should('have.length', 3).each((toggle) => {
-      cy.wrap(toggle).should('be.disabled')
+    cy.get('[cy-id="auto-pipeline-settings"] [role="switch"]').should('have.length', 5)
+    cy.get('[cy-id="auto-pipeline-settings"] [role="switch"]').each((toggle, index) => {
+      // The seek index repair (4th) is not tied to the mode
+      cy.wrap(toggle).should(index === 3 ? 'not.be.disabled' : 'be.disabled')
     })
   })
 
@@ -100,8 +106,33 @@ describe('<AutoPipelineSettingsSection />', () => {
   })
 
   it('disables the EPUB step without chapterbotEpub and notes a missing speech check', () => {
-    mountSection({ features: { autoPipeline: true, chapterbotEpub: false, chapterbotVerify: false }, initial: { ...AUTO_PIPELINE_DEFAULTS, mode: 'on', autoEpub: true } })
+    mountSection({
+      features: { autoPipeline: true, chapterbotEpub: false, chapterbotVerify: false },
+      initial: { ...AUTO_PIPELINE_DEFAULTS, mode: 'on', autoEpub: true }
+    })
     cy.get('[cy-id="auto-pipeline-no-verify"]').should('exist')
-    cy.get('[cy-id="auto-pipeline-settings"] [role="switch"]').last().should('be.disabled').and('have.attr', 'aria-checked', 'false')
+    cy.get('[cy-id="auto-pipeline-settings"] [role="switch"]').eq(2).should('be.disabled').and('have.attr', 'aria-checked', 'false')
+  })
+
+  it('asks before turning on the seek index repair, and turns it off without asking', () => {
+    mountSection({ initial: { ...AUTO_PIPELINE_DEFAULTS, mode: 'on' } })
+    cy.get('[cy-id="auto-pipeline-repair-sweep"] [role="switch"]').first().click()
+    cy.get('[role="dialog"]').should('contain.text', 'without asking').contains('button', 'Cancel').click()
+    cy.get('@onChange').should('not.have.been.called')
+    cy.get('[cy-id="auto-pipeline-repair-sweep"] [role="switch"]').first().should('have.attr', 'aria-checked', 'false').click()
+    cy.get('[role="dialog"]').contains('button', 'Yes').click()
+    cy.get('@onChange').its('lastCall.args.0.autoRepairSeekIndex').should('equal', true)
+    cy.get('[cy-id="auto-pipeline-repair-sweep"] [role="switch"]').first().click()
+    cy.get('[role="dialog"]').should('not.exist')
+    cy.get('@onChange').its('lastCall.args.0.autoRepairSeekIndex').should('equal', false)
+  })
+
+  it('shows the quiet hours once the nightly sweep is on', () => {
+    mountSection({ initial: { ...AUTO_PIPELINE_DEFAULTS, mode: 'on' } })
+    cy.get('[cy-id="auto-pipeline-sweep-window"]').should('not.exist')
+    cy.get('[cy-id="auto-pipeline-repair-sweep"] [role="switch"]').last().click()
+    cy.get('@onChange').its('lastCall.args.0.nightlySweep').should('equal', true)
+    cy.get('[cy-id="auto-pipeline-sweep-window"] input').first().should('have.value', '01:00')
+    cy.get('[cy-id="auto-pipeline-sweep-window"] input').last().should('have.value', '06:00')
   })
 })
