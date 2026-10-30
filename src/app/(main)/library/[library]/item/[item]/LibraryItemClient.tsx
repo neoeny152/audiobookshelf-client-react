@@ -132,7 +132,9 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
   const handleStartGuide = (from?: GuideStepId) => {
     if (!health) return
     const steps = getGuideSteps(health)
-    const index = Math.max(0, from ? steps.indexOf(from) : 0)
+    // a step asked for by name (Pick the match) is kept even when the health read since no longer lists it
+    if (from && !steps.includes(from)) steps.splice(steps.indexOf('lookup'), 0, from)
+    const index = from ? steps.indexOf(from) : 0
     setGuide({ steps, index })
     openGuideStep(steps[index])
   }
@@ -290,11 +292,7 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
                 )}
 
                 {pipelineState && (
-                  <PipelineStatusChip
-                    state={pipelineState}
-                    href={getProcessingHref(library.id, getPipelineTab(pipelineState.status))}
-                    className="mt-1"
-                  />
+                  <PipelineStatusChip state={pipelineState} href={getProcessingHref(library.id, getPipelineTab(pipelineState.status))} className="mt-1" />
                 )}
               </div>
 

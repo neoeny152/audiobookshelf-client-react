@@ -101,15 +101,13 @@ describe('<GuidedFixCard />', () => {
     mountCard()
     cy.contains('button', 'Fix automatically').click()
     cy.get('@getHealth').should('have.been.calledWith', 'li_1', true)
-    cy.get('[cy-id="repair-consent"]')
-      .should('contain.text', 'Repair the audio files first?')
-      .and('contain.text', 'Rewrite 4 MP3 files')
-      .and('contain.text', 'Do this automatically from now on')
+    cy.get('[cy-id="repair-consent"]').should('contain.text', 'Repair the audio files first?').and('contain.text', 'Rewrite 4 MP3 files')
+    cy.get('[role="dialog"]').should('contain.text', 'Do this automatically from now on')
     cy.get('[role="dialog"]').contains('button', 'Cancel').click()
     cy.get('@run').should('not.have.been.called')
 
     cy.contains('button', 'Fix automatically').click()
-    cy.get('[cy-id="repair-consent"] input[type="checkbox"]').click()
+    cy.get('[role="dialog"] input[type="checkbox"]').click()
     cy.get('[role="dialog"]').contains('button', 'Repair and fix').click()
     cy.get('@enableAutoRepair').should('have.been.calledOnce')
     cy.get('@run').should('have.been.calledOnceWith', 'li_1', { fix: true, repairSeekIndex: true })
@@ -145,12 +143,13 @@ describe('<GuidedFixCard />', () => {
     cy.get('@onStartGuide').should('have.been.calledOnceWith', 'match')
   })
 
-  it('shows Repair files as the first guide step and moves on once the files are repaired', () => {
+  it('shows Repair files as the first guide step and moves on once the files are repaired, without the library setting', () => {
     const guide: GuidedFix = { stepId: 'repair', stepIndex: 0, total: 5, paused: false, advance: cy.stub().as('advance'), resume: cy.stub(), stop: cy.stub() }
     mountCard({ guide })
     cy.contains('button', 'Fix automatically').should('not.exist')
     cy.get('[cy-id="guide-hint"]').should('contain.text', 'Step 1 of 5: Repair the audio files')
     cy.contains('button', 'Repair files').click()
+    cy.get('[role="dialog"] input[type="checkbox"]').should('not.exist')
     cy.get('[role="dialog"]').contains('button', 'Repair').click()
     cy.get('@onRepairFiles').should('have.been.calledOnce')
     cy.get('@advance').should('have.been.calledOnce')

@@ -1,15 +1,15 @@
 'use client'
 
-import Checkbox from '@/components/ui/Checkbox'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
-import { useEffect, useState } from 'react'
 
 interface RepairConsentDialogProps {
   isOpen: boolean
   /** MP3 files that would be rewritten */
   fileCount: number
   yesButtonText: string
+  /** Offer "Do this automatically from now on"; not for a repair of this one book only */
+  offerAutomatic?: boolean
   onClose: () => void
   /** `always`: the "Do this automatically from now on" box was ticked */
   onConfirm: (always: boolean) => void
@@ -19,13 +19,8 @@ interface RepairConsentDialogProps {
  * The OK to rewrite a book's MP3s before the pipeline goes on, with the option to stop asking (the library's Repair MP3
  * seek index automatically setting). Chapter times are always kept.
  */
-export default function RepairConsentDialog({ isOpen, fileCount, yesButtonText, onClose, onConfirm }: RepairConsentDialogProps) {
+export default function RepairConsentDialog({ isOpen, fileCount, yesButtonText, offerAutomatic = true, onClose, onConfirm }: RepairConsentDialogProps) {
   const t = useTypeSafeTranslations()
-  const [always, setAlways] = useState(false)
-  useEffect(() => {
-    if (isOpen) setAlways(false)
-  }, [isOpen])
-
   return (
     <ConfirmDialog
       isOpen={isOpen}
@@ -34,16 +29,14 @@ export default function RepairConsentDialog({ isOpen, fileCount, yesButtonText, 
         <div className="flex flex-col gap-3" cy-id="repair-consent">
           <p className="font-semibold">{t('HeaderRepairBeforeFix')}</p>
           <p>{t('MessageConfirmRepairSeekIndex', { 0: fileCount })}</p>
-          <div>
-            <Checkbox value={always} size="small" label={t('LabelDoThisAutomatically')} onChange={setAlways} />
-            <p className="text-foreground-muted mt-1 ps-7 text-xs">{t('LabelDoThisAutomaticallyHelp')}</p>
-          </div>
+          {offerAutomatic && <p className="text-foreground-muted text-xs">{t('LabelDoThisAutomaticallyHelp')}</p>}
         </div>
       }
+      checkboxLabel={offerAutomatic ? t('LabelDoThisAutomatically') : undefined}
       yesButtonText={yesButtonText}
       yesButtonClassName="bg-primary"
       onClose={onClose}
-      onConfirm={() => onConfirm(always)}
+      onConfirm={(always) => onConfirm(!!always)}
     />
   )
 }

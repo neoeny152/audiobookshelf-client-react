@@ -1,5 +1,6 @@
 import GuideTarget from '@/components/widgets/guided-fix/GuideTarget'
 import { GuidedFixContext, type GuidedFix } from '@/contexts/GuidedFixContext'
+import { useState } from 'react'
 
 function guide(partial: Partial<GuidedFix> = {}): GuidedFix {
   return { stepId: 'lookup', stepIndex: 2, total: 5, paused: false, advance: cy.stub(), resume: cy.stub(), stop: cy.stub().as('stop'), ...partial }
@@ -40,10 +41,44 @@ describe('<GuideTarget />', () => {
     cy.focused().should('not.exist')
   })
 
-  it('stops the guide with its button or Escape', () => {
+  it("keeps the control's own description and follows the control when the content changes", () => {
+    function Swapping() {
+      const [done, setDone] = useState(false)
+      return done ? (
+        <p>
+          <button type="button">Apply</button>
+        </p>
+      ) : (
+        <button type="button" aria-describedby="own" onClick={() => setDone(true)}>
+          Snap
+        </button>
+      )
+    }
+    cy.mount(
+      <GuidedFixContext.Provider value={guide({ stepId: 'snap' })}>
+        <span id="own">Own help</span>
+        <GuideTarget step="snap">
+          <Swapping />
+        </GuideTarget>
+      </GuidedFixContext.Provider>
+    )
+    cy.get('[cy-id="guide-hint"] [role="status"]')
+      .invoke('attr', 'id')
+      .then((id) => {
+        cy.contains('button', 'Snap').should('have.attr', 'aria-describedby', `own ${id}`).click()
+        cy.contains('button', 'Apply').should('have.attr', 'aria-describedby', id)
+      })
+  })
+
+  it('stops the guide with its button or Escape, before a modal would see the Escape', () => {
+    const modalEscape = cy.stub().as('modalEscape')
+    document.addEventListener('keydown', modalEscape, { capture: true })
     mountTarget(guide())
     cy.get('button[aria-label="Stop the guide"]').focus().type('{esc}')
     cy.get('@stop').should('have.been.calledOnce')
+    cy.get('@modalEscape')
+      .should('not.have.been.called')
+      .then(() => document.removeEventListener('keydown', modalEscape, { capture: true }))
     cy.get('button[aria-label="Stop the guide"]').click()
     cy.get('@stop').should('have.been.calledTwice')
   })

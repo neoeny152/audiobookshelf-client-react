@@ -7,7 +7,7 @@ import { SEEK_INDEX_TASK_ACTIONS } from '@/hooks/useSeekIndex'
 import { callStatusAction } from '@/lib/actionResult'
 import { toPipelineItemState } from '@/lib/autoPipeline'
 import type { ItemHealth } from '@/types/api'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface UseItemHealthOptions {
   enabled: boolean
@@ -48,9 +48,14 @@ export function useItemHealth(libraryItemId: string, { enabled, measure = false 
     }
   }, [enabled, libraryItemId, measure])
 
+  // A run saves its state on every poll and log line; the health only changes with its status
+  const lastStatusRef = useRef<string | null>(null)
   const handlePipelineUpdate = useCallback(
     (data: unknown) => {
-      if (enabled && toPipelineItemState(data)?.libraryItemId === libraryItemId) void reload()
+      const state = toPipelineItemState(data)
+      if (!enabled || state?.libraryItemId !== libraryItemId || state.status === lastStatusRef.current) return
+      lastStatusRef.current = state.status
+      void reload()
     },
     [enabled, libraryItemId, reload]
   )

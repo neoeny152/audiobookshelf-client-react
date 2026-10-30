@@ -233,7 +233,8 @@ export default function AutoPipelineSettingsSection({ value, libraryProvider, au
               value={settings.sweepStart}
               disabled={off}
               className="w-32"
-              onChange={(sweepStart) => sweepStart && update({ sweepStart })}
+              // the server refuses equal start and end
+              onChange={(sweepStart) => sweepStart && sweepStart !== settings.sweepEnd && update({ sweepStart })}
             />
             <TextInput
               type="time"
@@ -241,7 +242,7 @@ export default function AutoPipelineSettingsSection({ value, libraryProvider, au
               value={settings.sweepEnd}
               disabled={off}
               className="w-32"
-              onChange={(sweepEnd) => sweepEnd && update({ sweepEnd })}
+              onChange={(sweepEnd) => sweepEnd && sweepEnd !== settings.sweepStart && update({ sweepEnd })}
             />
           </div>
         )}

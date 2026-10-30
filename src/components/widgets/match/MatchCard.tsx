@@ -15,9 +15,20 @@ interface MatchCardProps {
   isFocused?: boolean
   cardIndex?: number
   onArrowKey?: (direction: 'up' | 'down', index: number) => void
+  /** Guide me points at this card: a pulsing ring, and the hint as its description */
+  guideHintId?: string
 }
 
-export default function MatchCard({ book, isPodcast = false, currentBookDuration = 0, onSelect, isFocused = false, cardIndex, onArrowKey }: MatchCardProps) {
+export default function MatchCard({
+  book,
+  isPodcast = false,
+  currentBookDuration = 0,
+  onSelect,
+  isFocused = false,
+  cardIndex,
+  onArrowKey,
+  guideHintId
+}: MatchCardProps) {
   const t = useTypeSafeTranslations()
   const [selectedCover, setSelectedCover] = useState<string | null>(null)
   const cardRef = React.useRef<HTMLDivElement>(null)
@@ -124,10 +135,18 @@ export default function MatchCard({ book, isPodcast = false, currentBookDuration
       role="option"
       aria-selected={isFocused}
       aria-label={`Select ${book.title}`}
-      className={mergeClasses('hover:bg-bg-hover/50 w-full cursor-pointer rounded border p-3', 'border-border', 'focus:border-foreground', 'outline-none')}
+      aria-describedby={guideHintId}
+      className={mergeClasses(
+        'hover:bg-bg-hover/50 w-full cursor-pointer rounded border p-3',
+        'border-border',
+        'focus:border-foreground',
+        'outline-none',
+        guideHintId && 'relative'
+      )}
       onClick={handleSelect}
       onKeyDown={handleKeyDown}
     >
+      {guideHintId && <span aria-hidden="true" className="ring-primary pointer-events-none absolute inset-0 rounded ring-2 motion-safe:animate-pulse" />}
       <div className="flex flex-col py-1 md:flex-row">
         {/* Mobile: cover image with published year and confidence on the right */}
         {/* Desktop: cover image on the left */}

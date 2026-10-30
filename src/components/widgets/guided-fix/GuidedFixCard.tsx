@@ -289,6 +289,7 @@ export default function GuidedFixCard({
         isOpen={!!consent}
         fileCount={consent?.files ?? 0}
         yesButtonText={consent?.kind === 'guide' ? t('ButtonRepairSeekIndex') : t('ButtonRepairAndFix')}
+        offerAutomatic={consent?.kind !== 'guide'}
         onClose={() => setConsent(null)}
         onConfirm={(always) => void handleConsent(always)}
       />

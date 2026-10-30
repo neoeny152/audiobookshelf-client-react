@@ -8,7 +8,7 @@ import Dropdown from '@/components/ui/Dropdown'
 import { MultiSelectItem } from '@/components/ui/MultiSelect'
 import TextInput from '@/components/ui/TextInput'
 import ConfirmDialog from '@/components/widgets/ConfirmDialog'
-import GuideTarget from '@/components/widgets/guided-fix/GuideTarget'
+import { GuideHint, useActiveGuideStep } from '@/components/widgets/guided-fix/GuideTarget'
 import BookMatchView from '@/components/widgets/match/BookMatchView'
 import MatchCard from '@/components/widgets/match/MatchCard'
 import PodcastMatchView from '@/components/widgets/match/PodcastMatchView'
@@ -21,7 +21,7 @@ import { callStatusAction } from '@/lib/actionResult'
 import { getLibraryItemCoverUrl } from '@/lib/coverUtils'
 import { formatDrift } from '@/lib/itemHealth'
 import { BookLibraryItem, BookSearchResult, isBookMedia, isPodcastMedia, PodcastLibraryItem, PodcastSearchResult } from '@/types/api'
-import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition, type Ref } from 'react'
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition, type Ref } from 'react'
 
 interface MatchProps {
   libraryItem: BookLibraryItem | PodcastLibraryItem
@@ -93,6 +93,9 @@ export default function Match({
   /** Measured minus stored length of the book's MP3s (fork servers), which the match scores already use */
   const [measuredDrift, setMeasuredDrift] = useState(0)
   const healthAvailable = useServerFeature('mp3SeekIndex')
+  /** Guide me points at the best result */
+  const guidingMatch = !!useActiveGuideStep('match')
+  const guideHintId = useId()
 
   const media = useMemo(() => libraryItem.media || {}, [libraryItem.media])
   const mediaMetadata = useMemo(() => media.metadata || {}, [media.metadata])
@@ -429,6 +432,8 @@ export default function Match({
             </div>
           )}
 
+          {!isPendingSearch && searchResults.length > 0 && <GuideHint step="match" id={guideHintId} className="mt-3 shrink-0" />}
+
           {!isPendingSearch && (
             <div
               ref={scrollContainerRef}
@@ -438,28 +443,19 @@ export default function Match({
               role="listbox"
               aria-label={t('AriaLabelSearchResults')}
             >
-              {searchResults.map((result, index) => {
-                const card = (
-                  <MatchCard
-                    key={index}
-                    book={result}
-                    isPodcast={isPodcast}
-                    currentBookDuration={currentBookDuration}
-                    onSelect={handleSelectMatch}
-                    isFocused={focusedCardIndex === index}
-                    cardIndex={index}
-                    onArrowKey={handleCardArrowKey}
-                  />
-                )
-                // Guide me points at the best result
-                return index === 0 ? (
-                  <GuideTarget key={index} step="match">
-                    {card}
-                  </GuideTarget>
-                ) : (
-                  card
-                )
-              })}
+              {searchResults.map((result, index) => (
+                <MatchCard
+                  key={index}
+                  book={result}
+                  isPodcast={isPodcast}
+                  currentBookDuration={currentBookDuration}
+                  onSelect={handleSelectMatch}
+                  isFocused={focusedCardIndex === index}
+                  cardIndex={index}
+                  onArrowKey={handleCardArrowKey}
+                  guideHintId={index === 0 && guidingMatch ? guideHintId : undefined}
+                />
+              ))}
             </div>
           )}
         </div>

@@ -62,7 +62,7 @@ describe('<NeedsRepairList />', () => {
   it('repairs after the OK, passing the "from now on" choice, and puts a book aside', () => {
     mountList()
     cy.get('[cy-id="needs-repair-row"]').first().contains('button', 'Repair').click()
-    cy.get('[cy-id="repair-consent"] input[type="checkbox"]').click()
+    cy.get('[role="dialog"] input[type="checkbox"]').click()
     cy.get('[role="dialog"]').contains('button', 'Repair').click()
     cy.get('@onRepair').should('have.been.calledOnceWith', waiting, true)
     cy.get('[cy-id="needs-repair-row"]').first().contains('button', 'Not now').click()
