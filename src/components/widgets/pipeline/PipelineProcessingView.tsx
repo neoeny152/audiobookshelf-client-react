@@ -25,7 +25,8 @@ import type { TranslationKey } from '@/types/translations'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
-export type PipelineRunScope = 'unprocessed' | 'all'
+/** `needs-work`: the books whose health has an issue (lib/itemHealth), processed again if need be */
+export type PipelineRunScope = 'unprocessed' | 'all' | 'needs-work'
 
 export interface PipelineProcessingViewProps {
   libraryId: string
@@ -64,6 +65,12 @@ const MODE_LABEL: Record<AutoPipelineMode, TranslationKey> = {
   dryRun: 'LabelAutoPipelineModeDryRun',
   on: 'LabelAutoPipelineModeOn'
 }
+
+const RUN_CONFIRM: Readonly<Record<PipelineRunScope, TranslationKey>> = Object.freeze({
+  unprocessed: 'MessageConfirmAutoPipelineRunUnprocessed',
+  all: 'MessageConfirmAutoPipelineRunAll',
+  'needs-work': 'MessageConfirmAutoPipelineRunNeedsWork'
+})
 
 type PendingConfirm = { kind: 'run'; scope: PipelineRunScope } | { kind: 'undo'; item: PipelineItemState }
 
@@ -123,6 +130,14 @@ export default function PipelineProcessingView({
             </Btn>
             <Btn size="small" disabled={!gate || !!runningScope} loading={runningScope === 'all'} onClick={() => setPending({ kind: 'run', scope: 'all' })}>
               {t('ButtonAutoPipelineRunAll')}
+            </Btn>
+            <Btn
+              size="small"
+              disabled={!gate || !!runningScope}
+              loading={runningScope === 'needs-work'}
+              onClick={() => setPending({ kind: 'run', scope: 'needs-work' })}
+            >
+              {t('ButtonAutoPipelineRunNeedsWork')}
             </Btn>
           </div>
         )}
@@ -227,9 +242,7 @@ export default function PipelineProcessingView({
         isOpen={!!pending}
         message={
           pending?.kind === 'run'
-            ? t(pending.scope === 'all' ? 'MessageConfirmAutoPipelineRunAll' : 'MessageConfirmAutoPipelineRunUnprocessed', {
-                mode: t(MODE_LABEL[mode ?? 'off'])
-              })
+            ? t(RUN_CONFIRM[pending.scope], { mode: t(MODE_LABEL[mode ?? 'off']) })
             : t('MessageConfirmAutoPipelineUndoChapters', { title: pending?.kind === 'undo' ? (pending.item.title ?? '') : '' })
         }
         onClose={() => setPending(null)}

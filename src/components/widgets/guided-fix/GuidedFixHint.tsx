@@ -26,6 +26,8 @@ export interface GuidedFixActions {
   enableAutomation: (options: { autoRepairSeekIndex: boolean; autoEpub: boolean }) => Promise<StatusActionResult<unknown>>
   /** The guide's optional last step: a read-along EPUB made from the audio */
   startEpub: (libraryItemId: string) => Promise<StatusActionResult<unknown>>
+  /** "Also fix the other books": queue the library's books that need work in the auto pipeline */
+  runBacklog: () => Promise<StatusActionResult<{ queued: number }>>
 }
 
 export interface GuidedFixHintProps {
@@ -53,6 +55,10 @@ export interface GuidedFixHintProps {
   epubOffer: EpubOffer | null
   /** Its read-along EPUB box is offered (the server can make them) */
   canAutomateEpub: boolean
+  /** Other books of the library that need work, offered to queue with "Do all of this automatically" */
+  backlogCount: number
+  /** The Processing page, where queued books can be followed */
+  processingHref: string
 }
 
 const FIX_STEP_LABEL: Partial<Record<PipelineItemStatus, TranslationKey>> = {
@@ -85,7 +91,9 @@ export default function GuidedFixHint({
   onNextTimeAnswered,
   canAutomate,
   epubOffer,
-  canAutomateEpub
+  canAutomateEpub,
+  backlogCount,
+  processingHref
 }: GuidedFixHintProps) {
   const t = useTypeSafeTranslations()
   const guide = useGuidedFix()
@@ -95,6 +103,9 @@ export default function GuidedFixHint({
   const [savingAutomation, setSavingAutomation] = useState(false)
   const [automateRepair, setAutomateRepair] = useState(false)
   const [automateEpub, setAutomateEpub] = useState(false)
+  const [fixBacklog, setFixBacklog] = useState(true)
+  /** Books queued with "Also fix the other books", shown until dismissed */
+  const [backlogQueued, setBacklogQueued] = useState<number | null>(null)
   /** MP3 files Fix it for me would rewrite, while it asks */
   const [consentFiles, setConsentFiles] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -158,6 +169,19 @@ export default function GuidedFixHint({
         setError(saved.error)
         return
       }
+      if (fixBacklog && backlogCount > 0) {
+        setSavingAutomation(true)
+        const run = await callStatusAction(actions.runBacklog)
+        setSavingAutomation(false)
+        if (!run.ok) {
+          setError(run.error)
+          return
+        }
+        // Says how many were queued until dismissed
+        setGuidancePreference(preference)
+        setBacklogQueued(run.data.queued)
+        return
+      }
     }
     setGuidancePreference(preference)
     onNextTimeAnswered()
@@ -166,7 +190,12 @@ export default function GuidedFixHint({
   const handleDismiss = () => {
     setRunState(null)
     setError(null)
-    onDismiss()
+    if (backlogQueued === null) {
+      onDismiss()
+      return
+    }
+    setBacklogQueued(null)
+    onNextTimeAnswered()
   }
 
   // A socket update newer than the run's start is the run's progress (an older one is from before it)
@@ -248,6 +277,20 @@ export default function GuidedFixHint({
         {action}
       </>
     )
+  } else if (backlogQueued !== null) {
+    body = (
+      <span cy-id="guided-fix-backlog">
+        {t.rich('MessageGuideBacklogQueued', {
+          count: backlogQueued,
+          link: (chunks) => (
+            <Link href={processingHref} className="link-underline text-foreground">
+              {chunks}
+            </Link>
+          )
+        })}
+        {automateEpub && ` ${t('MessageGuideBacklogEpubNote')}`}
+      </span>
+    )
   } else if (doneSummary !== null) {
     body = (
       <div className="flex flex-col gap-2" cy-id="guided-fix-next-time">
@@ -271,6 +314,15 @@ export default function GuidedFixHint({
             {/* A box for highlighting existing EPUBs joins this one once the server can align them */}
             {canAutomateEpub && (
               <Checkbox size="small" value={automateEpub} label={t('LabelAutomateReadAlongEpub')} labelClass="text-xs" onChange={setAutomateEpub} />
+            )}
+            {backlogCount > 0 && (
+              <Checkbox
+                size="small"
+                value={fixBacklog}
+                label={t('LabelGuideFixBacklog', { count: backlogCount })}
+                labelClass="text-xs"
+                onChange={setFixBacklog}
+              />
             )}
           </div>
         )}
@@ -342,7 +394,7 @@ export default function GuidedFixHint({
           {t('MessageFixFailed', { reason: error })}
         </span>
       )}
-      {!fixRunning && !guide && doneSummary === null && (
+      {!fixRunning && !guide && (doneSummary === null || backlogQueued !== null) && (
         <IconBtn borderless size="small" variant="muted" ariaLabel={t('ButtonAutoPipelineDismiss')} onClick={handleDismiss}>
           close
         </IconBtn>

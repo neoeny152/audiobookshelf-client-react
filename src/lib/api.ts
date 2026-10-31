@@ -639,9 +639,12 @@ export async function getLibraryPipeline(libraryId: string, status?: PipelineIte
   return apiRequest<LibraryPipelineResponse>(`/api/libraries/${libraryId}/pipeline${query}`)
 }
 
-/** Admin only. Queues the library's books: `unprocessed` skips books the pipeline already handled. */
-export async function runLibraryPipeline(libraryId: string, scope: 'unprocessed' | 'all'): Promise<{ queued: number }> {
-  return apiRequest<{ queued: number }>(`/api/libraries/${libraryId}/pipeline/run`, { method: 'POST', body: JSON.stringify({ scope }) })
+/**
+ * Admin only. Queues the library's books: `unprocessed` skips books the pipeline already handled, `needs-work` takes
+ * only the books that need work (but `except`, and books already on the pipeline or waiting for a review).
+ */
+export async function runLibraryPipeline(libraryId: string, scope: 'unprocessed' | 'all' | 'needs-work', except?: string[]): Promise<{ queued: number }> {
+  return apiRequest<{ queued: number }>(`/api/libraries/${libraryId}/pipeline/run`, { method: 'POST', body: JSON.stringify({ scope, except }) })
 }
 
 /** Fork only: what is likely wrong with the book. `measure` (admin only) first measures MP3s without a seek header. */

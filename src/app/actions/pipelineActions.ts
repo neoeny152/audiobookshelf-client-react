@@ -23,8 +23,12 @@ export async function getLibraryPipelineAction(libraryId: string, status?: Pipel
   return toStatusActionResult(() => api.getLibraryPipeline(libraryId, status))
 }
 
-export async function runLibraryPipelineAction(libraryId: string, scope: 'unprocessed' | 'all'): Promise<StatusActionResult<{ queued: number }>> {
-  return toStatusActionResult(() => api.runLibraryPipeline(libraryId, scope))
+export async function runLibraryPipelineAction(
+  libraryId: string,
+  scope: 'unprocessed' | 'all' | 'needs-work',
+  except?: string[]
+): Promise<StatusActionResult<{ queued: number }>> {
+  return toStatusActionResult(() => api.runLibraryPipeline(libraryId, scope, except))
 }
 
 export async function getItemPipelineAction(libraryItemId: string): Promise<StatusActionResult<PipelineItemState>> {

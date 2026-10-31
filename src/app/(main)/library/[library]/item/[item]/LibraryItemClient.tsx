@@ -2,7 +2,7 @@
 
 import { startEpubJobAction } from '@/app/actions/epubActions'
 import { clearPodcastDownloadQueueAction } from '@/app/actions/mediaActions'
-import { getItemHealthAction, runItemPipelineAction, updateLibraryAutoPipelineAction } from '@/app/actions/pipelineActions'
+import { getItemHealthAction, runItemPipelineAction, runLibraryPipelineAction, updateLibraryAutoPipelineAction } from '@/app/actions/pipelineActions'
 import LibraryItemMetadataEditModal, { type MetadataEditSection } from '@/components/modals/LibraryItemMetadataEditModal'
 import IconBtn from '@/components/ui/IconBtn'
 import AudioTracksTable from '@/components/widgets/AudioTracksTable'
@@ -20,6 +20,7 @@ import { useSeekIndexEnabled } from '@/components/widgets/seek-index/SeekIndexWa
 import TranscriptSection from '@/components/widgets/transcripts/TranscriptSection'
 import { GuidedFixContext } from '@/contexts/GuidedFixContext'
 import { useLibrary } from '@/contexts/LibraryContext'
+import { useNeedsWork } from '@/contexts/NeedsWorkContext'
 import { PipelineProposalContext } from '@/contexts/PipelineProposalContext'
 import { useTasks } from '@/contexts/TasksContext'
 import { useGlobalToast } from '@/contexts/ToastContext'
@@ -96,6 +97,7 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
   // off. The first look measures MP3s without a seek header.
   const seekIndexEnabled = useSeekIndexEnabled()
   const guidanceOff = useGuidancePreference() === 'off'
+  const needsWork = useNeedsWork()
   const healthEnabled = seekIndexEnabled && isBookWithAudio && !guidanceOff
   const { health, read: healthRead, reload: reloadHealth } = useItemHealth(libraryItem.id, { enabled: healthEnabled, measure: true })
   const [guide, setGuide] = useState<{ steps: GuideStepId[]; index: number } | null>(null)
@@ -137,9 +139,10 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
           ...(autoRepairSeekIndex && { autoRepairSeekIndex }),
           ...(autoEpub && { autoEpub })
         }),
-      startEpub: startEpubJobAction
+      startEpub: startEpubJobAction,
+      runBacklog: () => runLibraryPipelineAction(libraryItem.libraryId, 'needs-work', [libraryItem.id])
     }),
-    [libraryItem.libraryId]
+    [libraryItem.id, libraryItem.libraryId]
   )
   const metadata = libraryItem.media.metadata as BookMetadata | PodcastMetadata
   const podcastAuthor = 'author' in metadata ? metadata.author : undefined
@@ -426,6 +429,8 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
                     canAutomate={autoPipelineAvailable}
                     epubOffer={epubOffer}
                     canAutomateEpub={epubFromAudioAvailable}
+                    backlogCount={needsWork.items.filter((item) => item.libraryItemId !== libraryItem.id).length}
+                    processingHref={getProcessingHref(library.id)}
                   />
                 </GuidedFixContext.Provider>
               )}

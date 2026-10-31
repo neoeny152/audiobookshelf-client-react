@@ -61,7 +61,13 @@ function mountHint({
         .resolves({ ok: true, data: pipelineState({ status: 'queued', trigger: 'fix', updatedAt: 10 }) }),
     enableAutoRepair: actions.enableAutoRepair ?? cy.stub().as('enableAutoRepair').resolves({ ok: true, data: {} }),
     enableAutomation: actions.enableAutomation ?? cy.stub().as('enableAutomation').resolves({ ok: true, data: {} }),
-    startEpub: actions.startEpub ?? cy.stub().as('startEpub').resolves({ ok: true, data: {} })
+    startEpub: actions.startEpub ?? cy.stub().as('startEpub').resolves({ ok: true, data: {} }),
+    runBacklog:
+      actions.runBacklog ??
+      cy
+        .stub()
+        .as('runBacklog')
+        .resolves({ ok: true, data: { queued: 14 } })
   }
   cy.mount(
     <GuidedFixContext.Provider value={guide}>
@@ -81,6 +87,8 @@ function mountHint({
         canAutomate
         epubOffer="create"
         canAutomateEpub
+        backlogCount={0}
+        processingHref="/library/lib_1/processing"
         {...props}
       />
     </GuidedFixContext.Provider>
@@ -204,5 +212,28 @@ describe('<GuidedFixHint />', () => {
     cy.get('@onNextTimeAnswered')
       .should('have.been.calledOnce')
       .then(() => expect(getGuidancePreference()).to.equal('off'))
+  })
+
+  it('also queues the other books that need work, and says where to follow them', () => {
+    mountHint({ props: { doneSummary: '50 chapters saved', backlogCount: 14 } })
+    cy.contains('label', 'Also fix the 14 other books that need work').should('exist')
+    cy.get('[cy-id="guided-fix-next-time"] input[type="checkbox"]').eq(1).click()
+    cy.contains('button', 'Do all of this automatically').click()
+    cy.get('@enableAutomation').should('have.been.calledOnceWith', { autoRepairSeekIndex: false, autoEpub: true })
+    cy.get('@runBacklog').should('have.been.calledOnce')
+    cy.get('[cy-id="guided-fix-backlog"]').should('contain.text', 'Queued 14 books. Follow them on the Processing page.').and('contain.text', 'take hours each')
+    cy.get('[cy-id="guided-fix-backlog"] a').should('have.attr', 'href', '/library/lib_1/processing')
+    cy.get('@onNextTimeAnswered').should('not.have.been.called')
+    cy.get('button[aria-label="Dismiss"]').click()
+    cy.get('@onNextTimeAnswered').should('have.been.calledOnce')
+  })
+
+  it('does not queue the other books when their box is unticked', () => {
+    mountHint({ props: { doneSummary: '50 chapters saved', backlogCount: 3 } })
+    cy.contains('label', 'Also fix the 3 other books that need work').should('exist')
+    cy.get('[cy-id="guided-fix-next-time"] input[type="checkbox"]').eq(2).click()
+    cy.contains('button', 'Do all of this automatically').click()
+    cy.get('@runBacklog').should('not.have.been.called')
+    cy.get('@onNextTimeAnswered').should('have.been.calledOnce')
   })
 })
