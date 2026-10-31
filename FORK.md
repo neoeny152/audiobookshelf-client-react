@@ -23,10 +23,9 @@ This is an unofficial personal fork of [audiobookshelf/audiobookshelf-client-rea
 - **Automatic processing:** library settings, a Processing page (including a run on the books that need work), chapter review with approve and undo, and item status.
 - **Guided fix** for books that probably have the wrong length, match or chapters:
   - item page: a book health hint with Guide me and Fix automatically;
-  - Guide me walks through match, MP3 seek index repair (on the Chapters tab), Audible chapter lookup, snap, save and an optional EPUB, pulsing an amber ring on each step's control; at the end it can also queue the other books that need work for automatic processing;
+  - Guide me walks through match, MP3 seek index repair (on the Chapters tab), Audible chapter lookup, snap, save and an optional EPUB, pulsing an amber ring on each step's control; at the end, a ticked "Also fix the N other books that need work" option queues them for automatic processing (the needs-work scope), and the hint links to the Processing page;
   - book cards: a quiet "Needs processing" line under the title (problems in a tooltip), and an Edit pencil in the warning colour, visible without hovering, that opens the item page and starts Guide me;
   - "Guidance for books that need work" on the Account page turns it off (kept in this browser).
-<!-- TODO: backlog checkbox (in progress); describe it here when it lands on neo. -->
 - **Possible duplicates** on the library Issues page ([#5676](https://github.com/advplyr/audiobookshelf/issues/5676)).
 - **Search** shows results matched by file name or path ([#5680](https://github.com/advplyr/audiobookshelf/issues/5680)).
 
