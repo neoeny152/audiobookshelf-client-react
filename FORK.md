@@ -3,7 +3,7 @@
 This is an unofficial personal fork of [audiobookshelf/audiobookshelf-client-react](https://github.com/audiobookshelf/audiobookshelf-client-react), used for learning and experiments. It is not affiliated with or supported by the Audiobookshelf project. Please report problems with Audiobookshelf itself upstream, not here.
 
 - **Upstream base:** `.upstream-base` holds the upstream `master` commit this branch is synced to (currently `9c30742f`).
-- **Server:** it pairs with the server fork [neoeny152/audiobookshelf](https://github.com/neoeny152/audiobookshelf), which documents the server endpoints. Every fork feature is shown only when the server lists it in `serverFeatures` (`GET /status`), so this client still works with a stock server.
+- **Server:** it pairs with the server fork [neoeny152/audiobookshelf](https://github.com/neoeny152/audiobookshelf), which documents the server endpoints. Most fork features (EPUB from audio, read-along, speech check, transcripts, automatic processing, seek index repair, duplicates, batch endpoints) are shown only when the server lists them in `serverFeatures` (`GET /status`), so this client still works with a stock server. The chapter editor's Snap to audio panel is always shown and fails on a stock server.
 
 ## Added
 
@@ -20,8 +20,13 @@ This is an unofficial personal fork of [audiobookshelf/audiobookshelf-client-rea
 - A player panel, item and episode sections, and podcast settings.
 
 ### Library maintenance
-- **Automatic processing:** settings, a Processing page, chapter review with approve and undo, and item status.
-- **Guided fix** on the item page: book health card, Guide me, Fix automatically, and needs-work guidance.
+- **Automatic processing:** library settings, a Processing page (including a run on the books that need work), chapter review with approve and undo, and item status.
+- **Guided fix** for books that probably have the wrong length, match or chapters:
+  - item page: a book health hint with Guide me and Fix automatically;
+  - Guide me walks through match, MP3 seek index repair (on the Chapters tab), Audible chapter lookup, snap, save and an optional EPUB, pulsing an amber ring on each step's control; at the end it can also queue the other books that need work for automatic processing;
+  - book cards: a quiet "Needs processing" line under the title (problems in a tooltip), and an Edit pencil in the warning colour, visible without hovering, that opens the item page and starts Guide me;
+  - "Guidance for books that need work" on the Account page turns it off (kept in this browser).
+<!-- TODO: backlog checkbox (in progress); describe it here when it lands on neo. -->
 - **Possible duplicates** on the library Issues page ([#5676](https://github.com/advplyr/audiobookshelf/issues/5676)).
 - **Search** shows results matched by file name or path ([#5680](https://github.com/advplyr/audiobookshelf/issues/5680)).
 
@@ -36,7 +41,7 @@ This is an unofficial personal fork of [audiobookshelf/audiobookshelf-client-rea
 
 ### Other
 - Theme tokens for checkboxes and queue rows, and an `IconBtn` variant.
-- The components catalog pages were removed ([#296](https://github.com/audiobookshelf/audiobookshelf-client-react/pull/296)).
+- The components catalog pages were removed ([#296](https://github.com/audiobookshelf/audiobookshelf-client-react/issues/296)).
 
 ## Container image
 
