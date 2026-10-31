@@ -1314,6 +1314,7 @@
   "MessageSearchResultsFor": "Search results for",
   "MessageSeekIndexBackupDeleted": "Backup deleted.",
   "MessageSeekIndexBackupKept": "Backup kept ({0}). The originals can be restored or the backup deleted below.",
+  "MessageSeekIndexBackupKeptLater": "Backup kept ({0}). The originals can be restored or the backup deleted later from the Chapters tab.",
   "MessageSeekIndexBackupsTotal": "Seek index backups of all books use {0}.",
   "MessageSeekIndexChaptersKept": "Saved chapter times were not changed. If they were set before the repair, re-run chapter lookup or snap to line them up with the files.",
   "MessageSeekIndexChaptersKeptEndExtended": "Saved chapter times were not changed; the last chapter now runs to the new end. If they were set before the repair, re-run chapter lookup or snap to line them up with the files.",

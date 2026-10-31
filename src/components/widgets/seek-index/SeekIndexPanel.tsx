@@ -196,7 +196,10 @@ export default function SeekIndexPanel({
                   )}
                   {result.type === 'repair' && (resultBackup || backupDeleted) && (
                     <p className="mt-1" cy-id="seek-index-result-backup">
-                      {resultBackup ? t('MessageSeekIndexBackupKept', { 0: bytesPretty(resultBackup.size) }) : t('MessageSeekIndexBackupDeleted')}
+                      {resultBackup
+                        ? // The backups row is hidden while Guide me runs (see below)
+                          t(guide ? 'MessageSeekIndexBackupKeptLater' : 'MessageSeekIndexBackupKept', { 0: bytesPretty(resultBackup.size) })
+                        : t('MessageSeekIndexBackupDeleted')}
                     </p>
                   )}
                 </>

@@ -131,6 +131,15 @@ describe('<SeekIndexPanel />', () => {
     cy.get('@onRepair').should('have.been.calledOnceWith', { chapters: 'keep' })
   })
 
+  it('points to the Chapters tab for the backup while the guide runs (the backups row is hidden then)', () => {
+    mountPanel(
+      { status: status(parts, [backup]), result },
+      { stepId: 'lookup', stepIndex: 2, total: 6, paused: false, advance: cy.stub(), resume: cy.stub(), stop: cy.stub() }
+    )
+    cy.get('[cy-id="seek-index-result"]').should('contain.text', 'deleted later from the Chapters tab')
+    cy.get('[cy-id="seek-index-backups"]').should('not.exist')
+  })
+
   it('keeps the guide step line while the repair runs', () => {
     mountPanel(
       { running: true, progress: '28%' },
