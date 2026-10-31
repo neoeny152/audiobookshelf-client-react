@@ -168,6 +168,12 @@ describe('<EpubFromAudio />', () => {
     cy.get('[cy-id="epub-from-audio-progress"]').contains('button', 'Cancel').should('be.disabled')
   })
 
+  it('says when chapterbot paused the job for a chapter check', () => {
+    mountEpub({ actions: { get: cy.stub().resolves({ ok: true, data: job({ status: 'running', stage: 'paused', progress: 0.3 }) }) } })
+    startJob()
+    cy.get('[cy-id="epub-from-audio-progress"]').should('contain.text', 'Paused for a chapter check')
+  })
+
   it('reports a failure pushed by the server', () => {
     mountEpub({
       actions: { get: cy.stub().resolves({ ok: true, data: job({ status: 'running' }) }) },
@@ -288,7 +294,12 @@ describe('<EpubFromAudio />', () => {
 
     it('shows nothing when the latest job already ended', () => {
       mountEpub({
-        actions: { getCurrent: cy.stub().as('getCurrent').resolves({ ok: true, data: job({ status: 'failed', error: 'x' }) }) },
+        actions: {
+          getCurrent: cy
+            .stub()
+            .as('getCurrent')
+            .resolves({ ok: true, data: job({ status: 'failed', error: 'x' }) })
+        },
         currentJobAvailable: true
       })
       cy.get('@getCurrent').should('have.been.called')

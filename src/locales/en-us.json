@@ -1192,6 +1192,7 @@
   "MessageEpisodesSelected": "{count} {count, plural, one {episode} other {episodes}} selected",
   "MessageEpubFromAudioCancelling": "Cancelling. The part being transcribed finishes first.",
   "MessageEpubFromAudioChapters": "{done} of {total} chapters",
+  "MessageEpubFromAudioPaused": "Paused for a chapter check; it goes on when the check is done.",
   "MessageEpubFromAudioQueued": "Waiting for its turn on the server.",
   "MessageEpubFromAudioRunning": "Transcribing the audio. This takes hours; you can leave this page and come back.",
   "MessageEpubFromAudioSaving": "Saving the EPUB into the book folder.",

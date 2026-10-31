@@ -66,6 +66,8 @@ function statusMessage(job: EpubJob, t: TypeSafeTranslations): string {
   if (job.status === 'downloading') return t('MessageEpubFromAudioSaving')
   if (job.cancelRequested) return t('MessageEpubFromAudioCancelling')
   if (job.status === 'queued') return t('MessageEpubFromAudioQueued')
+  // chapterbot pauses the job while a speech check runs
+  if (job.stage === 'paused') return t('MessageEpubFromAudioPaused')
   return t('MessageEpubFromAudioRunning')
 }
 
