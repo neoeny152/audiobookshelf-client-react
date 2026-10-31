@@ -13,14 +13,14 @@ This is an unofficial personal fork of [audiobookshelf/audiobookshelf-client-rea
 - MP3 seek index warning and repair, with backups, restore and resume.
 
 ### Ebooks
-- **Make EPUB from audio** in the item Tools menu, with progress visible to anyone who opens the book.
+- **Make EPUB from audio** in the item Tools menu, with progress visible to anyone who opens the book, including "Paused for a chapter check" while the sidecar runs a speech check (needs the chapterbot sidecar).
 - **Read-along:** highlight and follow in the e-reader for EPUBs made from audio.
 
 ### Transcripts
 - A player panel, item and episode sections, and podcast settings.
 
 ### Library maintenance
-- **Automatic processing:** library settings, a Processing page (including a run on the books that need work), chapter review with approve and undo, and item status.
+- **Automatic processing:** library settings (automatic EPUBs are made overnight in the quiet hours, which the settings show), a Processing page (including a run on the books that need work), chapter review with approve and undo, and item status.
 - **Guided fix** for books that probably have the wrong length, match or chapters:
   - item page: a book health hint with Guide me and Fix automatically;
   - Guide me walks through match, MP3 seek index repair (on the Chapters tab), Audible chapter lookup, snap, save and an optional EPUB, pulsing an amber ring on each step's control; at the end, a ticked "Also fix the N other books that need work" option queues them for automatic processing (the needs-work scope), and the hint links to the Processing page;
