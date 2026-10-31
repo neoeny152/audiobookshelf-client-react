@@ -65,6 +65,8 @@ interface MediaCardOverlayProps {
   onPlay: () => void
   onRead: () => void
   onEdit?: () => void
+  /** Edit in the warning colour (see MediaCard `onHighlightedEdit`) */
+  editHighlighted?: boolean
   onMoreAction: (action: string, data?: Record<string, string>) => void
   onMoreMenuOpenChange: (isOpen: boolean) => void
   onSelect?: (event: React.MouseEvent) => void
@@ -98,6 +100,7 @@ export default function MediaCardOverlay({
   onPlay,
   onRead,
   onEdit,
+  editHighlighted = false,
   onMoreAction,
   onMoreMenuOpenChange,
   onSelect,
@@ -240,7 +243,14 @@ export default function MediaCardOverlay({
 
           {/* Edit button */}
           {!dragOnly && showEditButton && userCanUpdate && !isSelectionMode && (
-            <MediaOverlayIconBtn cyId="editButton" position="top-end" icon="edit" onClick={handleEditClick} ariaLabel={t('ButtonEdit')} />
+            <MediaOverlayIconBtn
+              cyId="editButton"
+              position="top-end"
+              icon="edit"
+              onClick={handleEditClick}
+              ariaLabel={t('ButtonEdit')}
+              className={editHighlighted ? 'text-warning' : undefined}
+            />
           )}
 
           {/* More menu icon */}

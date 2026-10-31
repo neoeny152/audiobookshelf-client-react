@@ -86,6 +86,11 @@ export interface MediaCardProps {
    */
   footerNote?: ReactNode
   /**
+   * Replaces the Edit button's default (the edit modal on Details); the button then shows in the warning colour.
+   * E.g. starting Guide me for a book that needs processing
+   */
+  onHighlightedEdit?: () => void
+  /**
    * Optional episode to display instead of the main library item (e.g. for recent episodes)
    */
   episode?: PodcastEpisode
@@ -143,6 +148,7 @@ function MediaCard(props: MediaCardProps) {
     renderOverlayBadges,
     renderSeriesNameOverlay,
     footerNote,
+    onHighlightedEdit,
     episode,
     isSelectionMode = false,
     selected = false,
@@ -630,7 +636,8 @@ function MediaCard(props: MediaCardProps) {
             renderSeriesNameOverlay={renderSeriesNameOverlay}
             onPlay={handlePlay}
             onRead={handleReadEBook}
-            onEdit={handleOpenEdit}
+            onEdit={onHighlightedEdit ?? handleOpenEdit}
+            editHighlighted={!!onHighlightedEdit}
             onMoreAction={handleMoreAction}
             onMoreMenuOpenChange={handleMoreMenuOpenChange}
             onSelect={handleSelect}

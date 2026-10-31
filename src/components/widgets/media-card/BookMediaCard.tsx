@@ -3,7 +3,8 @@
 import NeedsWorkNote from '@/components/widgets/guided-fix/NeedsWorkNote'
 import { useNeedsWork } from '@/contexts/NeedsWorkContext'
 import { type BookMedia, isPersonalizedSeriesRef } from '@/types/api'
-import { useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import { useCallback, useMemo } from 'react'
 import MediaCard, { type MediaCardProps } from './MediaCard'
 
 export type BookMediaCardProps = MediaCardProps
@@ -14,8 +15,13 @@ export type BookMediaCardProps = MediaCardProps
 export default function BookMediaCard(props: BookMediaCardProps) {
   const { libraryItem } = props
   const media = libraryItem.media as BookMedia
-  // Fork only: the book needs work (see NeedsWorkContext)
+  // Fork only: the book needs work (see NeedsWorkContext); Edit opens its page, which starts Guide me
   const needsWork = useNeedsWork().byId.get(libraryItem.id)
+  const router = useRouter()
+  const handleGuidedEdit = useCallback(
+    () => router.push(`/library/${libraryItem.libraryId}/item/${libraryItem.id}?guide=1`),
+    [libraryItem.id, libraryItem.libraryId, router]
+  )
 
   // Sequence badge only when the server injects a shelf `PersonalizedSeriesRef`
   // (continue-series, series-filtered rows). Minified home shelves use `seriesName` only;
@@ -68,6 +74,12 @@ export default function BookMediaCard(props: BookMediaCardProps) {
   }, [ebookFormat])
 
   return (
-    <MediaCard {...props} renderBadges={renderBadges} renderOverlayBadges={renderOverlayBadges} footerNote={needsWork && <NeedsWorkNote item={needsWork} />} />
+    <MediaCard
+      {...props}
+      renderBadges={renderBadges}
+      renderOverlayBadges={renderOverlayBadges}
+      footerNote={needsWork && <NeedsWorkNote item={needsWork} />}
+      onHighlightedEdit={needsWork ? handleGuidedEdit : undefined}
+    />
   )
 }

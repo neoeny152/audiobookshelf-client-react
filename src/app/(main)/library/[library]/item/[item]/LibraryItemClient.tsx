@@ -41,7 +41,7 @@ import { computeProgress } from '@/lib/mediaProgress'
 import { BookLibraryItem, BookMetadata, ItemHealthIssue, PodcastEpisode, PodcastLibraryItem, PodcastMetadata } from '@/types/api'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import LibraryItemActionButtons from './LibraryItemActionButtons'
 import LibraryItemCover from './LibraryItemCover'
 import LibraryItemDetails from './LibraryItemDetails'
@@ -96,7 +96,8 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
   // off. The first look measures MP3s without a seek header.
   const seekIndexEnabled = useSeekIndexEnabled()
   const guidanceOff = useGuidancePreference() === 'off'
-  const { health, reload: reloadHealth } = useItemHealth(libraryItem.id, { enabled: seekIndexEnabled && isBookWithAudio && !guidanceOff, measure: true })
+  const healthEnabled = seekIndexEnabled && isBookWithAudio && !guidanceOff
+  const { health, read: healthRead, reload: reloadHealth } = useItemHealth(libraryItem.id, { enabled: healthEnabled, measure: true })
   const [guide, setGuide] = useState<{ steps: GuideStepId[]; index: number } | null>(null)
   /** What a guide that just ended did, while the hint asks what to do next time (no guidance preference set yet) */
   const [doneSummary, setDoneSummary] = useState<string | null>(null)
@@ -110,13 +111,10 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
     },
     [libraryItem.id]
   )
-  // Edit starts the guide while the hint shows (not while the pipeline works on the book)
-  const needsGuide =
-    !!health &&
-    !guide &&
-    !hintDismissed &&
-    !(pipelineState && isPipelineActive(pipelineState.status)) &&
-    health.issues.some((issue) => issue !== 'chapters-unverified')
+  // A guide can start while the book needs work and the pipeline is not on it; Edit starts one while the hint shows
+  const canGuide =
+    !!health && !guide && !(pipelineState && isPipelineActive(pipelineState.status)) && health.issues.some((issue) => issue !== 'chapters-unverified')
+  const needsGuide = canGuide && !hintDismissed
   // The guide's optional last step: a read-along EPUB from the audio for a book without an EPUB (see EpubOffer)
   const epubFromAudioAvailable = useServerFeature('chapterbotEpub')
   const epubOffer: EpubOffer | null =
@@ -235,6 +233,22 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
     // Drop the query so a reload or Back does not open the editor again
     router.replace(pathname, { scroll: false })
   }, [editParam, initialLibraryItem.id, pathname, proposalParam, router, userCanUpdate])
+
+  // Edit on the card of a book that needs work comes here with `?guide=1`: Guide me starts once the health is read
+  // (the edit modal opens instead when the book cannot be guided). Once: the query outlives a few renders.
+  const guideParam = searchParams.get('guide') === '1'
+  const guideParamHandledRef = useRef(false)
+  const handleGuideParam = useEffectEvent(() => {
+    if (guideParamHandledRef.current) return
+    guideParamHandledRef.current = true
+    router.replace(pathname, { scroll: false })
+    if (canGuide) handleStartGuide()
+    else if (userCanUpdate) handleOpenMetadataEdit('details')
+  })
+  useEffect(() => {
+    if (!guideParam) guideParamHandledRef.current = false
+    else if (healthRead) handleGuideParam()
+  }, [guideParam, healthRead])
 
   const handleItemUpdated = (updatedItem: BookLibraryItem | PodcastLibraryItem) => {
     setLibraryItem((prev) => mergeLibraryItemUpdate(prev, updatedItem) as BookLibraryItem | PodcastLibraryItem)

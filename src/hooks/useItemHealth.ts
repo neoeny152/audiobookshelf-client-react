@@ -23,6 +23,8 @@ export function useItemHealth(libraryItemId: string, { enabled, measure = false 
   const { getTasksByLibraryItemId } = useTasks()
   const [health, setHealth] = useState<ItemHealth | null>(null)
   const [loading, setLoading] = useState(false)
+  /** The first read since the item or `enabled` changed has finished, whatever it returned */
+  const [read, setRead] = useState(false)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -35,6 +37,7 @@ export function useItemHealth(libraryItemId: string, { enabled, measure = false 
 
   useEffect(() => {
     setHealth(null)
+    setRead(false)
     if (!enabled) return
     let active = true
     setLoading(true)
@@ -42,6 +45,7 @@ export function useItemHealth(libraryItemId: string, { enabled, measure = false 
       if (!active) return
       setLoading(false)
       setHealth(result.ok ? result.data : null)
+      setRead(true)
     })
     return () => {
       active = false
@@ -67,5 +71,5 @@ export function useItemHealth(libraryItemId: string, { enabled, measure = false 
     if (enabled && lastSeekTaskId) void reload()
   }, [enabled, lastSeekTaskId, reload])
 
-  return { health, loading, reload }
+  return { health, loading, read, reload }
 }
