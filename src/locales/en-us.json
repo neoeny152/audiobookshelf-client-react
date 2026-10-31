@@ -364,6 +364,7 @@
   "LabelAutoPipelineBlockerSourceMismatch": "the Audible chapters do not fit the audio",
   "LabelAutoPipelineBlockerSourceNear": "the Audible chapters only roughly fit the audio",
   "LabelAutoPipelineBlockerSpeechCheckUnavailable": "the speech check was not available",
+  "LabelAutoPipelineBlockerTitlesDiffer": "Audible's chapter titles differ from the spoken headings (the starts line up): use the heard titles",
   "LabelAutoPipelineBlockerUserEdited": "the chapters were edited by a person",
   "LabelAutoPipelineChapters": "Check and fix chapters",
   "LabelAutoPipelineChaptersHelp": "Take the Audible chapters, snap them to pauses in the audio and check that each one starts where its heading is read out. They are only saved when every chapter checks out; otherwise the book waits for review. Chapters someone edited are left alone.",

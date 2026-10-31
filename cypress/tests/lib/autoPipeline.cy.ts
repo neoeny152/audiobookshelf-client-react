@@ -172,6 +172,7 @@ describe('tabs and actions', () => {
   it('labels the server blocker codes', () => {
     expect(getPipelineWhyLabel('late')?.key).to.equal('LabelAutoPipelineWhyLate')
     expect(getPipelineWhyLabel('source-near')?.key).to.equal('LabelAutoPipelineBlockerSourceNear')
+    expect(getPipelineWhyLabel('titles-differ')?.key).to.equal('LabelAutoPipelineBlockerTitlesDiffer')
     expect(getPipelineWhyLabel('snap-incomplete')?.key).to.equal('LabelAutoPipelineBlockerSnapIncomplete')
     expect(getPipelineWhyLabel('user-edited')?.key).to.equal('LabelAutoPipelineBlockerUserEdited')
     expect(getPipelineWhyLabel('speech-check-unavailable')?.key).to.equal('LabelAutoPipelineBlockerSpeechCheckUnavailable')

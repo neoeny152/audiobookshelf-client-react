@@ -232,7 +232,8 @@ const BLOCKER_LABEL: Readonly<Record<string, TranslationKey>> = Object.freeze({
   'snap-incomplete': 'LabelAutoPipelineBlockerSnapIncomplete',
   'user-edited': 'LabelAutoPipelineBlockerUserEdited',
   'speech-check-unavailable': 'LabelAutoPipelineBlockerSpeechCheckUnavailable',
-  'no-snap': 'LabelAutoPipelineBlockerNoSnap'
+  'no-snap': 'LabelAutoPipelineBlockerNoSnap',
+  'titles-differ': 'LabelAutoPipelineBlockerTitlesDiffer'
 })
 
 /**
