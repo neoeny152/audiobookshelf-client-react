@@ -225,7 +225,8 @@ export default function AutoPipelineSettingsSection({ value, libraryProvider, au
           onChange={(nightlySweep) => update({ nightlySweep })}
           tooltip={t('LabelAutoPipelineNightlySweepHelp')}
         />
-        {settings.nightlySweep && (
+        {/* The quiet hours are also when EPUBs are made */}
+        {(settings.nightlySweep || (settings.autoEpub && features.chapterbotEpub)) && (
           <div className="flex flex-wrap items-end gap-2" cy-id="auto-pipeline-sweep-window">
             <TextInput
               type="time"

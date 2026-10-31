@@ -135,4 +135,10 @@ describe('<AutoPipelineSettingsSection />', () => {
     cy.get('[cy-id="auto-pipeline-sweep-window"] input').first().should('have.value', '01:00')
     cy.get('[cy-id="auto-pipeline-sweep-window"] input').last().should('have.value', '06:00')
   })
+
+  it('shows the quiet hours with automatic EPUBs too (they are made then)', () => {
+    mountSection({ initial: { ...AUTO_PIPELINE_DEFAULTS, mode: 'on', autoEpub: true } })
+    cy.contains('Make an EPUB from the audio, overnight').should('exist')
+    cy.get('[cy-id="auto-pipeline-sweep-window"]').should('exist')
+  })
 })

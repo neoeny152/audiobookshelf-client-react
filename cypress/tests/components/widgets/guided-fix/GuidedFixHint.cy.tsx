@@ -87,6 +87,7 @@ function mountHint({
         canAutomate
         epubOffer="create"
         canAutomateEpub
+        epubWindow="01:00–06:00"
         backlogCount={0}
         processingHref="/library/lib_1/processing"
         {...props}
@@ -221,7 +222,9 @@ describe('<GuidedFixHint />', () => {
     cy.contains('button', 'Do all of this automatically').click()
     cy.get('@enableAutomation').should('have.been.calledOnceWith', { autoRepairSeekIndex: false, autoEpub: true })
     cy.get('@runBacklog').should('have.been.calledOnce')
-    cy.get('[cy-id="guided-fix-backlog"]').should('contain.text', 'Queued 14 books. Follow them on the Processing page.').and('contain.text', 'take hours each')
+    cy.get('[cy-id="guided-fix-backlog"]')
+      .should('contain.text', 'Queued 14 books. Follow them on the Processing page.')
+      .and('contain.text', 'made overnight, one at a time')
     cy.get('[cy-id="guided-fix-backlog"] a').should('have.attr', 'href', '/library/lib_1/processing')
     cy.get('@onNextTimeAnswered').should('not.have.been.called')
     cy.get('button[aria-label="Dismiss"]').click()

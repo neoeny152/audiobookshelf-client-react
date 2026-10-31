@@ -55,6 +55,8 @@ export interface GuidedFixHintProps {
   epubOffer: EpubOffer | null
   /** Its read-along EPUB box is offered (the server can make them) */
   canAutomateEpub: boolean
+  /** The library's quiet hours ("01:00–06:00"), when the pipeline makes EPUBs */
+  epubWindow: string
   /** Other books of the library that need work, offered to queue with "Do all of this automatically" */
   backlogCount: number
   /** The Processing page, where queued books can be followed */
@@ -92,6 +94,7 @@ export default function GuidedFixHint({
   canAutomate,
   epubOffer,
   canAutomateEpub,
+  epubWindow,
   backlogCount,
   processingHref
 }: GuidedFixHintProps) {
@@ -313,7 +316,13 @@ export default function GuidedFixHint({
             <Checkbox size="small" value={automateRepair} label={t('LabelAutoPipelineAutoRepair')} labelClass="text-xs" onChange={setAutomateRepair} />
             {/* A box for highlighting existing EPUBs joins this one once the server can align them */}
             {canAutomateEpub && (
-              <Checkbox size="small" value={automateEpub} label={t('LabelAutomateReadAlongEpub')} labelClass="text-xs" onChange={setAutomateEpub} />
+              <Checkbox
+                size="small"
+                value={automateEpub}
+                label={t('LabelAutomateReadAlongEpub', { window: epubWindow })}
+                labelClass="text-xs"
+                onChange={setAutomateEpub}
+              />
             )}
             {backlogCount > 0 && (
               <Checkbox

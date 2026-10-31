@@ -32,7 +32,7 @@ import { useItemPageSocket } from '@/hooks/useItemPageSocket'
 import { useItemPipelineState } from '@/hooks/useItemPipelineState'
 import { useServerFeature } from '@/hooks/useServerFeatures'
 import { useTypeSafeTranslations } from '@/hooks/useTypeSafeTranslations'
-import { getPipelineReviewHref, getProcessingHref, getPipelineTab, isPipelineActive } from '@/lib/autoPipeline'
+import { getPipelineReviewHref, getProcessingHref, getPipelineTab, isPipelineActive, withAutoPipelineDefaults } from '@/lib/autoPipeline'
 import { getLibraryItemCoverUrl } from '@/lib/coverUtils'
 import { secondsToTimestamp } from '@/lib/datefns'
 import { canMakeEpubFromAudio, findEpubFromAudioFile } from '@/lib/epubFromAudio'
@@ -119,6 +119,7 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
   const needsGuide = canGuide && !hintDismissed
   // The guide's optional last step: a read-along EPUB from the audio for a book without an EPUB (see EpubOffer)
   const epubFromAudioAvailable = useServerFeature('chapterbotEpub')
+  const autoPipelineSettings = withAutoPipelineDefaults(library.settings?.autoPipeline)
   const epubOffer: EpubOffer | null =
     epubFromAudioAvailable && canMakeEpubFromAudio(libraryItem) && !findEpubFromAudioFile(libraryItem) && !(libraryItem as BookLibraryItem).media.ebookFile
       ? 'create'
@@ -429,6 +430,7 @@ export default function LibraryItemClient({ libraryItem: initialLibraryItem }: L
                     canAutomate={autoPipelineAvailable}
                     epubOffer={epubOffer}
                     canAutomateEpub={epubFromAudioAvailable}
+                    epubWindow={`${autoPipelineSettings.sweepStart}–${autoPipelineSettings.sweepEnd}`}
                     backlogCount={needsWork.items.filter((item) => item.libraryItemId !== libraryItem.id).length}
                     processingHref={getProcessingHref(library.id)}
                   />
