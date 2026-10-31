@@ -65,7 +65,7 @@ interface MediaCardOverlayProps {
   onPlay: () => void
   onRead: () => void
   onEdit?: () => void
-  /** Edit in the warning colour (see MediaCard `onHighlightedEdit`) */
+  /** Edit in the warning colour, shown without hovering too (see MediaCard `onHighlightedEdit`) */
   editHighlighted?: boolean
   onMoreAction: (action: string, data?: Record<string, string>) => void
   onMoreMenuOpenChange: (isOpen: boolean) => void
@@ -183,8 +183,23 @@ export default function MediaCardOverlay({
     [onEdit]
   )
 
+  const showEdit = !dragOnly && showEditButton && userCanUpdate && !isSelectionMode
+  const editButton = (
+    <MediaOverlayIconBtn
+      cyId="editButton"
+      position="top-end"
+      icon="edit"
+      onClick={handleEditClick}
+      ariaLabel={t('ButtonEdit')}
+      className={editHighlighted ? 'text-warning drop-shadow-md' : undefined}
+    />
+  )
+
   return (
     <>
+      {/* A highlighted Edit stays out of hover, in the same place, to draw the click (touch devices included) */}
+      {editHighlighted && showEdit && !showOverlay && !isProcessingOrPending && editButton}
+
       {/* Overlay */}
       {showOverlay && (
         <div
@@ -242,16 +257,7 @@ export default function MediaCardOverlay({
           )}
 
           {/* Edit button */}
-          {!dragOnly && showEditButton && userCanUpdate && !isSelectionMode && (
-            <MediaOverlayIconBtn
-              cyId="editButton"
-              position="top-end"
-              icon="edit"
-              onClick={handleEditClick}
-              ariaLabel={t('ButtonEdit')}
-              className={editHighlighted ? 'text-warning' : undefined}
-            />
-          )}
+          {showEdit && editButton}
 
           {/* More menu icon */}
           {!dragOnly && !isSelectionMode && moreMenuItems.length > 0 && (

@@ -2,6 +2,7 @@
 
 import NeedsWorkNote from '@/components/widgets/guided-fix/NeedsWorkNote'
 import { useNeedsWork } from '@/contexts/NeedsWorkContext'
+import { mergeClasses } from '@/lib/merge-classes'
 import { type BookMedia, isPersonalizedSeriesRef } from '@/types/api'
 import { useRouter } from 'next/navigation'
 import { useCallback, useMemo } from 'react'
@@ -41,7 +42,11 @@ export default function BookMediaCard(props: BookMediaCardProps) {
         return (
           <div
             cy-id="seriesSequence"
-            className="shadow-modal-content absolute inset-e-[0.375em] top-[0.375em] z-10 rounded-lg bg-black/90 text-white"
+            className={mergeClasses(
+              'shadow-modal-content absolute top-[0.375em] z-10 rounded-lg bg-black/90 text-white',
+              // Beside the always-shown Edit of a book that needs work
+              needsWork ? 'inset-e-[1.875em]' : 'inset-e-[0.375em]'
+            )}
             style={{ padding: '0.1em 0.25em' }}
           >
             <p style={{ fontSize: '0.8em' }}>#{seriesSequence}</p>
@@ -53,7 +58,7 @@ export default function BookMediaCard(props: BookMediaCardProps) {
     }
     BookBadges.displayName = 'BookBadges'
     return BookBadges
-  }, [seriesSequence])
+  }, [needsWork, seriesSequence])
 
   const renderOverlayBadges = useMemo(() => {
     const BookOverlayBadges = () => {
